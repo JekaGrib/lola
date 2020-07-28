@@ -22,8 +22,35 @@ createUsersTable = do
   execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL, user_create_date DATE NOT NULL, admin boolean NOT NULL, author_id BIGINT REFERENCES authors(author_id), UNIQUE (author_id))"
   print "kk"
 
+createPicsTable :: IO ()
+createPicsTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE pics ( pic_id BIGSERIAL PRIMARY KEY NOT NULL, pic_url VARCHAR(1000) NOT NULL)"
+  print "kk"
+
+createCategoriesTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE categories ( category_id BIGSERIAL PRIMARY KEY NOT NULL, category_name VARCHAR(50) NOT NULL, super_category_id BIGINT)"
+  print "kk"
+
+createPostsTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE posts ( post_id BIGSERIAL PRIMARY KEY NOT NULL, post_name VARCHAR(100) NOT NULL, post_create_date DATE NOT NULL, category_id BIGINT NOT NULL REFERENCES categories(category_id), post_text VARCHAR(10000) NOT NULL, post_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
+  print "kk"
+
+createCommentsTable :: IO ()
+createCommentsTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE comments ( comment_id BIGSERIAL PRIMARY KEY NOT NULL, comment_text VARCHAR(1000) NOT NULL, post_id BIGINT NOT NULL REFERENCES posts(post_id), user_id BIGINT NOT NULL REFERENCES users(user_id))"
+  print "kk"
+
 
 main :: IO ()
 main = do
   createAuthorsTable
   createUsersTable
+  createPicsTable
+  createCategoriesTable
+  createPostsTable
+  createCommentsTable
+
