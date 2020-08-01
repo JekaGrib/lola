@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4728b9133a548630338051e2940da8e3fb003da1de07083cb4539ae923c67250
+-- hash: 06a12ee8bd5cd0cb55112831426161dd155199de247a2f01491a6655dc8a4dff
 
 name:           lola
 version:        0.1.0.0
@@ -36,6 +36,7 @@ library
       aeson
     , base >=4.7 && <5
     , bytestring
+    , http-conduit
     , http-types
     , postgresql-libpq
     , postgresql-simple
@@ -55,6 +56,7 @@ executable lola-exe
       aeson
     , base >=4.7 && <5
     , bytestring
+    , http-conduit
     , http-types
     , lola
     , postgresql-libpq
@@ -76,6 +78,7 @@ test-suite lola-test
       aeson
     , base >=4.7 && <5
     , bytestring
+    , http-conduit
     , http-types
     , lola
     , postgresql-libpq

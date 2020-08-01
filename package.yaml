@@ -29,7 +29,7 @@ dependencies:
 - bytestring
 - postgresql-libpq
 - postgresql-simple
-
+- http-conduit
 
 library:
   source-dirs: src
