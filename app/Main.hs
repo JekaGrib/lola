@@ -119,7 +119,7 @@ application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
   case pathInfo req of
     [createUser]        -> do
-      let passwordParam   = fromJust . fromJust . lookup   "first_name" $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup     "password" $ queryToQueryText $ queryString req
       let firstNameParam  = fromJust . fromJust . lookup   "first_name" $ queryToQueryText $ queryString req
       let lastNameParam   = fromJust . fromJust . lookup    "last_name" $ queryToQueryText $ queryString req
       let userPicUrlParam = fromJust . fromJust . lookup "user_pic_url" $ queryToQueryText $ queryString req
