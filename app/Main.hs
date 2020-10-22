@@ -13,6 +13,22 @@ import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
 import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS )
 import           Data.Maybe                     ( fromJust )
+import           Data.Time.Clock
+import           Data.Time.LocalTime
+import           Data.Time.Calendar.OrdinalDate
+
+getDay :: IO String
+getDay = do
+  time    <- getZonedTime
+  let day = showOrdinalDate . localDay . zonedTimeToLocalTime $ time
+  return day
+
+
+getTime :: IO String
+getTime = do
+  time    <- getZonedTime
+  return $ show time     
+   
 
 createAuthorsTable :: IO ()
 createAuthorsTable = do
@@ -20,16 +36,16 @@ createAuthorsTable = do
   execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000))"
   print "kk"
 
-createUsersTable :: IO ()
-createUsersTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, password VARCHAR(50) NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL, user_create_date DATE NOT NULL, admin boolean NOT NULL, author_id BIGINT REFERENCES authors(author_id), UNIQUE (author_id))"
-  print "kk"
-
 createPicsTable :: IO ()
 createPicsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   execute_ conn "CREATE TABLE pics ( pic_id BIGSERIAL PRIMARY KEY NOT NULL, pic_url VARCHAR(1000) NOT NULL)"
+  print "kk"
+
+createUsersTable :: IO ()
+createUsersTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, password VARCHAR(50) NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL REFERENCES pics(pic_id), user_create_date DATE NOT NULL, admin boolean NOT NULL, author_id BIGINT REFERENCES authors(author_id), UNIQUE (author_id))"
   print "kk"
 
 createTagsTable :: IO ()
@@ -81,8 +97,8 @@ createDraftsTagsTable = do
 
 createDbStructure = do
   createAuthorsTable
-  createUsersTable
   createPicsTable
+  createUsersTable
   createTagsTable
   createCategoriesTable
   createPostsTable
@@ -118,14 +134,15 @@ instance ToJSON DeleteUserResponse where
 application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
   case pathInfo req of
-    [createUser]        -> do
+    ["createUser"]        -> do
       let passwordParam   = fromJust . fromJust . lookup     "password" $ queryToQueryText $ queryString req
       let firstNameParam  = fromJust . fromJust . lookup   "first_name" $ queryToQueryText $ queryString req
       let lastNameParam   = fromJust . fromJust . lookup    "last_name" $ queryToQueryText $ queryString req
       let userPicUrlParam = fromJust . fromJust . lookup "user_pic_url" $ queryToQueryText $ queryString req
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES ( ? ) RETURNING pic_id" [userPicUrlParam]  
-      [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?, '20100103', false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId) ]
+      [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES ( ? ) RETURNING pic_id" [userPicUrlParam]
+      day <- getDay  
+      [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
       okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
     ["getUser", _]      -> do
       let userId = (pathInfo req) !! 1
@@ -134,11 +151,25 @@ application req send = do
       [Only lastName] <- query conn "SELECT last_name FROM users WHERE user_id = ? " [userId]
       [Only picId] <- query conn "SELECT user_pic_id FROM users WHERE user_id = ? " [userId]
       okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = read (unpack(userId)) , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
-    ["deleteUser", _]   -> do
-      let userId = (pathInfo req) !! 1
+    ["deleteUser"]   -> do
+      let userId        = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
+      let passwordParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
+      let adminId       = fromJust . fromJust . lookup "admin_id" $ queryToQueryText $ queryString req
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      execute conn "DELETE FROM users WHERE user_id = ? " [userId]
-      okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = True})
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminId]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminId]
+      case admBool of
+        True -> do
+          case (unpack $ adminId) == admPassword of
+            True -> do
+              execute conn "DELETE FROM users WHERE user_id = ? " [userId]
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = True})
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+              
+        
+      
       
 main :: IO ()
 main = do

@@ -30,6 +30,7 @@ dependencies:
 - postgresql-libpq
 - postgresql-simple
 - http-conduit
+- time
 
 library:
   source-dirs: src
