@@ -33,7 +33,7 @@ getTime = do
 createAuthorsTable :: IO ()
 createAuthorsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000))"
+  execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000) NOT NULL, user_id BIGINT NOT NULL REFERENCES users(user_id))"
   print "kk"
 
 createPicsTable :: IO ()
@@ -42,10 +42,16 @@ createPicsTable = do
   execute_ conn "CREATE TABLE pics ( pic_id BIGSERIAL PRIMARY KEY NOT NULL, pic_url VARCHAR(1000) NOT NULL)"
   print "kk"
 
+createCreateAdminKeyTable :: IO ()
+createCreateAdminKeyTable = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn "CREATE TABLE key ( create_admin_key VARCHAR(100) NOT NULL)"
+  print "kk"
+
 createUsersTable :: IO ()
 createUsersTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, password VARCHAR(50) NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL REFERENCES pics(pic_id), user_create_date DATE NOT NULL, admin boolean NOT NULL, author_id BIGINT REFERENCES authors(author_id), UNIQUE (author_id))"
+  execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, password VARCHAR(50) NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL REFERENCES pics(pic_id), user_create_date DATE NOT NULL, admin boolean NOT NULL)"
   print "kk"
 
 createTagsTable :: IO ()
@@ -95,10 +101,15 @@ createDraftsTagsTable = do
   execute_ conn "CREATE TABLE draftstags ( draft_id BIGINT NOT NULL REFERENCES drafts(draft_id), tag_id BIGINT NOT NULL REFERENCES tags(tag_id))"
   print "kk"
 
+addKey = do
+  conn1 <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute_ conn1 "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
+
 createDbStructure = do
-  createAuthorsTable
   createPicsTable
+  createCreateAdminKeyTable
   createUsersTable
+  createAuthorsTable
   createTagsTable
   createCategoriesTable
   createPostsTable
@@ -108,6 +119,7 @@ createDbStructure = do
   createDraftsTable
   createDraftsPicsTable
   createDraftsTagsTable
+  addKey
 
 data CreateUserResponse = CreateUserResponse {
       user_id      :: Integer
@@ -140,7 +152,7 @@ application req send = do
       let lastNameParam   = fromJust . fromJust . lookup    "last_name" $ queryToQueryText $ queryString req
       let userPicUrlParam = fromJust . fromJust . lookup "user_pic_url" $ queryToQueryText $ queryString req
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES ( ? ) RETURNING pic_id" [userPicUrlParam]
+      [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
       day <- getDay  
       [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
       okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
@@ -160,14 +172,29 @@ application req send = do
       [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminId]
       case admBool of
         True -> do
-          case (unpack $ adminId) == admPassword of
+          case (unpack $ passwordParam) == admPassword of
             True -> do
               execute conn "DELETE FROM users WHERE user_id = ? " [userId]
               okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = True})
             False -> do
               okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
         False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
-              
+    ["createAdmin"]        -> do
+      let createAdminKey  = fromJust . fromJust . lookup "create_admin_key" $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup         "password" $ queryToQueryText $ queryString req
+      let firstNameParam  = fromJust . fromJust . lookup       "first_name" $ queryToQueryText $ queryString req
+      let lastNameParam   = fromJust . fromJust . lookup        "last_name" $ queryToQueryText $ queryString req
+      let userPicUrlParam = fromJust . fromJust . lookup     "user_pic_url" $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only key]  <- query_ conn "SELECT create_admin_key FROM key"
+      case  createAdminKey == key of
+        True -> do
+          [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
+          day <- getDay  
+          [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, true ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
+          okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
+        False -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+
         
       
       
