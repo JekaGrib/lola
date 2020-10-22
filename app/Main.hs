@@ -129,19 +129,32 @@ data CreateUserResponse = CreateUserResponse {
     , user_pic_url :: Text
     } deriving Show
 
-data DeleteUserResponse = DeleteUserResponse {ok :: Bool}
-
 instance ToJSON CreateUserResponse where
     toJSON (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url) =
         object ["user_id" .= user_id, "first_name" .= first_name, "last_name" .= last_name, "user_pic_id" .= user_pic_id, "user_pic_url" .= user_pic_url]
     toEncoding (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url) =
         pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url)
 
+data DeleteUserResponse = DeleteUserResponse {ok :: Bool}
+
 instance ToJSON DeleteUserResponse where
     toJSON (DeleteUserResponse ok) =
         object ["ok" .= ok]
     toEncoding (DeleteUserResponse ok) =
         pairs ("ok" .= ok )
+
+data CreateAuthorResponse = CreateAuthorResponse {
+      author_id    :: Integer
+    , auth_user_id :: Integer
+    , author_info  :: Text
+    } deriving Show
+
+instance ToJSON CreateAuthorResponse where
+    toJSON (CreateAuthorResponse author_id auth_user_id author_info ) =
+        object ["author_id" .= author_id, "user_id" .= auth_user_id, "author_info" .= author_info]
+    toEncoding (CreateAuthorResponse author_id auth_user_id author_info ) =
+        pairs ( "author_id" .= author_id <> "user_id" .= auth_user_id <> "author_info" .= author_info)
+
 
 application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
@@ -164,17 +177,17 @@ application req send = do
       [Only picId] <- query conn "SELECT user_pic_id FROM users WHERE user_id = ? " [userId]
       okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = read (unpack(userId)) , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
     ["deleteUser"]   -> do
-      let userId        = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
+      let userIdParam   = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
       let passwordParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
-      let adminId       = fromJust . fromJust . lookup "admin_id" $ queryToQueryText $ queryString req
+      let adminIdParam  = fromJust . fromJust . lookup "admin_id" $ queryToQueryText $ queryString req
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminId]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminId]
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
       case admBool of
         True -> do
           case (unpack $ passwordParam) == admPassword of
             True -> do
-              execute conn "DELETE FROM users WHERE user_id = ? " [userId]
+              execute conn "DELETE FROM users WHERE user_id = ? " [userIdParam]
               okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = True})
             False -> do
               okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
@@ -194,6 +207,25 @@ application req send = do
           [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, true ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
           okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
         False -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["createAuthor"]        -> do
+      let adminIdParam   = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let passwordParam  = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let userIdParam    = fromJust . fromJust . lookup "user_id"     $ queryToQueryText $ queryString req
+      let authorInfoParam = fromJust . fromJust . lookup "author_info" $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case admBool of
+        True -> do
+          case (unpack $ passwordParam) == admPassword of
+            True -> do
+              [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,?) RETURNING author_id" [ userIdParam, authorInfoParam]
+              okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = authorId , auth_user_id = read $ unpack $ userIdParam , author_info = authorInfoParam})
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+      
+    
 
         
       
