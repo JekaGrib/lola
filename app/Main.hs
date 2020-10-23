@@ -178,6 +178,47 @@ instance ToJSON CreateCatResponse where
     toEncoding (CreateSubCatResponse cat_id cat_name super_cat) =
         pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
 
+data CreateDraftRequest = CreateDraftRequest {
+      user_id1      :: Integer
+    , password1   :: Text
+    , draft_name    :: Text
+    , draft_cat_id :: Integer
+    , draft_text  :: Text
+    , draft_main_pic_url :: Text
+    , draft_pics :: [DraftPic]
+    } deriving Show
+
+instance FromJSON CreateDraftRequest where
+    parseJSON (Object v) = CreateDraftRequest
+        <$> v .: "user_id"
+        <*> v .: "password"
+        <*> v .: "draft_name"
+        <*> v .: "draft_category_id"
+        <*> v .: "draft_text"
+        <*> v .: "draft_main_pic_url"
+        <*> v .: "draft_pics" 
+
+instance ToJSON CreateDraftRequest where
+    toJSON (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text draft_main_pic_url draft_pics) =
+        object ["user_id" .= user_id1, "password" .= password1, "draft_name" .= draft_name, "draft_category_id" .= draft_cat_id, "draft_text" .= draft_text, "draft_main_pic_url" .= draft_main_pic_url, "draft_pics" .= draft_pics]
+    toEncoding (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text draft_main_pic_url draft_pics) =
+        pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics" .= draft_pics)
+
+data DraftPic = DraftPic {
+      draft_pic_url :: Text
+    } deriving Show
+
+instance FromJSON DraftPic where
+    parseJSON (Object v) = DraftPic
+        <$> v .: "draft_pic_url"
+
+instance ToJSON DraftPic where
+    toJSON (DraftPic draft_pic_url ) =
+        object ["draft_pic_url" .= draft_pic_url]
+    toEncoding (DraftPic draft_pic_url ) =
+        pairs ( "draft_pic_url" .= draft_pic_url )
+
+
 {-
 
 data CreateSubCatResponse = CreateSubCatResponse {
@@ -301,9 +342,17 @@ application req send = do
       let catId = (pathInfo req) !! 1
       xs <- foo (read $ unpack $ catId)
       okHelper $ lazyByteString $ encode $ moo xs
-   
-    
-
+    ["createDraft"]  -> do
+      body <- strictRequestBody req
+      let usIdParam = user_id1 . fromJust . decode $ body
+      let pwdParam  = password1 . fromJust . decode $ body
+      let draftNameParam  = draft_name . fromJust . decode $ body
+      let draftCatIdParam  = draft_cat_id . fromJust . decode $ body
+      let draftTextParam  = draft_text . fromJust . decode $ body
+      let draftMainPicUrlParam  = draft_main_pic_url . fromJust . decode $ body
+      let draftPics  = fmap draft_pic_url . draft_pics . fromJust . decode $ body
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      okHelper $ lazyByteString $ encode $ (DeleteUserResponse {ok = True})
 
 
 
