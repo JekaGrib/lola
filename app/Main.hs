@@ -155,6 +155,44 @@ instance ToJSON CreateAuthorResponse where
     toEncoding (CreateAuthorResponse author_id auth_user_id author_info ) =
         pairs ( "author_id" .= author_id <> "user_id" .= auth_user_id <> "author_info" .= author_info)
 
+data CreateCatResponse 
+  = CreateSubCatResponse {
+      subCat_id      :: Integer
+    , subCat_name    :: Text
+    , super_category :: CreateCatResponse
+    } 
+  | CreateCatResponse {
+      cat_id    :: Integer
+    , cat_name  :: Text
+    , super_cat :: Text
+    } deriving Show
+
+
+instance ToJSON CreateCatResponse where
+    toJSON (CreateCatResponse cat_id cat_name super_cat) =
+        object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
+    toJSON (CreateSubCatResponse cat_id cat_name super_cat) =
+        object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
+    toEncoding (CreateCatResponse cat_id cat_name super_cat) =
+        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
+    toEncoding (CreateSubCatResponse cat_id cat_name super_cat) =
+        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
+
+{-
+
+data CreateSubCatResponse = CreateSubCatResponse {
+      subCat_id    :: Integer
+    , subCat_name  :: Text
+    , super_cat_id :: Integer
+    } deriving Show
+
+instance ToJSON CreateSubCatResponse where
+    toJSON (CreateSubCatResponse subCat_id subCat_name super_cat_id) =
+        object ["category_id" .= subCat_id, "category_name" .= subCat_name, "super_category_id" .= super_cat_id]
+    toEncoding (CreateSubCatResponse subCat_id subCat_name super_cat_id) =
+        pairs ( "category_id" .= subCat_id <> "category_name" .= subCat_name <> "super_category_id" .= super_cat_id)
+
+-}
 
 application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
@@ -208,9 +246,9 @@ application req send = do
           okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
         False -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createAuthor"]        -> do
-      let adminIdParam   = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
-      let passwordParam  = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
-      let userIdParam    = fromJust . fromJust . lookup "user_id"     $ queryToQueryText $ queryString req
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let userIdParam     = fromJust . fromJust . lookup "user_id"     $ queryToQueryText $ queryString req
       let authorInfoParam = fromJust . fromJust . lookup "author_info" $ queryToQueryText $ queryString req
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
@@ -224,10 +262,68 @@ application req send = do
             False -> do
               okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
         False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
-      
+    ["createCategory"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"      $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup "password"      $ queryToQueryText $ queryString req
+      let catNameParam    = fromJust . fromJust . lookup "category_name" $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case admBool of
+        True -> do
+          case (unpack $ passwordParam) == admPassword of
+            True -> do
+              [Only catId] <- query conn "INSERT INTO categories ( category_name) VALUES (?) RETURNING category_id " [ catNameParam]
+              [Only superCatId] <- query conn "SELECT COALESCE (super_category_id, '0') AS super_category_id FROM categories WHERE category_id = ?" [pack . show $ catId]
+              okHelper $ lazyByteString $ encode (CreateCatResponse { cat_id = catId , cat_name =  catNameParam , super_cat = pack . prettyNull . show $ (superCatId :: Int)})
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["createSubCategory"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
+      let catNameParam    = fromJust . fromJust . lookup "category_name"     $ queryToQueryText $ queryString req
+      let superCatIdParam = fromJust . fromJust . lookup "super_category_id" $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case admBool of
+        True -> do
+          case (unpack $ passwordParam) == admPassword of
+            True -> do
+              [Only catId] <- query conn "INSERT INTO categories ( category_name, super_category_id) VALUES (?,?) RETURNING category_id" [ catNameParam, superCatIdParam ]
+              xs <- foo catId
+              okHelper $ lazyByteString $ encode $ moo xs
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["getCategory", _]      -> do
+      let catId = (pathInfo req) !! 1
+      xs <- foo (read $ unpack $ catId)
+      okHelper $ lazyByteString $ encode $ moo xs
+   
     
 
-        
+
+
+
+foo :: Integer -> IO [(Integer,Text)]
+foo catId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only catName] <- query conn "SELECT category_name FROM categories WHERE category_id = ? " [pack . show $ catId]
+  [Only superCatId]   <- query conn "SELECT COALESCE (super_category_id, '0') AS super_category_id FROM categories WHERE category_id = ?" [pack . show $ catId]
+  case superCatId of 
+    0 -> return $ [(catId,catName)]
+    _ -> do
+      xs <- foo superCatId
+      return $ ((catId,catName) : xs) 
+
+moo [(x,y)] = CreateCatResponse { cat_id = x , cat_name =  y , super_cat = "NULL"}
+moo ((x,y):xs) = CreateSubCatResponse { subCat_id = x , subCat_name =  y , super_category = moo xs}
+
+prettyNull :: String -> String
+prettyNull "0" = "NULL" 
+prettyNull a   = a       
       
       
 main :: IO ()
