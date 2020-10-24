@@ -67,7 +67,7 @@ createCategoriesTable = do
 
 createPostsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE posts ( post_id BIGSERIAL PRIMARY KEY NOT NULL, post_name VARCHAR(100) NOT NULL, post_create_date DATE NOT NULL, post_category_id BIGINT NOT NULL REFERENCES categories(category_id), post_text VARCHAR(10000) NOT NULL, post_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
+  execute_ conn "CREATE TABLE posts ( post_id BIGSERIAL PRIMARY KEY NOT NULL, author_id BIGINT REFERENCES authors(author_id), post_name VARCHAR(100) NOT NULL, post_create_date DATE NOT NULL, post_category_id BIGINT NOT NULL REFERENCES categories(category_id), post_text VARCHAR(10000) NOT NULL, post_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
   print "kk"
 
 createCommentsTable :: IO ()
@@ -88,7 +88,7 @@ createPostsTagsTable = do
 
 createDraftsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE drafts ( draft_id BIGSERIAL PRIMARY KEY NOT NULL, post_id BIGINT REFERENCES posts(post_id), draft_name VARCHAR(100) NOT NULL, draft_category_id BIGINT NOT NULL REFERENCES categories(category_id), draft_text VARCHAR(10000) NOT NULL, draft_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
+  execute_ conn "CREATE TABLE drafts ( draft_id BIGSERIAL PRIMARY KEY NOT NULL, post_id BIGINT REFERENCES posts(post_id), author_id BIGINT REFERENCES authors(author_id), draft_name VARCHAR(100) NOT NULL, draft_category_id BIGINT NOT NULL REFERENCES categories(category_id), draft_text VARCHAR(10000) NOT NULL, draft_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
   print "kk"
 
 createDraftsPicsTable = do
@@ -183,8 +183,9 @@ data CreateDraftRequest = CreateDraftRequest {
     , password1   :: Text
     , draft_name    :: Text
     , draft_cat_id :: Integer
-    , draft_text  :: Text
+    , draft_text1  :: Text
     , draft_main_pic_url :: Text
+    , draft_tags_id :: [DraftTag]
     , draft_pics :: [DraftPic]
     } deriving Show
 
@@ -196,13 +197,14 @@ instance FromJSON CreateDraftRequest where
         <*> v .: "draft_category_id"
         <*> v .: "draft_text"
         <*> v .: "draft_main_pic_url"
+        <*> v .: "draft_tags_id"
         <*> v .: "draft_pics" 
 
 instance ToJSON CreateDraftRequest where
-    toJSON (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text draft_main_pic_url draft_pics) =
-        object ["user_id" .= user_id1, "password" .= password1, "draft_name" .= draft_name, "draft_category_id" .= draft_cat_id, "draft_text" .= draft_text, "draft_main_pic_url" .= draft_main_pic_url, "draft_pics" .= draft_pics]
-    toEncoding (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text draft_main_pic_url draft_pics) =
-        pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics" .= draft_pics)
+    toJSON (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_tags_id draft_pics) =
+        object ["user_id" .= user_id1, "password" .= password1, "draft_name" .= draft_name, "draft_category_id" .= draft_cat_id, "draft_text" .= draft_text1, "draft_main_pic_url" .= draft_main_pic_url, "draft_tags_id" .= draft_tags_id, "draft_pics" .= draft_pics]
+    toEncoding (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_tags_id draft_pics) =
+        pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text1 <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_tags_id" .= draft_tags_id <> "draft_pics" .= draft_pics)
 
 data DraftPic = DraftPic {
       draft_pic_url :: Text
@@ -218,6 +220,62 @@ instance ToJSON DraftPic where
     toEncoding (DraftPic draft_pic_url ) =
         pairs ( "draft_pic_url" .= draft_pic_url )
 
+data DraftTag = DraftTag {
+      tag_id3 :: Integer
+    } deriving Show
+
+instance ToJSON DraftTag where
+    toJSON (DraftTag tag_id3 ) =
+        object ["tag_id" .= tag_id3]
+    toEncoding (DraftTag tag_id3 ) =
+        pairs ( "tag_id" .= tag_id3 )
+
+instance FromJSON DraftTag where
+    parseJSON (Object v) = DraftTag
+        <$> v .: "tag_id"
+
+
+data CreateDraftResponse = CreateDraftResponse {
+      draft_id      :: Integer
+    , author_id2   :: Integer
+    , draft_name2    :: Text
+    , draft_cat :: CreateCatResponse
+    , draft_text2  :: Text
+    , draft_main_pic_id  :: Integer
+    , draft_main_pic_url2 :: Text
+    , draft_tags :: [CreateTagResponse]
+    , draft_pics2 :: [DraftPic2]
+    } deriving Show
+
+instance ToJSON CreateDraftResponse where
+    toJSON (CreateDraftResponse draft_id author_id2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_tags draft_pics2) =
+        object ["draft_id" .= draft_id, "author_id" .= author_id2, "draft_name" .= draft_name2, "draft_category" .= draft_cat, "draft_text" .= draft_text2, "draft_main_pic_id" .= draft_main_pic_id, "draft_main_pic_url" .= draft_main_pic_url2, "draft_pics" .= draft_pics2, "draft_tags" .= draft_tags]
+    toEncoding (CreateDraftResponse draft_id author_id2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_tags draft_pics2) =
+        pairs ("draft_id" .= draft_id <> "author_id" .= author_id2 <> "draft_name" .= draft_name2 <> "draft_category" .= draft_cat <> "draft_text" .= draft_text2 <> "draft_main_pic_id" .= draft_main_pic_id <> "draft_main_pic_url" .= draft_main_pic_url2 <> "draft_pics" .= draft_pics2 <> "draft_tags" .= draft_tags)
+
+data DraftPic2 = DraftPic2 {
+      draft_pic_id   :: Integer
+    , draft_pic_url2 :: Text
+    } deriving Show
+
+instance ToJSON DraftPic2 where
+    toJSON (DraftPic2 draft_pic_id2 draft_pic_url ) =
+        object ["draft_pic_id" .= draft_pic_id2, "draft_pic_url" .= draft_pic_url]
+    toEncoding (DraftPic2 draft_pic_id2 draft_pic_url ) =
+        pairs ( "draft_pic_id" .= draft_pic_id2 <> "draft_pic_url" .= draft_pic_url )
+
+
+
+data CreateTagResponse = CreateTagResponse {
+      tag_id   :: Integer
+    , tag_name :: Text
+    } deriving Show
+
+instance ToJSON CreateTagResponse where
+    toJSON (CreateTagResponse tag_id tag_name ) =
+        object ["tag_id" .= tag_id, "tag_name" .= tag_name]
+    toEncoding (CreateTagResponse tag_id tag_name ) =
+        pairs ( "tag_id" .= tag_id <> "tag_name" .= tag_name )
 
 {-
 
@@ -342,18 +400,90 @@ application req send = do
       let catId = (pathInfo req) !! 1
       xs <- foo (read $ unpack $ catId)
       okHelper $ lazyByteString $ encode $ moo xs
+    ["createTag"]  -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
+      let tagNameParam    = fromJust . fromJust . lookup "tag_name"     $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case admBool of
+        True -> do
+          case (unpack $ passwordParam) == admPassword of
+            True -> do
+              [Only tagId] <- query conn "INSERT INTO tags ( tag_name) VALUES (?) RETURNING tag_id" [ tagNameParam ]
+              okHelper $ lazyByteString $ encode $ CreateTagResponse tagId tagNameParam
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createDraft"]  -> do
       body <- strictRequestBody req
       let usIdParam = user_id1 . fromJust . decode $ body
       let pwdParam  = password1 . fromJust . decode $ body
       let draftNameParam  = draft_name . fromJust . decode $ body
       let draftCatIdParam  = draft_cat_id . fromJust . decode $ body
-      let draftTextParam  = draft_text . fromJust . decode $ body
+      let draftTextParam  = draft_text1 . fromJust . decode $ body
       let draftMainPicUrlParam  = draft_main_pic_url . fromJust . decode $ body
-      let draftPics  = fmap draft_pic_url . draft_pics . fromJust . decode $ body
+      let draftTagsIds  = fmap tag_id3 . draft_tags_id . fromJust . decode $ body
+      let draftPicsUrls  = fmap draft_pic_url . draft_pics . fromJust . decode $ body
       conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      okHelper $ lazyByteString $ encode $ (DeleteUserResponse {ok = True})
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+      case pwdParam == pwd of
+        True -> do
+          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?) AS author_id" [usIdParam]
+          case check of
+            True -> do
+              [Only authorId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
+              [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [draftMainPicUrlParam]
+              [Only draftId] <- query conn "INSERT INTO drafts (author_id, draft_name, draft_category_id, draft_text, draft_main_pic_id) VALUES (?,?,?,?,?) RETURNING draft_id" [pack . show $ authorId,draftNameParam,pack . show $ draftCatIdParam,draftTextParam,pack . show $ picId]
+              mapM (koo draftId) draftTagsIds
+              xs <- foo draftCatIdParam
+              draftPicsIds <- mapM goo draftPicsUrls
+              mapM (poo draftId) draftPicsIds
+              ys <- mapM roo draftTagsIds
+              okHelper $ lazyByteString $ encode $ CreateDraftResponse { draft_id = draftId, author_id2 = authorId, draft_name2 = draftNameParam , draft_cat =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
+            False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+{-    ["getDraft"]  -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
+      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
+      let draftIdParam    = fromJust . fromJust . lookup "draft_id"     $ queryToQueryText $ queryString req
+      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case admBool of
+        True -> do
+          case (unpack $ passwordParam) == admPassword of
+            True -> do
+              [Only catId] <- query conn "SELECT admin FROM users WHERE user_id = ? " [draftIdParam]
+              xs <- foo catId
+              okHelper $ lazyByteString $ encode $ moo xs
+            False -> do
+              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+-}
 
+koo draftId tagId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute conn "INSERT INTO draftstags (draft_id , tag_id) VALUES (?,?)" [pack . show $ draftId, pack . show $ tagId]
+
+poo draftId picId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute conn "INSERT INTO draftspics (draft_id , pic_id) VALUES (?,?)" [pack . show $ draftId, pack . show $ picId]
+
+roo tagId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only tagName] <- query conn "SELECT tag_name FROM tags WHERE tag_id = ?" [pack . show $ tagId]
+  return $ CreateTagResponse tagId tagName
+
+goo :: Text -> IO Integer
+goo t = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only picId] <- query conn "INSERT INTO pics (pic_url) VALUES (?) RETURNING pic_id" [t]
+  return picId
+
+loo [x] [y] = [DraftPic2 x y]
+loo (x:xs) (y:ys) = DraftPic2 x y : loo xs ys
 
 
 foo :: Integer -> IO [(Integer,Text)]
