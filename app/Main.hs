@@ -19,17 +19,19 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day )
 import           Database.PostgreSQL.Simple.Time
 
-getOrdinalDay :: IO String
-getOrdinalDay = do
-  time    <- getZonedTime
-  let day = showOrdinalDate . localDay . zonedTimeToLocalTime $ time
-  return day
+defaultPictureUrl :: Text
+defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
+defUsId = 1
+defPicId = 1
+defAuthId = 1
 
-getGregorianDay :: IO String
-getGregorianDay = do
+
+getDay :: IO String
+getDay = do
   time    <- getZonedTime
   let day = showGregorian . localDay . zonedTimeToLocalTime $ time
   return day
+
 
 
 getTime :: IO String
@@ -49,6 +51,23 @@ createPicsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   execute_ conn "CREATE TABLE pics ( pic_id BIGSERIAL PRIMARY KEY NOT NULL, pic_url VARCHAR(1000) NOT NULL)"
   print "kk"
+
+createDefaultPicture :: IO Integer
+createDefaultPicture = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only picId] <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id " [defaultPictureUrl]
+  return picId
+
+createDefaultUser picId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  day <- getDay  
+  [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( '12345678','DELETED','DELETED',?,?, false ) RETURNING user_id" [ pack (show picId), pack day ]
+  return userId
+
+createDefaultAuthor userId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,'DELETED' ) RETURNING author_id" [pack . show $ userId]  
+  return authorId
 
 createCreateAdminKeyTable :: IO ()
 createCreateAdminKeyTable = do
@@ -109,7 +128,7 @@ createDraftsTagsTable = do
   execute_ conn "CREATE TABLE draftstags ( draft_id BIGINT NOT NULL REFERENCES drafts(draft_id), tag_id BIGINT NOT NULL REFERENCES tags(tag_id))"
   print "kk"
 
-addKey = do
+addCreateAdminKey = do
   conn1 <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   execute_ conn1 "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
 
@@ -127,7 +146,16 @@ createDbStructure = do
   createDraftsTable
   createDraftsPicsTable
   createDraftsTagsTable
-  addKey
+
+addDefaultParameters = do
+  addCreateAdminKey
+  picId <- createDefaultPicture
+  userId <- createDefaultUser picId
+  authorId <- createDefaultAuthor userId
+  return [picId,userId,authorId]
+  
+
+
 
 data CreateUserResponse = CreateUserResponse {
       user_id      :: Integer
@@ -135,21 +163,32 @@ data CreateUserResponse = CreateUserResponse {
     , last_name    :: Text
     , user_pic_id  :: Integer
     , user_pic_url :: Text
+    , user_create_date :: Text
     } deriving Show
 
 instance ToJSON CreateUserResponse where
-    toJSON (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url) =
-        object ["user_id" .= user_id, "first_name" .= first_name, "last_name" .= last_name, "user_pic_id" .= user_pic_id, "user_pic_url" .= user_pic_url]
-    toEncoding (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url) =
-        pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url)
+    toJSON (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
+        object ["user_id" .= user_id, "first_name" .= first_name, "last_name" .= last_name, "user_pic_id" .= user_pic_id, "user_pic_url" .= user_pic_url, "user_create_date" .= user_create_date]
+    toEncoding (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
+        pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url <> "user_create_date" .= user_create_date)
 
-data DeleteUserResponse = DeleteUserResponse {ok :: Bool}
+data OkResponse = OkResponse {ok :: Bool}
 
-instance ToJSON DeleteUserResponse where
-    toJSON (DeleteUserResponse ok) =
+instance ToJSON OkResponse where
+    toJSON (OkResponse ok) =
         object ["ok" .= ok]
-    toEncoding (DeleteUserResponse ok) =
+    toEncoding (OkResponse ok) =
         pairs ("ok" .= ok )
+
+data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text}
+
+instance ToJSON OkInfoResponse where
+    toJSON (OkInfoResponse ok info) =
+        object ["ok" .= ok, "info" .= info]
+    toEncoding (OkInfoResponse ok info) =
+        pairs ("ok" .= ok <> "info" .= info )
+
+
 
 data CreateAuthorResponse = CreateAuthorResponse {
       author_id    :: Integer
@@ -356,125 +395,206 @@ instance ToJSON CreateSubCatResponse where
 
 application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   case pathInfo req of
     ["createUser"]        -> do
       let passwordParam   = fromJust . fromJust . lookup     "password" $ queryToQueryText $ queryString req
       let firstNameParam  = fromJust . fromJust . lookup   "first_name" $ queryToQueryText $ queryString req
       let lastNameParam   = fromJust . fromJust . lookup    "last_name" $ queryToQueryText $ queryString req
       let userPicUrlParam = fromJust . fromJust . lookup "user_pic_url" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
-      day <- getOrdinalDay  
-      [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
-      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
+      day <- getDay  
+      [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack  day ]
+      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day })
     ["getUser", userId]      -> do
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only firstName] <- query conn "SELECT first_name FROM users WHERE user_id = ? " [userId ]
       [Only lastName] <- query conn "SELECT last_name FROM users WHERE user_id = ? " [userId]
       [Only picId] <- query conn "SELECT user_pic_id FROM users WHERE user_id = ? " [userId]
-      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = read (unpack(userId)) , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
+      [Only userCreateDate] <- (query conn "SELECT user_create_date FROM users WHERE user_id = ?" [userId]) :: IO [Only Day]
+      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = read . unpack $ userId , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ userCreateDate})
     ["deleteUser"]   -> do
-      let userIdParam   = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
-      let passwordParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
+      let usIdParam   = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
+      let pwdParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
       let adminIdParam  = fromJust . fromJust . lookup "admin_id" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          execute conn "UPDATE comments SET user_id = ? WHERE user_id = ?" [pack . show $ defUsId,usIdParam]
+          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
+          case check of
             True -> do
-              execute conn "DELETE FROM users WHERE user_id = ? " [userIdParam]
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = True})
+              [Only authorId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ? " [usIdParam]) :: IO [Only Integer]
+              execute conn "UPDATE posts SET author_id = ? WHERE author_id = ?" [pack . show $ defAuthId,pack . show $ authorId]
+              onlyDraftsIds <- (query conn "SELECT draft_id FROM drafts WHERE author_id = ? " [pack . show $ authorId]) :: IO [Only Integer]
+              mapM boo $ fmap fromOnly onlyDraftsIds
+              mapM doo $ fmap fromOnly onlyDraftsIds
+              mapM hoo $ fmap fromOnly onlyDraftsIds
+              execute conn "DELETE FROM authors WHERE author_id = ?" [pack . show $ authorId]
+              execute conn "DELETE FROM users WHERE user_id = ?" [usIdParam]
+              okHelper $ lazyByteString $ encode (OkResponse {ok = True})
             False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+              execute conn "DELETE FROM users WHERE user_id = ?" [usIdParam]
+              okHelper $ lazyByteString $ encode (OkResponse {ok = True})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createAdmin"]        -> do
       let createAdminKey  = fromJust . fromJust . lookup "create_admin_key" $ queryToQueryText $ queryString req
       let passwordParam   = fromJust . fromJust . lookup         "password" $ queryToQueryText $ queryString req
       let firstNameParam  = fromJust . fromJust . lookup       "first_name" $ queryToQueryText $ queryString req
       let lastNameParam   = fromJust . fromJust . lookup        "last_name" $ queryToQueryText $ queryString req
       let userPicUrlParam = fromJust . fromJust . lookup     "user_pic_url" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only key]  <- query_ conn "SELECT create_admin_key FROM key"
       case  createAdminKey == key of
         True -> do
           [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
-          day <- getOrdinalDay  
+          day <- getDay  
           [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, true ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
-          okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = pack ("http://localhost:3000/pic_" ++ show picId)})
+          okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day })
         False -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createAuthor"]        -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
       let userIdParam     = fromJust . fromJust . lookup "user_id"     $ queryToQueryText $ queryString req
       let authorInfoParam = fromJust . fromJust . lookup "author_info" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,?) RETURNING author_id" [ userIdParam, authorInfoParam]
+          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = authorId , auth_user_id = read $ unpack $ userIdParam , author_info = authorInfoParam})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["getAuthor"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let authorIdParam = fromJust . fromJust . lookup "author_id" $ queryToQueryText $ queryString req
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE author_id = ?" [authorIdParam]
+          [Only userId] <- query conn "SELECT user_id FROM authors WHERE author_id = ?" [authorIdParam]
+          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfo})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["updateAuthor"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let authorIdParam = fromJust . fromJust . lookup "author_id" $ queryToQueryText $ queryString req
+      let authorInfoParam = fromJust . fromJust . lookup "author_info" $ queryToQueryText $ queryString req
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only userId] <- query conn "SELECT user_id FROM authors WHERE author_id = ?" [authorIdParam]
+          execute conn "UPDATE authors SET author_info = ? WHERE author_id = ?" [authorInfoParam,authorIdParam]
+          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfoParam})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["deleteAuthor"]   -> do
+      let adminIdParam  = fromJust . fromJust . lookup "admin_id" $ queryToQueryText $ queryString req
+      let pwdParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
+      let authIdParam   = fromJust . fromJust . lookup "author_id"  $ queryToQueryText $ queryString req   
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE author_id = ?)" [authIdParam]
+          case check of
             True -> do
-              [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,?) RETURNING author_id" [ userIdParam, authorInfoParam]
-              okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = authorId , auth_user_id = read $ unpack $ userIdParam , author_info = authorInfoParam})
-            False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+              execute conn "UPDATE posts SET author_id = ? WHERE author_id = ?" [pack . show $ defAuthId,authIdParam]
+              onlyDraftsIds <- (query conn "SELECT draft_id FROM drafts WHERE author_id = ? " [authIdParam]) :: IO [Only Integer]
+              mapM boo $ fmap fromOnly onlyDraftsIds
+              mapM doo $ fmap fromOnly onlyDraftsIds
+              mapM hoo $ fmap fromOnly onlyDraftsIds
+              execute conn "DELETE FROM authors WHERE author_id = ?" [authIdParam]
+              okHelper $ lazyByteString $ encode (OkResponse {ok = True})
+            False -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "author_id:" ++ unpack authIdParam ++ " doesn`t exist"}
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createCategory"]        -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"      $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"      $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"      $ queryToQueryText $ queryString req
       let catNameParam    = fromJust . fromJust . lookup "category_name" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
-            True -> do
-              [Only catId] <- query conn "INSERT INTO categories ( category_name) VALUES (?) RETURNING category_id " [ catNameParam]
-              [Only superCatId] <- query conn "SELECT COALESCE (super_category_id, '0') AS super_category_id FROM categories WHERE category_id = ?" [pack . show $ catId]
-              okHelper $ lazyByteString $ encode (CreateCatResponse { cat_id = catId , cat_name =  catNameParam , super_cat = pack . prettyNull . show $ (superCatId :: Int)})
-            False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only catId] <- query conn "INSERT INTO categories ( category_name) VALUES (?) RETURNING category_id " [ catNameParam]
+          [Only superCatId] <- query conn "SELECT COALESCE (super_category_id, '0') AS super_category_id FROM categories WHERE category_id = ?" [pack . show $ catId]
+          okHelper $ lazyByteString $ encode (CreateCatResponse { cat_id = catId , cat_name =  catNameParam , super_cat = pack . prettyNull . show $ (superCatId :: Int)})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createSubCategory"]        -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
       let catNameParam    = fromJust . fromJust . lookup "category_name"     $ queryToQueryText $ queryString req
       let superCatIdParam = fromJust . fromJust . lookup "super_category_id" $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
-            True -> do
-              [Only catId] <- query conn "INSERT INTO categories ( category_name, super_category_id) VALUES (?,?) RETURNING category_id" [ catNameParam, superCatIdParam ]
-              xs <- foo catId
-              okHelper $ lazyByteString $ encode $ moo xs
-            False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
-    ["getCategory", catId]      -> do
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only catId] <- query conn "INSERT INTO categories ( category_name, super_category_id) VALUES (?,?) RETURNING category_id" [ catNameParam, superCatIdParam ]
+          xs <- foo catId
+          okHelper $ lazyByteString $ encode $ moo xs
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["getCategory", catId] -> do
       xs <- foo (read $ unpack $ catId)
       okHelper $ lazyByteString $ encode $ moo xs
     ["createTag"]  -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
       let tagNameParam    = fromJust . fromJust . lookup "tag_name"     $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
-            True -> do
-              [Only tagId] <- query conn "INSERT INTO tags ( tag_name) VALUES (?) RETURNING tag_id" [ tagNameParam ]
-              okHelper $ lazyByteString $ encode $ CreateTagResponse tagId tagNameParam
-            False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          [Only tagId] <- query conn "INSERT INTO tags ( tag_name) VALUES (?) RETURNING tag_id" [ tagNameParam ]
+          okHelper $ lazyByteString $ encode $ CreateTagResponse tagId tagNameParam
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["getTag",tagId]  -> do
+      [Only tagName] <- query conn "SELECT tag_name FROM tags WHERE tag_id = ? " [ tagId ]
+      okHelper $ lazyByteString $ encode $ CreateTagResponse (read . unpack $ tagId) tagName
+    ["updateTag"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let tagIdParam = fromJust . fromJust . lookup "tag_id" $ queryToQueryText $ queryString req
+      let tagNameParam = fromJust . fromJust . lookup "tag_name" $ queryToQueryText $ queryString req
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          execute conn "UPDATE tags SET tag_name = ? WHERE tag_id = ?" [tagNameParam,tagIdParam]
+          okHelper $ lazyByteString $ encode (CreateTagResponse { tag_id = read . unpack $ tagIdParam , tag_name = tagNameParam})
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+    ["deleteTag"]        -> do
+      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
+      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
+      let tagIdParam = fromJust . fromJust . lookup "tag_id" $ queryToQueryText $ queryString req
+      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+      case zoo pwdParam pwd admBool of
+        "Success" -> do
+          execute conn "DELETE FROM draftstags WHERE tag_id = ?" [tagIdParam]
+          execute conn "DELETE FROM poststags WHERE tag_id = ?" [tagIdParam]
+          execute conn "DELETE FROM tags WHERE tag_id = ?" [tagIdParam]
+          okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createNewDraft"]  -> do
       body <- strictRequestBody req
       let usIdParam = user_id1 . fromJust . decode $ body
@@ -485,11 +605,10 @@ application req send = do
       let draftMainPicUrlParam  = draft_main_pic_url . fromJust . decode $ body
       let draftTagsIds  = fmap tag_id3 . draft_tags_ids . fromJust . decode $ body
       let draftPicsUrls  = fmap pic_url . draft_pics_urls . fromJust . decode $ body
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
       case pwdParam == pwd of
         True -> do
-          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?) AS author_id" [usIdParam]
+          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
           case check of
             True -> do
               [Only authorId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
@@ -501,17 +620,16 @@ application req send = do
               mapM (poo draftId) draftPicsIds
               ys <- mapM roo draftTagsIds
               okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = draftId, post_id2 = "NULL" , author_id2 = authorId, draft_name2 = draftNameParam , draft_cat =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
-            False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+            False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createPostsDraft"]  -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let pwdParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
       let postIdParam  = fromJust . fromJust . lookup "post_id"     $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
       case pwdParam == pwd of
         True -> do
-          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?) AS author_id" [usIdParam]
+          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
           case check of
             True -> do
               [Only authorUsId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
@@ -532,15 +650,14 @@ application req send = do
                   zs <- foo postCatId
                   hs <- mapM roo tagsIds
                   okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = draftId, post_id5 = read . unpack $ postIdParam, author_id5 = authorUsId, draft_name5 = postName , draft_cat5 =  moo zs , draft_text5 = postText , draft_main_pic_id5 =  postMainPicId , draft_main_pic_url5 = voo postMainPicId , draft_tags5 = hs, draft_pics5 =  loo picsIds (fmap voo picsIds)}
-                False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-            False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
-        False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})    
+                False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+            False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})    
     ["publishDraft"]  -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let passwordParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
       let draftIdParam  = fromJust . fromJust . lookup "draft_id"     $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?) AS author_id" [usIdParam]
+      [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
       [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
       [Only authorUsId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
       [Only authorDraftId] <- (query conn "SELECT author_id FROM drafts WHERE draft_id = ?" [draftIdParam]) :: IO [Only Integer]
@@ -552,7 +669,7 @@ application req send = do
             [Only draftCatId] <- query conn "SELECT draft_category_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftText] <- query conn "SELECT draft_text FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftMainPicId] <- query conn "SELECT draft_main_pic_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            day <- getGregorianDay
+            day <- getDay
             [Only postId] <- query conn "INSERT INTO posts (author_id, post_name, post_create_date, post_category_id, post_text, post_main_pic_id) VALUES (?,?,?,?,?,?) RETURNING post_id" [pack . show $ authorUsId,draftName,pack day,pack . show $ draftCatId,draftText,pack . show $ draftMainPicId]
             xs <- query conn "SELECT pic_id FROM draftspics WHERE draft_id = ?" [draftIdParam]
             let picsIds = fmap fromOnly xs
@@ -582,13 +699,12 @@ application req send = do
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
             okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author_id4 = authorUsId, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
-        False -> okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createComment"]  -> do
       let usIdParam    = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
       let postIdParam    = fromJust . fromJust . lookup "post_id"     $ queryToQueryText $ queryString req
       let commentTextParam    = fromJust . fromJust . lookup "comment_text"     $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
       [Only usPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
       case passwordParam == usPassword of
         True -> do
@@ -613,10 +729,28 @@ application req send = do
               xs <- foo catId
               okHelper $ lazyByteString $ encode $ moo xs
             False -> do
-              okHelper $ lazyByteString $ encode (DeleteUserResponse {ok = False})
+              okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
 -}
-    
+
+zoo pwdParam pwd admBool 
+  | admBool && (pwd == pwdParam) = "Success"
+  | admBool                      = "INVALID pwd, admin = True "
+  | (pwd == pwdParam)            = "valid pwd, user is NOT admin"
+  | otherwise                    = "INVALID pwd, user is NOT admin"
+
+boo draftId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute conn "DELETE FROM draftspics WHERE draft_id = ?" [pack . show $ draftId]
+
+doo draftId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute conn "DELETE FROM draftstags WHERE draft_id = ?" [pack . show $ draftId]
+
+hoo draftId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  execute conn "DELETE FROM drafts WHERE draft_id = ?" [pack . show $ draftId]   
+
 voo picId = pack $ "http://localhost:3000/picture/" ++ show picId
 
 koo draftId tagId = do
@@ -673,6 +807,7 @@ prettyNull a   = a
 main :: IO ()
 main = do
   createDbStructure
+  addDefaultParameters
   run 3000 application
 
 
