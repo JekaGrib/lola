@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -18,6 +19,7 @@ import           Data.Time.LocalTime
 import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day )
 import           Database.PostgreSQL.Simple.Time
+import           Data.String                    ( fromString )
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -25,6 +27,7 @@ defUsId = 1
 defPicId = 1
 defAuthId = 1
 
+commentNumberLimit = 20
 
 getDay :: IO String
 getDay = do
@@ -285,7 +288,7 @@ instance FromJSON TagId where
 data CreateNewDraftResponse = CreateNewDraftResponse {
       draft_id      :: Integer
     , post_id2      :: Text
-    , author_id2   :: Integer
+    , author2   :: CreateAuthorResponse
     , draft_name2    :: Text
     , draft_cat :: CreateCatResponse
     , draft_text2  :: Text
@@ -296,10 +299,10 @@ data CreateNewDraftResponse = CreateNewDraftResponse {
     } deriving Show
 
 instance ToJSON CreateNewDraftResponse where
-    toJSON (CreateNewDraftResponse draft_id post_id2 author_id2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags) =
-        object ["draft_id" .= draft_id, "post_id" .= post_id2, "author_id" .= author_id2, "draft_name" .= draft_name2, "draft_category" .= draft_cat, "draft_text" .= draft_text2, "draft_main_pic_id" .= draft_main_pic_id, "draft_main_pic_url" .= draft_main_pic_url2, "draft_pics" .= draft_pics2, "draft_tags" .= draft_tags]
-    toEncoding (CreateNewDraftResponse draft_id post_id2 author_id2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags ) =
-        pairs ("draft_id" .= draft_id <> "post_id" .= post_id2 <> "author_id" .= author_id2 <> "draft_name" .= draft_name2 <> "draft_category" .= draft_cat <> "draft_text" .= draft_text2 <> "draft_main_pic_id" .= draft_main_pic_id <> "draft_main_pic_url" .= draft_main_pic_url2 <> "draft_pics" .= draft_pics2 <> "draft_tags" .= draft_tags)
+    toJSON (CreateNewDraftResponse draft_id post_id2 author2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags) =
+        object ["draft_id" .= draft_id, "post_id" .= post_id2, "author" .= author2, "draft_name" .= draft_name2, "draft_category" .= draft_cat, "draft_text" .= draft_text2, "draft_main_pic_id" .= draft_main_pic_id, "draft_main_pic_url" .= draft_main_pic_url2, "draft_pics" .= draft_pics2, "draft_tags" .= draft_tags]
+    toEncoding (CreateNewDraftResponse draft_id post_id2 author2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags ) =
+        pairs ("draft_id" .= draft_id <> "post_id" .= post_id2 <> "author" .= author2 <> "draft_name" .= draft_name2 <> "draft_category" .= draft_cat <> "draft_text" .= draft_text2 <> "draft_main_pic_id" .= draft_main_pic_id <> "draft_main_pic_url" .= draft_main_pic_url2 <> "draft_pics" .= draft_pics2 <> "draft_tags" .= draft_tags)
 
 
 data PicIdUrl = PicIdUrl {
@@ -316,7 +319,7 @@ instance ToJSON PicIdUrl where
 data CreatePostsDraftResponse = CreatePostsDraftResponse {
       draft_id5      :: Integer
     , post_id5      :: Integer
-    , author_id5   :: Integer
+    , author5   :: CreateAuthorResponse
     , draft_name5    :: Text
     , draft_cat5 :: CreateCatResponse
     , draft_text5  :: Text
@@ -327,14 +330,14 @@ data CreatePostsDraftResponse = CreatePostsDraftResponse {
     } deriving Show
 
 instance ToJSON CreatePostsDraftResponse where
-    toJSON (CreatePostsDraftResponse draft_id5 post_id5 author_id5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5) =
-        object ["draft_id" .= draft_id5, "post_id" .= post_id5, "author_id" .= author_id5, "draft_name" .= draft_name5, "draft_category" .= draft_cat5, "draft_text" .= draft_text5, "draft_main_pic_id" .= draft_main_pic_id5, "draft_main_pic_url" .= draft_main_pic_url5, "draft_pics" .= draft_pics5, "draft_tags" .= draft_tags5]
-    toEncoding (CreatePostsDraftResponse draft_id5 post_id5 author_id5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5 ) =
-        pairs ("draft_id" .= draft_id5 <> "post_id" .= post_id5 <> "author_id" .= author_id5 <> "draft_name" .= draft_name5 <> "draft_category" .= draft_cat5 <> "draft_text" .= draft_text5 <> "draft_main_pic_id" .= draft_main_pic_id5 <> "draft_main_pic_url" .= draft_main_pic_url5 <> "draft_pics" .= draft_pics5 <> "draft_tags" .= draft_tags5)
+    toJSON (CreatePostsDraftResponse draft_id5 post_id5 author5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5) =
+        object ["draft_id" .= draft_id5, "post_id" .= post_id5, "author" .= author5, "draft_name" .= draft_name5, "draft_category" .= draft_cat5, "draft_text" .= draft_text5, "draft_main_pic_id" .= draft_main_pic_id5, "draft_main_pic_url" .= draft_main_pic_url5, "draft_pics" .= draft_pics5, "draft_tags" .= draft_tags5]
+    toEncoding (CreatePostsDraftResponse draft_id5 post_id5 author5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5 ) =
+        pairs ("draft_id" .= draft_id5 <> "post_id" .= post_id5 <> "author" .= author5 <> "draft_name" .= draft_name5 <> "draft_category" .= draft_cat5 <> "draft_text" .= draft_text5 <> "draft_main_pic_id" .= draft_main_pic_id5 <> "draft_main_pic_url" .= draft_main_pic_url5 <> "draft_pics" .= draft_pics5 <> "draft_tags" .= draft_tags5)
 
 data PublishDraftResponse = PublishDraftResponse {
       post_id      :: Integer
-    , author_id4   :: Integer
+    , author4   :: CreateAuthorResponse
     , post_name    :: Text
     , post_create_date :: Text
     , post_cat     :: CreateCatResponse
@@ -346,10 +349,10 @@ data PublishDraftResponse = PublishDraftResponse {
     } deriving Show
 
 instance ToJSON PublishDraftResponse where
-    toJSON (PublishDraftResponse post_id author_id4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
-        object ["post_id" .= post_id, "author_id" .= author_id4, "post_name" .= post_name, "post_create_date" .= post_create_date, "post_category" .= post_cat, "post_text" .= post_text, "post_main_pic_id" .= post_main_pic_id, "post_main_pic_url" .= post_main_pic_url, "post_pics" .= post_pics, "post_tags" .= post_tags]
-    toEncoding (PublishDraftResponse post_id author_id4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
-        pairs ("post_id" .= post_id <> "author_id" .= author_id4  <> "post_name" .= post_name <> "post_create_date" .= post_create_date <> "post_category" .= post_cat <> "post_text" .= post_text <> "post_main_pic_id" .= post_main_pic_id <> "post_main_pic_url" .= post_main_pic_url <> "post_pics" .= post_pics <> "post_tags" .= post_tags)
+    toJSON (PublishDraftResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
+        object ["post_id" .= post_id, "author" .= author4, "post_name" .= post_name, "post_create_date" .= post_create_date, "post_category" .= post_cat, "post_text" .= post_text, "post_main_pic_id" .= post_main_pic_id, "post_main_pic_url" .= post_main_pic_url, "post_pics" .= post_pics, "post_tags" .= post_tags]
+    toEncoding (PublishDraftResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
+        pairs ("post_id" .= post_id <> "author" .= author4  <> "post_name" .= post_name <> "post_create_date" .= post_create_date <> "post_category" .= post_cat <> "post_text" .= post_text <> "post_main_pic_id" .= post_main_pic_id <> "post_main_pic_url" .= post_main_pic_url <> "post_pics" .= post_pics <> "post_tags" .= post_tags)
 
 
 
@@ -376,6 +379,17 @@ instance ToJSON CreateCommentResponse where
         object ["comment_id" .= comment_id, "comment_text" .= comment_text, "post_id" .= post_id, "user_id" .= user_id]
     toEncoding (CreateCommentResponse comment_id comment_text post_id user_id) =
         pairs ( "comment_id" .= comment_id <> "comment_text" .= comment_text <> "post_id" .= post_id <> "user_id" .= user_id )
+
+data CommentsResponse = CommentsResponse {
+      page   :: Integer
+    , comments :: [CreateCommentResponse]
+    } deriving Show
+
+instance ToJSON CommentsResponse where
+    toJSON (CommentsResponse page comments) =
+        object ["page" .= page, "comments" .= comments]
+    toEncoding (CommentsResponse page comments) =
+        pairs ( "page" .= page <> "comments" .= comments )
 
 {-
 
@@ -581,20 +595,23 @@ application req send = do
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["deleteTag"]        -> do
-      let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
-      let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
-      let tagIdParam = fromJust . fromJust . lookup "tag_id" $ queryToQueryText $ queryString req
-      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case zoo pwdParam pwd admBool of
-        "Success" -> do
-          execute conn "DELETE FROM draftstags WHERE tag_id = ?" [tagIdParam]
-          execute conn "DELETE FROM poststags WHERE tag_id = ?" [tagIdParam]
-          execute conn "DELETE FROM tags WHERE tag_id = ?" [tagIdParam]
-          okHelper $ lazyByteString $ encode (OkResponse { ok = True })
-        "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-        "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-        "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+      case fmap (isExistParam req) ["admin_id","password","tag_id"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["admin_id","password","tag_id"] of
+            [Just adminIdParam,Just pwdParam,Just tagIdParam] -> do
+              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+              case zoo pwdParam pwd admBool of
+                "Success" -> do
+                  execute conn "DELETE FROM draftstags WHERE tag_id = ?" [tagIdParam]
+                  execute conn "DELETE FROM poststags WHERE tag_id = ?" [tagIdParam]
+                  execute conn "DELETE FROM tags WHERE tag_id = ?" [tagIdParam]
+                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"} 
     ["createNewDraft"]  -> do
       body <- strictRequestBody req
       let usIdParam = user_id1 . fromJust . decode $ body
@@ -612,6 +629,7 @@ application req send = do
           case check of
             True -> do
               [Only authorId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
+              [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
               [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [draftMainPicUrlParam]
               [Only draftId] <- query conn "INSERT INTO drafts (author_id, draft_name, draft_category_id, draft_text, draft_main_pic_id) VALUES (?,?,?,?,?) RETURNING draft_id" [pack . show $ authorId,draftNameParam,pack . show $ draftCatIdParam,draftTextParam,pack . show $ picId]
               mapM (koo draftId) draftTagsIds
@@ -619,7 +637,7 @@ application req send = do
               draftPicsIds <- mapM goo draftPicsUrls
               mapM (poo draftId) draftPicsIds
               ys <- mapM roo draftTagsIds
-              okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = draftId, post_id2 = "NULL" , author_id2 = authorId, draft_name2 = draftNameParam , draft_cat =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
+              okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = draftId, post_id2 = "NULL" , author2 = CreateAuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createPostsDraft"]  -> do
@@ -641,6 +659,7 @@ application req send = do
                   [Only postCatId] <- query conn "SELECT post_category_id  FROM posts WHERE post_id = ?" [postIdParam]
                   [Only postMainPicId] <- query conn "SELECT post_main_pic_id FROM posts WHERE post_id = ?" [postIdParam]                  
                   [Only draftId] <- query conn "INSERT INTO drafts (post_id, author_id, draft_name, draft_category_id, draft_text, draft_main_pic_id) VALUES (?,?,?,?,?,?) RETURNING draft_id" [postIdParam,pack . show $ authorUsId,postName,pack . show $ postCatId,postText,pack . show $ postMainPicId]
+                  [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
                   xs <- query conn "SELECT pic_id FROM postspics WHERE post_id = ?" [postIdParam]
                   let picsIds = fmap fromOnly xs
                   ys <- query conn "SELECT tag_id FROM poststags WHERE post_id = ?" [postIdParam] 
@@ -649,7 +668,7 @@ application req send = do
                   mapM (poo draftId) picsIds
                   zs <- foo postCatId
                   hs <- mapM roo tagsIds
-                  okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = draftId, post_id5 = read . unpack $ postIdParam, author_id5 = authorUsId, draft_name5 = postName , draft_cat5 =  moo zs , draft_text5 = postText , draft_main_pic_id5 =  postMainPicId , draft_main_pic_url5 = voo postMainPicId , draft_tags5 = hs, draft_pics5 =  loo picsIds (fmap voo picsIds)}
+                  okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = draftId, post_id5 = read . unpack $ postIdParam, author5 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name5 = postName , draft_cat5 =  moo zs , draft_text5 = postText , draft_main_pic_id5 =  postMainPicId , draft_main_pic_url5 = voo postMainPicId , draft_tags5 = hs, draft_pics5 =  loo picsIds (fmap voo picsIds)}
                 False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})    
@@ -669,6 +688,7 @@ application req send = do
             [Only draftCatId] <- query conn "SELECT draft_category_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftText] <- query conn "SELECT draft_text FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftMainPicId] <- query conn "SELECT draft_main_pic_id FROM drafts WHERE draft_id = ?" [draftIdParam]
+            [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
             day <- getDay
             [Only postId] <- query conn "INSERT INTO posts (author_id, post_name, post_create_date, post_category_id, post_text, post_main_pic_id) VALUES (?,?,?,?,?,?) RETURNING post_id" [pack . show $ authorUsId,draftName,pack day,pack . show $ draftCatId,draftText,pack . show $ draftMainPicId]
             xs <- query conn "SELECT pic_id FROM draftspics WHERE draft_id = ?" [draftIdParam]
@@ -679,13 +699,14 @@ application req send = do
             mapM (woo postId) tagsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author_id4 = authorUsId, post_name = draftName , post_create_date = (pack day), post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author4 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
           _ -> do 
             [Only postId] <- query conn "SELECT post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftName] <- query conn "SELECT draft_name FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftCatId] <- query conn "SELECT draft_category_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftText] <- query conn "SELECT draft_text FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftMainPicId] <- query conn "SELECT draft_main_pic_id FROM drafts WHERE draft_id = ?" [draftIdParam]
+            [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
             xs <- query conn "SELECT pic_id FROM draftspics WHERE draft_id = ?" [draftIdParam]
             let picsIds = fmap fromOnly xs
             ys <- query conn "SELECT tag_id FROM draftstags WHERE draft_id = ?" [draftIdParam] 
@@ -698,19 +719,82 @@ application req send = do
             mapM (qoo postId) picsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author_id4 = authorUsId, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author4 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createComment"]  -> do
-      let usIdParam    = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
-      let postIdParam    = fromJust . fromJust . lookup "post_id"     $ queryToQueryText $ queryString req
-      let commentTextParam    = fromJust . fromJust . lookup "comment_text"     $ queryToQueryText $ queryString req
-      [Only usPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
-      case passwordParam == usPassword of
-        True -> do
-          [Only commentId] <- query conn "INSERT INTO comments (comment_text, post_id, user_id) VALUES (?,?,?) RETURNING comment_id" [ commentTextParam, postIdParam, usIdParam ]
-          okHelper $ lazyByteString $ encode $ CreateCommentResponse { comment_id = commentId , comment_text = commentTextParam, post_id6 = read . unpack $ postIdParam, user_id6 = read . unpack $ usIdParam}
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
+      case fmap (isExistParam req) ["user_id","password","post_id","comment_text"] of
+        [True,True,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","post_id","comment_text"] of
+            [Just usIdParam,Just pwdParam,Just postIdParam,Just commentTextParam] -> do
+              [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+              case pwdParam == usPwd of
+                True -> do
+                  [Only commentId] <- query conn "INSERT INTO comments (comment_text, post_id, user_id) VALUES (?,?,?) RETURNING comment_id" [ commentTextParam, postIdParam, usIdParam ]
+                  okHelper $ lazyByteString $ encode $ CreateCommentResponse { comment_id = commentId , comment_text = commentTextParam, post_id6 = read . unpack $ postIdParam, user_id6 = read . unpack $ usIdParam}
+                False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
+    ["getComments"] -> do
+      case fmap (isExistParam req) ["post_id","page"] of
+        [True] -> do
+          case fmap (parseParam req) ["post_id","page"] of
+            [Just postIdParam, Just pageParam] -> do
+              let pageNum = read . unpack $ pageParam
+              commentsIds <- selectLimitListFromDb conn "comments" ("post_id",postIdParam) "comment_id" pageNum commentNumberLimit
+              commentsTexts <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds) 
+              postsIds <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds)
+              usIds <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds)
+              okHelper $ lazyByteString $ encode $ CommentsResponse {page = pageNum, comments = coo commentsIds commentsTexts postsIds usIds }
+    ["updateMyComment"]  -> do
+      case fmap (isExistParam req) ["user_id","password","comment_id","comment_text"] of
+        [True,True,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","comment_id","comment_text"] of
+            [Just usIdParam,Just pwdParam,Just commentIdParam,Just commentTextParam] -> do
+              pwd <- selectFromDb conn "users" ("user_id",usIdParam) "password"
+              case pwd == pwdParam of
+                True -> do
+                  usCommentId <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
+                  case usCommentId == (read . unpack $ usIdParam) of
+                    True -> do
+                      execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
+                      okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                    _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this comment"}
+                _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+    ["deleteComment"]  -> do
+      case fmap (isExistParam req) ["user_id","admin_id","password","comment_id"] of
+        [True,True,True,True] -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Too much query parameters"}
+        [True,False,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","comment_id"] of
+            [Just usIdParam,Just pwdParam,Just commentIdParam] -> do
+              pwd <- selectFromDb conn "users" ("user_id",usIdParam) "password"
+              case pwd == pwdParam of
+                True -> do
+                  usCommentId <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
+                  postId      <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
+                  authPostId  <- (selectFromDb conn "posts" ("post_id",pack . show $ postId) "author_id") :: IO Integer
+                  usPostId  <- (selectFromDb conn "authors" ("auth_id",pack . show $ authPostId) "user_id") :: IO Integer
+                  case (usCommentId == (read . unpack $ usIdParam)) || (usPostId == (read . unpack $ usIdParam)) of
+                    True -> do
+                      execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
+                      okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                    _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot delete this comment"}
+                _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        [False,True,True,True] -> do
+          case fmap (parseParam req) ["admin_id","password","comment_id"] of
+            [Just adminIdParam,Just pwdParam,Just commentIdParam] -> do
+              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+              case zoo pwdParam pwd admBool of
+                "Success" -> do
+                  execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
+                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
 
 
 
@@ -732,6 +816,34 @@ application req send = do
               okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
 -}
+
+
+isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
+  Just _  -> True
+  Nothing -> False
+
+parseParam req txt = fromJust . lookup txt $ queryToQueryText $ queryString req 
+
+--selectFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO a
+selectFromDb conn table (eqParamName,eqParamValue) param = do
+  [Only value] <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
+  return value
+
+reverseSelectFromDb conn table param eqParamName eqParamValue = selectFromDb conn table (eqParamName,eqParamValue) param
+
+--selectListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO [a]
+selectListFromDb conn table (eqParamName,eqParamValue) param  = do
+  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
+  return (fmap fromOnly xs)
+
+
+--selectLimitListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) =>  Connection -> String -> (String,Text) -> String -> Integer -> Integer -> IO [a]
+selectLimitListFromDb conn table (eqParamName,eqParamValue) param page limitNumber = do
+  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT" ++ show (page*limitNumber)) [eqParamValue]
+  return (fmap fromOnly xs)  
+
+coo [a] [b] [c] [d] = [CreateCommentResponse a b c d]
+coo (a:as) (b:bs) (c:cs) (d:ds) = (CreateCommentResponse a b c d) : coo as bs cs ds
 
 zoo pwdParam pwd admBool 
   | admBool && (pwd == pwdParam) = "Success"
