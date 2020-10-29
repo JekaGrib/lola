@@ -26,6 +26,7 @@ defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-47645
 defUsId = 1
 defPicId = 1
 defAuthId = 1
+defCatId = 1
 
 commentNumberLimit = 20
 
@@ -71,6 +72,12 @@ createDefaultAuthor userId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,'DELETED' ) RETURNING author_id" [pack . show $ userId]  
   return authorId
+
+createDefaultCategory :: IO Integer
+createDefaultCategory = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only catId] <- query_ conn "INSERT INTO categories (category_name) VALUES ( 'NONE' ) RETURNING category_id" 
+  return catId
 
 createCreateAdminKeyTable :: IO ()
 createCreateAdminKeyTable = do
@@ -155,6 +162,7 @@ addDefaultParameters = do
   picId <- createDefaultPicture
   userId <- createDefaultUser picId
   authorId <- createDefaultAuthor userId
+  createDefaultCategory
   return [picId,userId,authorId]
   
 
@@ -579,6 +587,45 @@ application req send = do
     ["getCategory", catId] -> do
       xs <- foo (read $ unpack $ catId)
       okHelper $ lazyByteString $ encode $ moo xs
+    ["updateCategory"] -> do
+      case fmap (isExistParam req) ["admin_id","password","category_id","category_name","super_category_id"] of
+        [True,True,True,True,True] -> do
+          case fmap (parseParam req) ["admin_id","password","category_id","category_name","super_category_id"] of
+            [Just adminIdParam,Just pwdParam,Just catIdParam,Just catNameParam,Just superCatIdParam] -> do
+              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+              case zoo pwdParam pwd admBool of
+                "Success" -> do
+                  updateDb conn "categories" ("category_name", catNameParam) "category_id" catIdParam
+                  updateDb conn "categories" ("super_category_id", superCatIdParam) "category_id" catIdParam
+                  allSuperCats <- foo (read $ unpack $ catIdParam)  
+                  okHelper $ lazyByteString $ encode $ moo allSuperCats
+                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"} 
+    ["deleteCategory"] -> do
+      case fmap (isExistParam req) ["admin_id","password","category_id"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["admin_id","password","category_id"] of
+            [Just adminIdParam,Just pwdParam,Just catIdParam] -> do
+              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+              case zoo pwdParam pwd admBool of
+                "Success" -> do
+                  let catIdNum = read . unpack $ catIdParam
+                  xs <- findAllSubCat catIdNum
+                  let allSubCats = fmap (pack . show) . Prelude.reverse $ xs
+                  mapM (updateDb conn "posts" ("post_category_id", pack . show $ defCatId) "post_category_id") allSubCats
+                  mapM (updateDb conn "drafts" ("draft_category_id", pack . show $ defCatId) "draft_category_id") allSubCats
+                  mapM (deleteFromDb conn "categories" "category_id") allSubCats
+                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"} 
     ["createTag"]  -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
       let pwdParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
@@ -686,7 +733,43 @@ application req send = do
                   okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = draftId, post_id5 = read . unpack $ postIdParam, author5 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name5 = postName , draft_cat5 =  moo zs , draft_text5 = postText , draft_main_pic_id5 =  postMainPicId , draft_main_pic_url5 = voo postMainPicId , draft_tags5 = hs, draft_pics5 =  loo picsIds (fmap voo picsIds)}
                 False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
-        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})    
+        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+    ["getDraft"]  -> do
+      case fmap (isExistParam req) ["user_id","password","draft_id"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","draft_id"] of
+            [Just usIdParam,Just pwdParam,Just draftIdParam] -> do
+              [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+              case pwdParam == usPwd of
+                True -> do
+                  authorId <- selectFromDb conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
+                  usDraftId <- selectFromDb conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
+                  case usDraftId == (read . unpack $ usIdParam) of
+                    True -> do
+                      [Only postId] <- query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
+                      case postId of
+                        0 -> do
+                          [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
+                          [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
+                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
+                          allSuperCats <- foo draftCatId  
+                          draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
+                          draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
+                          hs <- mapM roo draftTagsIds
+                          okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = read . unpack $ draftIdParam, post_id2 = "NULL" , author2 = CreateAuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
+                        _ -> do
+                          [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
+                          [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
+                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
+                          allSuperCats <- foo draftCatId  
+                          draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
+                          draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
+                          hs <- mapM roo draftTagsIds
+                          okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = read . unpack $ draftIdParam, post_id5 = postId , author5 = CreateAuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name5 = draftName , draft_cat5 =  moo allSuperCats , draft_text5 = draftText , draft_main_pic_id5 =  draftPicId , draft_main_pic_url5 = voo draftPicId , draft_tags5 = hs, draft_pics5 =  loo draftPicsIds (fmap voo draftPicsIds)}   
+                    False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get this draft"}
+                False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}    
     ["publishDraft"]  -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let passwordParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
@@ -855,13 +938,34 @@ selectLimitListFromDb conn table (eqParamName,eqParamValue) param page limitNumb
   xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) [eqParamValue]
   return (fmap fromOnly xs)  
 
+--updateDb :: Connection -> String -> (String,Text) -> String -> Text -> IO GHC.Int.Int64
+updateDb conn table (setName,setValue) eqParamName eqParamValue  = do
+  execute conn (fromString $ "UPDATE " ++ table ++ " SET " ++ setName ++ " = ? WHERE " ++ eqParamName ++ " = ?") [setValue,eqParamValue]
+  
 
+
+--deleteFromDb :: Connection -> String -> String -> Text -> IO GHC.Int.Int64
+deleteFromDb conn table eqParamName eqParamValue = do
+  execute conn (fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
+  
 
 --coo [a] [b] [c] [d] = [CommentIdTextUserResponse a b c d]
 --coo (a:as) (b:bs) (c:cs) (d:ds) = (CommentIdTextUserResponse a b c d) : coo as bs cs ds
 --coo :: [(Integer,Text,Integer)] -> [CommentIdTextUserResponse]
 coo [(a,b,c)] = [CommentIdTextUserResponse a b c]
 coo ((a,b,c):cs) = (CommentIdTextUserResponse a b c): coo cs
+
+findAllSubCat :: Integer -> IO [Integer]
+findAllSubCat catId = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  [Only tf] <- query conn "SELECT EXISTS (SELECT category_id FROM categories WHERE super_category_id = ?)" [pack . show $ catId]
+  case tf of
+    False -> return [catId]
+    True  -> do
+      xs <- selectListFromDb conn "categories" ("super_category_id",(pack . show $ catId)) "category_id"
+      ys <- mapM findAllSubCat xs
+      return $ catId : (Prelude.concat  ys)
+
 
 zoo pwdParam pwd admBool 
   | admBool && (pwd == pwdParam) = "Success"
@@ -913,6 +1017,7 @@ goo t = do
 
 loo [x] [y] = [PicIdUrl x y]
 loo (x:xs) (y:ys) = PicIdUrl x y : loo xs ys
+
 
 
 foo :: Integer -> IO [(Integer,Text)]
