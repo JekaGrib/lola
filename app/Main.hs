@@ -380,16 +380,31 @@ instance ToJSON CreateCommentResponse where
     toEncoding (CreateCommentResponse comment_id comment_text post_id user_id) =
         pairs ( "comment_id" .= comment_id <> "comment_text" .= comment_text <> "post_id" .= post_id <> "user_id" .= user_id )
 
+data CommentIdTextUserResponse = CommentIdTextUserResponse {
+      comment_id8   :: Integer
+    , comment_text8 :: Text
+    , user_id8   :: Integer
+    } deriving Show
+
+instance ToJSON CommentIdTextUserResponse where
+    toJSON (CommentIdTextUserResponse comment_id comment_text user_id) =
+        object ["comment_id" .= comment_id, "comment_text" .= comment_text, "user_id" .= user_id]
+    toEncoding (CommentIdTextUserResponse comment_id comment_text user_id) =
+        pairs ( "comment_id" .= comment_id <> "comment_text" .= comment_text <> "user_id" .= user_id )
+
 data CommentsResponse = CommentsResponse {
-      page   :: Integer
-    , comments :: [CreateCommentResponse]
+      page     :: Integer
+    , post_id9 :: Integer
+    , comments :: [CommentIdTextUserResponse]
     } deriving Show
 
 instance ToJSON CommentsResponse where
-    toJSON (CommentsResponse page comments) =
-        object ["page" .= page, "comments" .= comments]
-    toEncoding (CommentsResponse page comments) =
-        pairs ( "page" .= page <> "comments" .= comments )
+    toJSON (CommentsResponse page post_id comments) =
+        object ["page" .= page, "post_id" .= post_id, "comments" .= comments]
+    toEncoding (CommentsResponse page post_id comments) =
+        pairs ( "page" .= page <> "post_id" .= post_id <> "comments" .= comments )
+
+
 
 {-
 
@@ -740,11 +755,8 @@ application req send = do
           case fmap (parseParam req) ["post_id","page"] of
             [Just postIdParam, Just pageParam] -> do
               let pageNum = read . unpack $ pageParam
-              commentsIds <- selectLimitListFromDb conn "comments" ("post_id",postIdParam) "comment_id" pageNum commentNumberLimit
-              commentsTexts <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds) 
-              postsIds <- mapM (reverseSelectFromDb conn "comments" "post_id" "comment_id") (fmap (pack . show) commentsIds)
-              usIds <- mapM (reverseSelectFromDb conn "comments" "user_id" "comment_id") (fmap (pack . show) commentsIds)
-              okHelper $ lazyByteString $ encode $ CommentsResponse {page = pageNum, comments = coo commentsIds commentsTexts postsIds usIds }
+              xs <- (query conn (fromString $ "SELECT comment_id, comment_text, user_id FROM comments WHERE post_id = ? OFFSET " ++ show ((pageNum-1)*commentNumberLimit) ++ " LIMIT " ++ show (pageNum*commentNumberLimit)) [postIdParam]) :: IO [(Integer,Text,Integer)]
+              okHelper $ lazyByteString $ encode $ CommentsResponse {page = pageNum, post_id9 = (read . unpack $ postIdParam), comments = coo xs }
     ["updateMyComment"]  -> do
       case fmap (isExistParam req) ["user_id","password","comment_id","comment_text"] of
         [True,True,True,True] -> do
@@ -845,8 +857,11 @@ selectLimitListFromDb conn table (eqParamName,eqParamValue) param page limitNumb
 
 
 
-coo [a] [b] [c] [d] = [CreateCommentResponse a b c d]
-coo (a:as) (b:bs) (c:cs) (d:ds) = (CreateCommentResponse a b c d) : coo as bs cs ds
+--coo [a] [b] [c] [d] = [CommentIdTextUserResponse a b c d]
+--coo (a:as) (b:bs) (c:cs) (d:ds) = (CommentIdTextUserResponse a b c d) : coo as bs cs ds
+--coo :: [(Integer,Text,Integer)] -> [CommentIdTextUserResponse]
+coo [(a,b,c)] = [CommentIdTextUserResponse a b c]
+coo ((a,b,c):cs) = (CommentIdTextUserResponse a b c): coo cs
 
 zoo pwdParam pwd admBool 
   | admBool && (pwd == pwdParam) = "Success"
