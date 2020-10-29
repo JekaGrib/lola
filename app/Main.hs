@@ -736,14 +736,14 @@ application req send = do
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
     ["getComments"] -> do
       case fmap (isExistParam req) ["post_id","page"] of
-        [True] -> do
+        [True,True] -> do
           case fmap (parseParam req) ["post_id","page"] of
             [Just postIdParam, Just pageParam] -> do
               let pageNum = read . unpack $ pageParam
               commentsIds <- selectLimitListFromDb conn "comments" ("post_id",postIdParam) "comment_id" pageNum commentNumberLimit
               commentsTexts <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds) 
-              postsIds <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds)
-              usIds <- mapM (reverseSelectFromDb conn "comments" "comment_text" "comment_id") (fmap (pack . show) commentsIds)
+              postsIds <- mapM (reverseSelectFromDb conn "comments" "post_id" "comment_id") (fmap (pack . show) commentsIds)
+              usIds <- mapM (reverseSelectFromDb conn "comments" "user_id" "comment_id") (fmap (pack . show) commentsIds)
               okHelper $ lazyByteString $ encode $ CommentsResponse {page = pageNum, comments = coo commentsIds commentsTexts postsIds usIds }
     ["updateMyComment"]  -> do
       case fmap (isExistParam req) ["user_id","password","comment_id","comment_text"] of
@@ -757,7 +757,8 @@ application req send = do
                   case usCommentId == (read . unpack $ usIdParam) of
                     True -> do
                       execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
-                      okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                      postId  <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
+                      okHelper $ lazyByteString $ encode $ CreateCommentResponse { comment_id = (read . unpack $ commentIdParam) , comment_text = commentTextParam, post_id6 = postId, user_id6 = usCommentId}
                     _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this comment"}
                 _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
@@ -773,7 +774,7 @@ application req send = do
                   usCommentId <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
                   postId      <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
                   authPostId  <- (selectFromDb conn "posts" ("post_id",pack . show $ postId) "author_id") :: IO Integer
-                  usPostId  <- (selectFromDb conn "authors" ("auth_id",pack . show $ authPostId) "user_id") :: IO Integer
+                  usPostId  <- (selectFromDb conn "authors" ("author_id",pack . show $ authPostId) "user_id") :: IO Integer
                   case (usCommentId == (read . unpack $ usIdParam)) || (usPostId == (read . unpack $ usIdParam)) of
                     True -> do
                       execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
@@ -839,8 +840,10 @@ selectListFromDb conn table (eqParamName,eqParamValue) param  = do
 
 --selectLimitListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) =>  Connection -> String -> (String,Text) -> String -> Integer -> Integer -> IO [a]
 selectLimitListFromDb conn table (eqParamName,eqParamValue) param page limitNumber = do
-  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT" ++ show (page*limitNumber)) [eqParamValue]
+  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) [eqParamValue]
   return (fmap fromOnly xs)  
+
+
 
 coo [a] [b] [c] [d] = [CreateCommentResponse a b c d]
 coo (a:as) (b:bs) (c:cs) (d:ds) = (CreateCommentResponse a b c d) : coo as bs cs ds
