@@ -9,7 +9,7 @@ import           Network.HTTP.Types             ( status200, status404, status30
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
 import           Data.Aeson
-import           Data.Text
+import           Data.Text                      ( pack, unpack, Text )
 import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
 import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS )
@@ -20,6 +20,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
+import           Data.List                      ( intercalate, zip4 )
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -29,6 +30,7 @@ defAuthId = 1
 defCatId = 1
 
 commentNumberLimit = 20
+draftNumberLimit = 5
 
 getDay :: IO String
 getDay = do
@@ -334,6 +336,18 @@ instance ToJSON PicIdUrl where
         object ["pic_id" .= pic_id2, "pic_url" .= pic_url]
     toEncoding (PicIdUrl pic_id2 pic_url ) =
         pairs ( "pic_id" .= pic_id2 <> "pic_url" .= pic_url )
+
+data DraftsResponse = DraftsResponse {
+      page9     :: Integer
+    , drafts9 :: [DraftResponse]
+    } deriving Show
+
+instance ToJSON DraftsResponse where
+    toJSON (DraftsResponse page drafts ) =
+        object ["page" .= page, "drafts" .= drafts]
+    toEncoding (DraftsResponse page drafts ) =
+        pairs ( "page" .= page <> "drafts" .= drafts )
+  
 
 data PostResponse = PostResponse {
       post_id      :: Integer
@@ -676,7 +690,7 @@ application req send = do
               draftPicsIds <- mapM goo draftPicsUrls
               mapM (poo draftId) draftPicsIds
               ys <- mapM roo draftTagsIds
-              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
+              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = voo picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createPostsDraft"]  -> do
@@ -724,29 +738,81 @@ application req send = do
                   case usDraftId == (read . unpack $ usIdParam) of
                     True -> do
                       [Only postId] <- query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-                      case postId of
-                        0 -> do
-                          [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
-                          [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
-                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
-                          allSuperCats <- foo draftCatId  
-                          draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
-                          draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
-                          hs <- mapM roo draftTagsIds
-                          okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
-                        _ -> do
-                          [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
-                          [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
-                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
-                          allSuperCats <- foo draftCatId  
-                          draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
-                          draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
-                          hs <- mapM roo draftTagsIds
-                          okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = PostInteger $ postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
+                      [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
+                      [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
+                      authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
+                      allSuperCats <- foo draftCatId  
+                      draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
+                      draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
+                      hs <- mapM roo draftTagsIds
+                      okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
                     False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get this draft"}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}    
+    ["getDrafts"]  -> do
+      case fmap (isExistParam req) ["user_id","password","page"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","page"] of
+            [Just usIdParam,Just pwdParam,Just pageParam] -> do
+              [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+              case pwdParam == usPwd of
+                True -> do
+                  [Only isAuthor]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
+                  case isAuthor of
+                    True -> do
+                      authorId <- selectFromDb conn "authors" ("user_id",usIdParam) "author_id" :: IO Integer
+                      [Only isExistDraft]  <- query conn "SELECT EXISTS (SELECT draft_id FROM drafts WHERE author_id = ?)" [(pack . show $ authorId)]
+                      case isExistDraft of
+                        True -> do
+                          let pageNum = read . unpack $ pageParam
+                          params <- selectManyLimitFromDb conn "drafts" ("author_id",(pack . show $ authorId)) ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] pageNum draftNumberLimit
+                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info"
+                          let alldraftIdsText = fmap (pack . show . firstSix) params
+                          let allCatIdsNum = fmap fourthSix params
+                          manyAllSuperCats <- mapM foo allCatIdsNum
+                          manyDraftPicsIds <- mapM (reverseSelectListFromDb conn "draftspics" "pic_id" "draft_id") alldraftIdsText  
+                          manyDraftTagsIds <- mapM (reverseSelectListFromDb conn "draftstags" "tag_id" "draft_id") alldraftIdsText  
+                          hss <- mapM (mapM roo) manyDraftTagsIds
+                          let allParams = zip4 params manyAllSuperCats manyDraftPicsIds hss
+                          okHelper $ lazyByteString $ encode $ DraftsResponse { page9 = pageNum , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId),cats,pics,tags) -> DraftResponse { draft_id2 = draftId, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo cats , draft_text2 = draftText , draft_main_pic_id2 =  draftMainPicId , draft_main_pic_url2 = voo draftMainPicId , draft_tags2 = tags, draft_pics2 =  loo pics (fmap voo pics)}) allParams }   
+                        False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Author has not draft"}
+                    False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get drafts"}
+                False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}    
+    ["updateDraft",draftId]  -> do
+      let draftIdNum = read . unpack $ draftId
+      body <- strictRequestBody req
+      let usIdParam = user_id1 . fromJust . decode $ body
+      let pwdParam  = password1 . fromJust . decode $ body
+      let draftNameParam  = draft_name . fromJust . decode $ body
+      let draftCatIdParam  = draft_cat_id . fromJust . decode $ body
+      let draftTextParam  = draft_text1 . fromJust . decode $ body
+      let draftMainPicUrlParam  = draft_main_pic_url . fromJust . decode $ body
+      let draftTagsIds  = fmap tag_id3 . draft_tags_ids . fromJust . decode $ body
+      let draftPicsUrls  = fmap pic_url . draft_pics_urls . fromJust . decode $ body
+      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+      case pwdParam == pwd of
+        True -> do
+          authorUsId <- selectFromDb conn "authors" ("user_id",pack .show $ usIdParam) "author_id" :: IO Integer
+          authorDraftId <- selectFromDb conn "drafts" ("draft_id",draftId) "author_id" :: IO Integer
+          case (authorUsId == authorDraftId) of
+            True -> do
+              [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [pack .show $ usIdParam]
+              [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [draftMainPicUrlParam]
+              execute conn "DELETE FROM draftstags WHERE draft_id = ?" [draftId]
+              execute conn "DELETE FROM draftspics WHERE draft_id = ?" [draftId]
+              execute conn "UPDATE drafts SET draft_name = ?, draft_category_id = ?, draft_text = ?, draft_main_pic_id = ? WHERE draft_id = ?" [draftNameParam,pack . show $ draftCatIdParam,draftTextParam,pack . show $ picId,draftId]
+              mapM (koo draftIdNum) draftTagsIds
+              ys <- mapM roo draftTagsIds
+              draftPicsIds <- mapM goo draftPicsUrls
+              mapM (poo draftIdNum) draftPicsIds
+              xs <- foo draftCatIdParam
+              [Only postId]   <- (query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftId]) :: IO [Only Integer]
+              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorDraftId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = voo picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}
+            False -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this draft"}
+        False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
     ["publishDraft"]  -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let passwordParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
@@ -883,12 +949,23 @@ selectFromDb conn table (eqParamName,eqParamValue) param = do
   [Only value] <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return value
 
+selectManyFromDb conn table (eqParamName,eqParamValue) params = do
+  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
+  return xs
+
+selectManyLimitFromDb conn table (eqParamName,eqParamValue) params page limitNumber = do
+  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) [eqParamValue]
+  return xs
+
+
 reverseSelectFromDb conn table param eqParamName eqParamValue = selectFromDb conn table (eqParamName,eqParamValue) param
 
 --selectListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO [a]
 selectListFromDb conn table (eqParamName,eqParamValue) param  = do
   xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return (fmap fromOnly xs)
+
+reverseSelectListFromDb conn table param eqParamName eqParamValue = selectListFromDb conn table (eqParamName,eqParamValue) param
 
 
 --selectLimitListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) =>  Connection -> String -> (String,Text) -> String -> Integer -> Integer -> IO [a]
@@ -1005,3 +1082,56 @@ main = do
 
 
 
+
+firstThree (a,b,c) = a
+firstFour  (a,b,c,d) = a
+firstFive  (a,b,c,d,e) = a
+firstSix   (a,b,c,d,e,f) = a
+firstSeven (a,b,c,d,e,f,g) = a
+firstEight (a,b,c,d,e,f,g,h) = a
+firstNine  (a,b,c,d,e,f,g,h,i) = a
+firstTen   (a,b,c,d,e,f,g,h,i,j) = a
+
+secondThree (a,b,c) = b
+secondFour  (a,b,c,d) = b
+secondFive  (a,b,c,d,e) = b
+secondSix   (a,b,c,d,e,f) = b
+secondSeven (a,b,c,d,e,f,g) = b
+secondEight (a,b,c,d,e,f,g,h) = b
+secondNine  (a,b,c,d,e,f,g,h,i) = b
+secondTen   (a,b,c,d,e,f,g,h,i,j) = b
+
+thirdThree (a,b,c) = c
+thirdFour  (a,b,c,d) = c
+thirdFive  (a,b,c,d,e) = c
+thirdSix   (a,b,c,d,e,f) = c
+thirdSeven (a,b,c,d,e,f,g) = c
+thirdEight (a,b,c,d,e,f,g,h) = c
+thirdNine  (a,b,c,d,e,f,g,h,i) = c
+thirdTen   (a,b,c,d,e,f,g,h,i,j) = c
+
+fourthFour  (a,b,c,d) = d
+fourthFive  (a,b,c,d,e) = d
+fourthSix   (a,b,c,d,e,f) = d
+fourthSeven (a,b,c,d,e,f,g) = d
+fourthEight (a,b,c,d,e,f,g,h) = d
+fourthNine  (a,b,c,d,e,f,g,h,i) = d
+fourthTen   (a,b,c,d,e,f,g,h,i,j) = d
+
+fifthFive  (a,b,c,d,e) = e
+fifthSix   (a,b,c,d,e,f) = e
+fifthSeven (a,b,c,d,e,f,g) = e
+fifthEight (a,b,c,d,e,f,g,h) = e
+fifthNine  (a,b,c,d,e,f,g,h,i) = e
+fifthTen   (a,b,c,d,e,f,g,h,i,j) = e
+
+sixthSix   (a,b,c,d,e,f) = f
+sixthSeven (a,b,c,d,e,f,g) = f
+sixthEight (a,b,c,d,e,f,g,h) = f
+sixthNine  (a,b,c,d,e,f,g,h,i) = f
+sixthTen   (a,b,c,d,e,f,g,h,i,j) = f
+
+seventhSeven (a,b,c,d,e,f,g) = g
+seventhEight (a,b,c,d,e,f,g,h) = g
+seventhNine  (a,b,c,d,e,f,g,h,i) = g
+seventhTen   (a,b,c,d,e,f,g,h,i,j) = g
