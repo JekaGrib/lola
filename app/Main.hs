@@ -813,6 +813,26 @@ application req send = do
               okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorDraftId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = voo picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}
             False -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this draft"}
         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+    ["deleteDraft"]  -> do
+      case fmap (isExistParam req) ["user_id","password","draft_id"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["user_id","password","draft_id"] of
+            [Just usIdParam,Just pwdParam,Just draftIdParam] -> do
+              [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
+              case pwdParam == usPwd of
+                True -> do
+                  authorId <- selectFromDb conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
+                  usDraftId <- selectFromDb conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
+                  case usDraftId == (read . unpack $ usIdParam) of
+                    True -> do
+                      execute conn "DELETE FROM draftstags WHERE draft_id = ?" [draftIdParam]
+                      execute conn "DELETE FROM draftspics WHERE draft_id = ?" [draftIdParam]
+                      execute conn "DELETE FROM drafts WHERE draft_id = ?" [draftIdParam]
+                      okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                    False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot delete this draft"}
+                False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}    
     ["publishDraft"]  -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
       let passwordParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
