@@ -882,6 +882,17 @@ application req send = do
             hs <- mapM roo tagsIds
             okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+    ["getPost",postId]  -> do
+      [Only isExistPost]  <- query conn "SELECT EXISTS (SELECT post_id FROM posts WHERE post_id = ?)" [postId]
+      case isExistPost of
+        True -> do  
+          [(auId,usId,auInfo,pName,pDate,pCatId,pText,picId)] <- selectManyFromDb conn "posts JOIN authors ON authors.author_id = posts.author_id " ("post_id",postId) ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+          allSuperCats <- foo pCatId
+          picsIds <- selectListFromDb conn "postspics" ("post_id",postId) "pic_id"
+          tagsIds <- selectListFromDb conn "poststags" ("post_id",postId) "tag_id"
+          hs <- mapM roo tagsIds
+          okHelper $ lazyByteString $ encode $ PostResponse { post_id = (read . unpack $ postId), author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = moo allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = voo picId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
+        False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Post id:" ++ unpack postId ++ " doesn`t exist"}
     ["deletePost"]  -> do
       case fmap (isExistParam req) ["admin_id","password","post_id"] of
         [True,True,True] -> do
@@ -1182,3 +1193,7 @@ seventhSeven (a,b,c,d,e,f,g) = g
 seventhEight (a,b,c,d,e,f,g,h) = g
 seventhNine  (a,b,c,d,e,f,g,h,i) = g
 seventhTen   (a,b,c,d,e,f,g,h,i,j) = g
+
+eighthEight (a,b,c,d,e,f,g,h) = h
+eighthNine  (a,b,c,d,e,f,g,h,i) = h
+eighthTen   (a,b,c,d,e,f,g,h,i,j) = h
