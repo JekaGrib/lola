@@ -882,6 +882,26 @@ application req send = do
             hs <- mapM roo tagsIds
             okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+    ["deletePost"]  -> do
+      case fmap (isExistParam req) ["admin_id","password","post_id"] of
+        [True,True,True] -> do
+          case fmap (parseParam req) ["admin_id","password","post_id"] of
+            [Just adminIdParam,Just pwdParam,Just postIdParam] -> do
+              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
+              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
+              case zoo pwdParam pwd admBool of
+                "Success" -> do
+                  execute conn "DELETE FROM poststags WHERE post_id = ?" [postIdParam]
+                  execute conn "DELETE FROM postspics WHERE post_id = ?" [postIdParam]
+                  execute conn "DELETE FROM comments  WHERE post_id = ?" [postIdParam]
+                  execute conn "DELETE FROM drafts    WHERE post_id = ?" [postIdParam]
+                  execute conn "DELETE FROM posts     WHERE post_id = ?" [postIdParam]
+                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
+                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
+            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
+        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}      
     ["createComment"]  -> do
       case fmap (isExistParam req) ["user_id","password","post_id","comment_text"] of
         [True,True,True,True] -> do
