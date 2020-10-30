@@ -974,6 +974,13 @@ application req send = do
                 "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
+    ["picture",picId]  -> do
+      picUrl <- selectFromDb conn "pics" ("pic_id",picId) "pic_url"
+      res <- httpLBS $ fromString $ unpack $ picUrl
+      send $ responseBuilder 
+        status200 
+        [("Content-Type", "image/jpeg")] 
+        $ lazyByteString $ getResponseBody res 
 
 
 
