@@ -168,7 +168,7 @@ addDefaultParameters = do
 
 
 
-data CreateUserResponse = CreateUserResponse {
+data UserResponse = UserResponse {
       user_id      :: Integer
     , first_name   :: Text
     , last_name    :: Text
@@ -177,10 +177,10 @@ data CreateUserResponse = CreateUserResponse {
     , user_create_date :: Text
     } deriving Show
 
-instance ToJSON CreateUserResponse where
-    toJSON (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
+instance ToJSON UserResponse where
+    toJSON (UserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
         object ["user_id" .= user_id, "first_name" .= first_name, "last_name" .= last_name, "user_pic_id" .= user_pic_id, "user_pic_url" .= user_pic_url, "user_create_date" .= user_create_date]
-    toEncoding (CreateUserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
+    toEncoding (UserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
         pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url <> "user_create_date" .= user_create_date)
 
 data OkResponse = OkResponse {ok :: Bool}
@@ -201,42 +201,42 @@ instance ToJSON OkInfoResponse where
 
 
 
-data CreateAuthorResponse = CreateAuthorResponse {
+data AuthorResponse = AuthorResponse {
       author_id    :: Integer
     , auth_user_id :: Integer
     , author_info  :: Text
     } deriving Show
 
-instance ToJSON CreateAuthorResponse where
-    toJSON (CreateAuthorResponse author_id auth_user_id author_info ) =
+instance ToJSON AuthorResponse where
+    toJSON (AuthorResponse author_id auth_user_id author_info ) =
         object ["author_id" .= author_id, "user_id" .= auth_user_id, "author_info" .= author_info]
-    toEncoding (CreateAuthorResponse author_id auth_user_id author_info ) =
+    toEncoding (AuthorResponse author_id auth_user_id author_info ) =
         pairs ( "author_id" .= author_id <> "user_id" .= auth_user_id <> "author_info" .= author_info)
 
-data CreateCatResponse 
-  = CreateSubCatResponse {
+data CatResponse 
+  = SubCatResponse {
       subCat_id      :: Integer
     , subCat_name    :: Text
-    , super_category :: CreateCatResponse
+    , super_category :: CatResponse
     } 
-  | CreateCatResponse {
+  | CatResponse {
       cat_id    :: Integer
     , cat_name  :: Text
     , super_cat :: Text
     } deriving Show
 
 
-instance ToJSON CreateCatResponse where
-    toJSON (CreateCatResponse cat_id cat_name super_cat) =
+instance ToJSON CatResponse where
+    toJSON (CatResponse cat_id cat_name super_cat) =
         object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
-    toJSON (CreateSubCatResponse cat_id cat_name super_cat) =
+    toJSON (SubCatResponse cat_id cat_name super_cat) =
         object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
-    toEncoding (CreateCatResponse cat_id cat_name super_cat) =
+    toEncoding (CatResponse cat_id cat_name super_cat) =
         pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
-    toEncoding (CreateSubCatResponse cat_id cat_name super_cat) =
+    toEncoding (SubCatResponse cat_id cat_name super_cat) =
         pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
 
-data CreateDraftRequest = CreateDraftRequest {
+data DraftRequest = DraftRequest {
       user_id1      :: Integer
     , password1   :: Text
     , draft_name    :: Text
@@ -247,8 +247,8 @@ data CreateDraftRequest = CreateDraftRequest {
     , draft_tags_ids :: [TagId]
     } deriving Show
 
-instance FromJSON CreateDraftRequest where
-    parseJSON (Object v) = CreateDraftRequest
+instance FromJSON DraftRequest where
+    parseJSON (Object v) = DraftRequest
         <$> v .: "user_id"
         <*> v .: "password"
         <*> v .: "draft_name"
@@ -258,10 +258,10 @@ instance FromJSON CreateDraftRequest where
         <*> v .: "draft_pics_urls"
         <*> v .: "draft_tags_ids" 
 
-instance ToJSON CreateDraftRequest where
-    toJSON (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids ) =
+instance ToJSON DraftRequest where
+    toJSON (DraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids ) =
         object ["user_id" .= user_id1, "password" .= password1, "draft_name" .= draft_name, "draft_category_id" .= draft_cat_id, "draft_text" .= draft_text1, "draft_main_pic_url" .= draft_main_pic_url, "draft_pics_urls" .= draft_pics_urls, "draft_tags_ids" .= draft_tags_ids]
-    toEncoding (CreateDraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids) =
+    toEncoding (DraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids) =
         pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text1 <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics_urls" .= draft_pics_urls <> "draft_tags_ids" .= draft_tags_ids)
 
 data PicUrl = PicUrl {
@@ -293,24 +293,35 @@ instance FromJSON TagId where
         <$> v .: "tag_id"
 
 
-data CreateNewDraftResponse = CreateNewDraftResponse {
-      draft_id      :: Integer
-    , post_id2      :: Text
-    , author2   :: CreateAuthorResponse
+data Post = PostInteger Integer | PostText Text
+
+instance Show Post where
+  show (PostInteger a) = show a
+  show (PostText a) = unpack a
+
+instance ToJSON Post where
+  toJSON (PostInteger a) = toJSON a
+  toJSON (PostText a) = toJSON a
+  
+
+data DraftResponse = DraftResponse {
+      draft_id2      :: Integer
+    , post_id2      :: Post
+    , author2   :: AuthorResponse
     , draft_name2    :: Text
-    , draft_cat :: CreateCatResponse
+    , draft_cat2 :: CatResponse
     , draft_text2  :: Text
-    , draft_main_pic_id  :: Integer
+    , draft_main_pic_id2  :: Integer
     , draft_main_pic_url2 :: Text
     , draft_pics2 :: [PicIdUrl]
-    , draft_tags ::  [CreateTagResponse]
+    , draft_tags2 ::  [TagResponse]
     } deriving Show
 
-instance ToJSON CreateNewDraftResponse where
-    toJSON (CreateNewDraftResponse draft_id post_id2 author2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags) =
-        object ["draft_id" .= draft_id, "post_id" .= post_id2, "author" .= author2, "draft_name" .= draft_name2, "draft_category" .= draft_cat, "draft_text" .= draft_text2, "draft_main_pic_id" .= draft_main_pic_id, "draft_main_pic_url" .= draft_main_pic_url2, "draft_pics" .= draft_pics2, "draft_tags" .= draft_tags]
-    toEncoding (CreateNewDraftResponse draft_id post_id2 author2 draft_name2 draft_cat draft_text2 draft_main_pic_id draft_main_pic_url2 draft_pics2 draft_tags ) =
-        pairs ("draft_id" .= draft_id <> "post_id" .= post_id2 <> "author" .= author2 <> "draft_name" .= draft_name2 <> "draft_category" .= draft_cat <> "draft_text" .= draft_text2 <> "draft_main_pic_id" .= draft_main_pic_id <> "draft_main_pic_url" .= draft_main_pic_url2 <> "draft_pics" .= draft_pics2 <> "draft_tags" .= draft_tags)
+instance ToJSON DraftResponse where
+    toJSON (DraftResponse draft_id post_id author draft_name draft_cat draft_text draft_main_pic_id draft_main_pic_url draft_pics draft_tags) =
+        object ["draft_id" .= draft_id, "post_id" .= post_id, "author" .= author, "draft_name" .= draft_name, "draft_category" .= draft_cat, "draft_text" .= draft_text, "draft_main_pic_id" .= draft_main_pic_id, "draft_main_pic_url" .= draft_main_pic_url, "draft_pics" .= draft_pics, "draft_tags" .= draft_tags]
+    toEncoding (DraftResponse draft_id post_id author draft_name draft_cat draft_text draft_main_pic_id draft_main_pic_url draft_pics draft_tags ) =
+        pairs ("draft_id" .= draft_id <> "post_id" .= post_id <> "author" .= author <> "draft_name" .= draft_name <> "draft_category" .= draft_cat <> "draft_text" .= draft_text <> "draft_main_pic_id" .= draft_main_pic_id <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics" .= draft_pics <> "draft_tags" .= draft_tags)
 
 
 data PicIdUrl = PicIdUrl {
@@ -324,68 +335,49 @@ instance ToJSON PicIdUrl where
     toEncoding (PicIdUrl pic_id2 pic_url ) =
         pairs ( "pic_id" .= pic_id2 <> "pic_url" .= pic_url )
 
-data CreatePostsDraftResponse = CreatePostsDraftResponse {
-      draft_id5      :: Integer
-    , post_id5      :: Integer
-    , author5   :: CreateAuthorResponse
-    , draft_name5    :: Text
-    , draft_cat5 :: CreateCatResponse
-    , draft_text5  :: Text
-    , draft_main_pic_id5  :: Integer
-    , draft_main_pic_url5 :: Text
-    , draft_pics5 :: [PicIdUrl]
-    , draft_tags5 ::  [CreateTagResponse]
-    } deriving Show
-
-instance ToJSON CreatePostsDraftResponse where
-    toJSON (CreatePostsDraftResponse draft_id5 post_id5 author5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5) =
-        object ["draft_id" .= draft_id5, "post_id" .= post_id5, "author" .= author5, "draft_name" .= draft_name5, "draft_category" .= draft_cat5, "draft_text" .= draft_text5, "draft_main_pic_id" .= draft_main_pic_id5, "draft_main_pic_url" .= draft_main_pic_url5, "draft_pics" .= draft_pics5, "draft_tags" .= draft_tags5]
-    toEncoding (CreatePostsDraftResponse draft_id5 post_id5 author5 draft_name5 draft_cat5 draft_text5 draft_main_pic_id5 draft_main_pic_url5 draft_pics5 draft_tags5 ) =
-        pairs ("draft_id" .= draft_id5 <> "post_id" .= post_id5 <> "author" .= author5 <> "draft_name" .= draft_name5 <> "draft_category" .= draft_cat5 <> "draft_text" .= draft_text5 <> "draft_main_pic_id" .= draft_main_pic_id5 <> "draft_main_pic_url" .= draft_main_pic_url5 <> "draft_pics" .= draft_pics5 <> "draft_tags" .= draft_tags5)
-
-data PublishDraftResponse = PublishDraftResponse {
+data PostResponse = PostResponse {
       post_id      :: Integer
-    , author4   :: CreateAuthorResponse
+    , author4   :: AuthorResponse
     , post_name    :: Text
     , post_create_date :: Text
-    , post_cat     :: CreateCatResponse
+    , post_cat     :: CatResponse
     , post_text    :: Text
     , post_main_pic_id  :: Integer
     , post_main_pic_url :: Text
     , post_pics :: [PicIdUrl]
-    , post_tags :: [CreateTagResponse]
+    , post_tags :: [TagResponse]
     } deriving Show
 
-instance ToJSON PublishDraftResponse where
-    toJSON (PublishDraftResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
+instance ToJSON PostResponse where
+    toJSON (PostResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
         object ["post_id" .= post_id, "author" .= author4, "post_name" .= post_name, "post_create_date" .= post_create_date, "post_category" .= post_cat, "post_text" .= post_text, "post_main_pic_id" .= post_main_pic_id, "post_main_pic_url" .= post_main_pic_url, "post_pics" .= post_pics, "post_tags" .= post_tags]
-    toEncoding (PublishDraftResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
+    toEncoding (PostResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
         pairs ("post_id" .= post_id <> "author" .= author4  <> "post_name" .= post_name <> "post_create_date" .= post_create_date <> "post_category" .= post_cat <> "post_text" .= post_text <> "post_main_pic_id" .= post_main_pic_id <> "post_main_pic_url" .= post_main_pic_url <> "post_pics" .= post_pics <> "post_tags" .= post_tags)
 
 
 
-data CreateTagResponse = CreateTagResponse {
+data TagResponse = TagResponse {
       tag_id   :: Integer
     , tag_name :: Text
     } deriving Show
 
-instance ToJSON CreateTagResponse where
-    toJSON (CreateTagResponse tag_id tag_name ) =
+instance ToJSON TagResponse where
+    toJSON (TagResponse tag_id tag_name ) =
         object ["tag_id" .= tag_id, "tag_name" .= tag_name]
-    toEncoding (CreateTagResponse tag_id tag_name ) =
+    toEncoding (TagResponse tag_id tag_name ) =
         pairs ( "tag_id" .= tag_id <> "tag_name" .= tag_name )
 
-data CreateCommentResponse = CreateCommentResponse {
+data CommentResponse = CommentResponse {
       comment_id   :: Integer
     , comment_text :: Text
     , post_id6   :: Integer
     , user_id6   :: Integer
     } deriving Show
 
-instance ToJSON CreateCommentResponse where
-    toJSON (CreateCommentResponse comment_id comment_text post_id user_id) =
+instance ToJSON CommentResponse where
+    toJSON (CommentResponse comment_id comment_text post_id user_id) =
         object ["comment_id" .= comment_id, "comment_text" .= comment_text, "post_id" .= post_id, "user_id" .= user_id]
-    toEncoding (CreateCommentResponse comment_id comment_text post_id user_id) =
+    toEncoding (CommentResponse comment_id comment_text post_id user_id) =
         pairs ( "comment_id" .= comment_id <> "comment_text" .= comment_text <> "post_id" .= post_id <> "user_id" .= user_id )
 
 data CommentIdTextUserResponse = CommentIdTextUserResponse {
@@ -414,21 +406,6 @@ instance ToJSON CommentsResponse where
 
 
 
-{-
-
-data CreateSubCatResponse = CreateSubCatResponse {
-      subCat_id    :: Integer
-    , subCat_name  :: Text
-    , super_cat_id :: Integer
-    } deriving Show
-
-instance ToJSON CreateSubCatResponse where
-    toJSON (CreateSubCatResponse subCat_id subCat_name super_cat_id) =
-        object ["category_id" .= subCat_id, "category_name" .= subCat_name, "super_category_id" .= super_cat_id]
-    toEncoding (CreateSubCatResponse subCat_id subCat_name super_cat_id) =
-        pairs ( "category_id" .= subCat_id <> "category_name" .= subCat_name <> "super_category_id" .= super_cat_id)
-
--}
 
 application req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
@@ -442,13 +419,13 @@ application req send = do
       [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
       day <- getDay  
       [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, false ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack  day ]
-      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day })
+      okHelper $ lazyByteString $ encode (UserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day })
     ["getUser", userId]      -> do
       [Only firstName] <- query conn "SELECT first_name FROM users WHERE user_id = ? " [userId ]
       [Only lastName] <- query conn "SELECT last_name FROM users WHERE user_id = ? " [userId]
       [Only picId] <- query conn "SELECT user_pic_id FROM users WHERE user_id = ? " [userId]
       [Only userCreateDate] <- (query conn "SELECT user_create_date FROM users WHERE user_id = ?" [userId]) :: IO [Only Day]
-      okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = read . unpack $ userId , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ userCreateDate})
+      okHelper $ lazyByteString $ encode (UserResponse {user_id = read . unpack $ userId , first_name = firstName , last_name = lastName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ userCreateDate})
     ["deleteUser"]   -> do
       let usIdParam   = fromJust . fromJust . lookup "user_id"  $ queryToQueryText $ queryString req
       let pwdParam = fromJust . fromJust . lookup "password" $ queryToQueryText $ queryString req
@@ -488,7 +465,7 @@ application req send = do
           [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [userPicUrlParam]
           day <- getDay  
           [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( ?,?,?,?,?, true ) RETURNING user_id" [ passwordParam , firstNameParam, lastNameParam, pack (show picId), pack day ]
-          okHelper $ lazyByteString $ encode (CreateUserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day })
+          okHelper $ lazyByteString $ encode (UserResponse {user_id = userId , first_name = firstNameParam , last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day })
         False -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["createAuthor"]        -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
@@ -500,7 +477,7 @@ application req send = do
       case zoo pwdParam pwd admBool of
         "Success" -> do
           [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,?) RETURNING author_id" [ userIdParam, authorInfoParam]
-          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = authorId , auth_user_id = read $ unpack $ userIdParam , author_info = authorInfoParam})
+          okHelper $ lazyByteString $ encode (AuthorResponse { author_id = authorId , auth_user_id = read $ unpack $ userIdParam , author_info = authorInfoParam})
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -514,7 +491,7 @@ application req send = do
         "Success" -> do
           [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE author_id = ?" [authorIdParam]
           [Only userId] <- query conn "SELECT user_id FROM authors WHERE author_id = ?" [authorIdParam]
-          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfo})
+          okHelper $ lazyByteString $ encode (AuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfo})
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -529,7 +506,7 @@ application req send = do
         "Success" -> do
           [Only userId] <- query conn "SELECT user_id FROM authors WHERE author_id = ?" [authorIdParam]
           execute conn "UPDATE authors SET author_info = ? WHERE author_id = ?" [authorInfoParam,authorIdParam]
-          okHelper $ lazyByteString $ encode (CreateAuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfoParam})
+          okHelper $ lazyByteString $ encode (AuthorResponse { author_id = read . unpack $ authorIdParam , auth_user_id = userId , author_info = authorInfoParam})
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -565,7 +542,7 @@ application req send = do
         "Success" -> do
           [Only catId] <- query conn "INSERT INTO categories ( category_name) VALUES (?) RETURNING category_id " [ catNameParam]
           [Only superCatId] <- query conn "SELECT COALESCE (super_category_id, '0') AS super_category_id FROM categories WHERE category_id = ?" [pack . show $ catId]
-          okHelper $ lazyByteString $ encode (CreateCatResponse { cat_id = catId , cat_name =  catNameParam , super_cat = pack . prettyNull . show $ (superCatId :: Int)})
+          okHelper $ lazyByteString $ encode (CatResponse { cat_id = catId , cat_name =  catNameParam , super_cat = pack . prettyNull . show $ (superCatId :: Int)})
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -635,13 +612,13 @@ application req send = do
       case zoo pwdParam pwd admBool of
         "Success" -> do
           [Only tagId] <- query conn "INSERT INTO tags ( tag_name) VALUES (?) RETURNING tag_id" [ tagNameParam ]
-          okHelper $ lazyByteString $ encode $ CreateTagResponse tagId tagNameParam
+          okHelper $ lazyByteString $ encode $ TagResponse tagId tagNameParam
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
     ["getTag",tagId]  -> do
       [Only tagName] <- query conn "SELECT tag_name FROM tags WHERE tag_id = ? " [ tagId ]
-      okHelper $ lazyByteString $ encode $ CreateTagResponse (read . unpack $ tagId) tagName
+      okHelper $ lazyByteString $ encode $ TagResponse (read . unpack $ tagId) tagName
     ["updateTag"]        -> do
       let adminIdParam    = fromJust . fromJust . lookup "admin_id"    $ queryToQueryText $ queryString req
       let pwdParam   = fromJust . fromJust . lookup "password"    $ queryToQueryText $ queryString req
@@ -652,7 +629,7 @@ application req send = do
       case zoo pwdParam pwd admBool of
         "Success" -> do
           execute conn "UPDATE tags SET tag_name = ? WHERE tag_id = ?" [tagNameParam,tagIdParam]
-          okHelper $ lazyByteString $ encode (CreateTagResponse { tag_id = read . unpack $ tagIdParam , tag_name = tagNameParam})
+          okHelper $ lazyByteString $ encode (TagResponse { tag_id = read . unpack $ tagIdParam , tag_name = tagNameParam})
         "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
         "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -699,7 +676,7 @@ application req send = do
               draftPicsIds <- mapM goo draftPicsUrls
               mapM (poo draftId) draftPicsIds
               ys <- mapM roo draftTagsIds
-              okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = draftId, post_id2 = "NULL" , author2 = CreateAuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
+              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  moo xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = draftMainPicUrlParam , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds draftPicsUrls}
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createPostsDraft"]  -> do
@@ -730,7 +707,7 @@ application req send = do
                   mapM (poo draftId) picsIds
                   zs <- foo postCatId
                   hs <- mapM roo tagsIds
-                  okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = draftId, post_id5 = read . unpack $ postIdParam, author5 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name5 = postName , draft_cat5 =  moo zs , draft_text5 = postText , draft_main_pic_id5 =  postMainPicId , draft_main_pic_url5 = voo postMainPicId , draft_tags5 = hs, draft_pics5 =  loo picsIds (fmap voo picsIds)}
+                  okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostInteger $ read . unpack $ postIdParam, author2 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name2 = postName , draft_cat2 =  moo zs , draft_text2 = postText , draft_main_pic_id2 =  postMainPicId , draft_main_pic_url2 = voo postMainPicId , draft_tags2 = hs, draft_pics2 =  loo picsIds (fmap voo picsIds)}
                 False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
@@ -756,7 +733,7 @@ application req send = do
                           draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
                           draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
                           hs <- mapM roo draftTagsIds
-                          okHelper $ lazyByteString $ encode $ CreateNewDraftResponse { draft_id = read . unpack $ draftIdParam, post_id2 = "NULL" , author2 = CreateAuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
+                          okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
                         _ -> do
                           [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
                           [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
@@ -765,7 +742,7 @@ application req send = do
                           draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
                           draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
                           hs <- mapM roo draftTagsIds
-                          okHelper $ lazyByteString $ encode $ CreatePostsDraftResponse { draft_id5 = read . unpack $ draftIdParam, post_id5 = postId , author5 = CreateAuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name5 = draftName , draft_cat5 =  moo allSuperCats , draft_text5 = draftText , draft_main_pic_id5 =  draftPicId , draft_main_pic_url5 = voo draftPicId , draft_tags5 = hs, draft_pics5 =  loo draftPicsIds (fmap voo draftPicsIds)}   
+                          okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = PostInteger $ postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = voo draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap voo draftPicsIds)}   
                     False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get this draft"}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
@@ -797,7 +774,7 @@ application req send = do
             mapM (woo postId) tagsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author4 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
           _ -> do 
             [Only postId] <- query conn "SELECT post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftName] <- query conn "SELECT draft_name FROM drafts WHERE draft_id = ?" [draftIdParam]
@@ -817,7 +794,7 @@ application req send = do
             mapM (qoo postId) picsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PublishDraftResponse { post_id = postId, author4 = CreateAuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = moo zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = voo draftMainPicId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createComment"]  -> do
       case fmap (isExistParam req) ["user_id","password","post_id","comment_text"] of
@@ -828,7 +805,7 @@ application req send = do
               case pwdParam == usPwd of
                 True -> do
                   [Only commentId] <- query conn "INSERT INTO comments (comment_text, post_id, user_id) VALUES (?,?,?) RETURNING comment_id" [ commentTextParam, postIdParam, usIdParam ]
-                  okHelper $ lazyByteString $ encode $ CreateCommentResponse { comment_id = commentId , comment_text = commentTextParam, post_id6 = read . unpack $ postIdParam, user_id6 = read . unpack $ usIdParam}
+                  okHelper $ lazyByteString $ encode $ CommentResponse { comment_id = commentId , comment_text = commentTextParam, post_id6 = read . unpack $ postIdParam, user_id6 = read . unpack $ usIdParam}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
@@ -853,7 +830,7 @@ application req send = do
                     True -> do
                       execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
                       postId  <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
-                      okHelper $ lazyByteString $ encode $ CreateCommentResponse { comment_id = (read . unpack $ commentIdParam) , comment_text = commentTextParam, post_id6 = postId, user_id6 = usCommentId}
+                      okHelper $ lazyByteString $ encode $ CommentResponse { comment_id = (read . unpack $ commentIdParam) , comment_text = commentTextParam, post_id6 = postId, user_id6 = usCommentId}
                     _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this comment"}
                 _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
@@ -893,25 +870,6 @@ application req send = do
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
 
 
-
-{-    ["getDraft"]  -> do
-      let adminIdParam    = fromJust . fromJust . lookup "admin_id"          $ queryToQueryText $ queryString req
-      let passwordParam   = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
-      let draftIdParam    = fromJust . fromJust . lookup "draft_id"     $ queryToQueryText $ queryString req
-      conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-      [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-      [Only admPassword] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-      case admBool of
-        True -> do
-          case (unpack $ passwordParam) == admPassword of
-            True -> do
-              [Only catId] <- query conn "SELECT admin FROM users WHERE user_id = ? " [draftIdParam]
-              xs <- foo catId
-              okHelper $ lazyByteString $ encode $ moo xs
-            False -> do
-              okHelper $ lazyByteString $ encode (OkResponse {ok = False})
-        False ->  send . responseBuilder status404 [] $ "Status 404 Not Found"
--}
 
 
 isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
@@ -1007,7 +965,7 @@ qoo postId picId = do
 roo tagId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   [Only tagName] <- query conn "SELECT tag_name FROM tags WHERE tag_id = ?" [pack . show $ tagId]
-  return $ CreateTagResponse tagId tagName
+  return $ TagResponse tagId tagName
 
 goo :: Text -> IO Integer
 goo t = do
@@ -1031,8 +989,8 @@ foo catId = do
       xs <- foo superCatId
       return $ ((catId,catName) : xs) 
 
-moo [(x,y)] = CreateCatResponse { cat_id = x , cat_name =  y , super_cat = "NULL"}
-moo ((x,y):xs) = CreateSubCatResponse { subCat_id = x , subCat_name =  y , super_category = moo xs}
+moo [(x,y)] = CatResponse { cat_id = x , cat_name =  y , super_cat = "NULL"}
+moo ((x,y):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , super_category = moo xs}
 
 prettyNull :: String -> String
 prettyNull "0" = "NULL" 
