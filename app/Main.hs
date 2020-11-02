@@ -31,6 +31,8 @@ defCatId = 1
 
 commentNumberLimit = 20
 draftNumberLimit = 5
+postNumberLimit = 5
+
 
 getDay :: IO String
 getDay = do
@@ -368,7 +370,16 @@ instance ToJSON PostResponse where
     toEncoding (PostResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
         pairs ("post_id" .= post_id <> "author" .= author4  <> "post_name" .= post_name <> "post_create_date" .= post_create_date <> "post_category" .= post_cat <> "post_text" .= post_text <> "post_main_pic_id" .= post_main_pic_id <> "post_main_pic_url" .= post_main_pic_url <> "post_pics" .= post_pics <> "post_tags" .= post_tags)
 
+data PostsResponse = PostsResponse {
+      page10     :: Integer
+    , posts10 :: [PostResponse]
+    } deriving Show
 
+instance ToJSON PostsResponse where
+    toJSON (PostsResponse page posts ) =
+        object ["page" .= page, "posts" .= posts]
+    toEncoding (PostsResponse page posts ) =
+        pairs ( "page" .= page <> "posts" .= posts )
 
 data TagResponse = TagResponse {
       tag_id   :: Integer
@@ -766,7 +777,7 @@ application req send = do
                       case isExistDraft of
                         True -> do
                           let pageNum = read . unpack $ pageParam
-                          params <- selectManyLimitFromDb conn "drafts" ("author_id",(pack . show $ authorId)) ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] pageNum draftNumberLimit
+                          params <- selectManyLimitWhereFromDb conn "drafts" ("author_id",(pack . show $ authorId)) ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] pageNum draftNumberLimit
                           authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info"
                           let alldraftIdsText = fmap (pack . show . firstSix) params
                           let allCatIdsNum = fmap fourthSix params
@@ -886,13 +897,25 @@ application req send = do
       [Only isExistPost]  <- query conn "SELECT EXISTS (SELECT post_id FROM posts WHERE post_id = ?)" [postId]
       case isExistPost of
         True -> do  
-          [(auId,usId,auInfo,pName,pDate,pCatId,pText,picId)] <- selectManyFromDb conn "posts JOIN authors ON authors.author_id = posts.author_id " ("post_id",postId) ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+          [(auId,usId,auInfo,pName,pDate,pCatId,pText,picId)] <- selectManyWhereFromDb conn "posts JOIN authors ON authors.author_id = posts.author_id " ("post_id",postId) ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
           allSuperCats <- foo pCatId
           picsIds <- selectListFromDb conn "postspics" ("post_id",postId) "pic_id"
           tagsIds <- selectListFromDb conn "poststags" ("post_id",postId) "tag_id"
           hs <- mapM roo tagsIds
           okHelper $ lazyByteString $ encode $ PostResponse { post_id = (read . unpack $ postId), author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = moo allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = voo picId, post_pics = loo picsIds (fmap voo picsIds), post_tags = hs}
         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Post id:" ++ unpack postId ++ " doesn`t exist"}
+    ["getPosts", page] -> do
+      let pageNum = read . unpack $ page :: Integer
+      params <- selectManyOrderLimitFromDb conn ("posts JOIN authors ON authors.author_id = posts.author_id ") "post_create_date DESC, post_id DESC" pageNum postNumberLimit  (["post_id","posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]) 
+      let postIdsNum = fmap firstNine params
+      let postIdsText = fmap (pack . show . firstNine) params
+      let postCatsIds = fmap seventhNine params 
+      manySuperCats <- mapM foo postCatsIds
+      manyPostPicsIds <- mapM (reverseSelectListFromDb conn "postspics" "pic_id" "post_id") postIdsText  
+      manyPostTagsIds <- mapM (reverseSelectListFromDb conn "poststags" "tag_id" "post_id") postIdsText  
+      hss <- mapM (mapM roo) manyPostTagsIds
+      let allParams = zip4 params manySuperCats manyPostPicsIds hss
+      okHelper $ lazyByteString $ encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tags) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = moo cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = voo picId, post_pics = loo pics (fmap voo pics), post_tags = tags}) allParams}
     ["deletePost"]  -> do
       case fmap (isExistParam req) ["admin_id","password","post_id"] of
         [True,True,True] -> do
@@ -1007,14 +1030,30 @@ selectFromDb conn table (eqParamName,eqParamValue) param = do
   [Only value] <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return value
 
-selectManyFromDb conn table (eqParamName,eqParamValue) params = do
+selectManyWhereFromDb conn table (eqParamName,eqParamValue) params = do
   xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return xs
 
-selectManyLimitFromDb conn table (eqParamName,eqParamValue) params page limitNumber = do
+selectManyFromDb conn table params = do
+  xs <- query_ conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table) 
+  return xs
+
+selectManyLimitWhereFromDb conn table (eqParamName,eqParamValue) params page limitNumber = do
   xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ? OFFSET " ++ show ((page-1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) [eqParamValue]
   return xs
 
+
+selectManyLimitFromDb conn table page limitNumber params   = do
+  xs <- query_ conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) 
+  return xs
+
+selectManyOrderLimitFromDb conn table orderBy page limitNumber params   = do
+  xs <- query_ conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) 
+  return xs
+
+selectManyOrderLimitWhereFromDb conn table orderBy page limitNumber params where' values = do
+  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) values
+  return xs
 
 reverseSelectFromDb conn table param eqParamName eqParamValue = selectFromDb conn table (eqParamName,eqParamValue) param
 
@@ -1197,3 +1236,6 @@ seventhTen   (a,b,c,d,e,f,g,h,i,j) = g
 eighthEight (a,b,c,d,e,f,g,h) = h
 eighthNine  (a,b,c,d,e,f,g,h,i) = h
 eighthTen   (a,b,c,d,e,f,g,h,i,j) = h
+
+ninthNine  (a,b,c,d,e,f,g,h,i) = i
+ninthTen   (a,b,c,d,e,f,g,h,i,j) = i
