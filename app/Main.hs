@@ -9,7 +9,7 @@ import           Network.HTTP.Types             ( status200, status404, status30
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
 import           Data.Aeson
-import           Data.Text                      ( pack, unpack, Text )
+import           Data.Text                      ( pack, unpack, Text, concat, toUpper )
 import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
 import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS )
@@ -906,16 +906,20 @@ application req send = do
         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Post id:" ++ unpack postId ++ " doesn`t exist"}
     ["getPosts", page] -> do
       let pageNum = read . unpack $ page :: Integer
-      params <- selectManyOrderLimitFromDb conn ("posts JOIN authors ON authors.author_id = posts.author_id ") "post_create_date DESC, post_id DESC" pageNum postNumberLimit  (["post_id","posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]) 
-      let postIdsNum = fmap firstNine params
-      let postIdsText = fmap (pack . show . firstNine) params
-      let postCatsIds = fmap seventhNine params 
-      manySuperCats <- mapM foo postCatsIds
-      manyPostPicsIds <- mapM (reverseSelectListFromDb conn "postspics" "pic_id" "post_id") postIdsText  
-      manyPostTagsIds <- mapM (reverseSelectListFromDb conn "poststags" "tag_id" "post_id") postIdsText  
-      hss <- mapM (mapM roo) manyPostTagsIds
-      let allParams = zip4 params manySuperCats manyPostPicsIds hss
-      okHelper $ lazyByteString $ encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tags) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = moo cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = voo picId, post_pics = loo pics (fmap voo pics), post_tags = tags}) allParams}
+      let extractParamsList = ["posts.post_id","posts.author_id","authors.user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+      case (chooseArgumentsForSelectParams req extractParamsList, sortArg req) of
+        (Right (table,where',values) , Right (joinTable,orderBy))-> do
+          params <- selectManyOrderLimitWhereFromDb conn (table ++ joinTable) orderBy pageNum postNumberLimit extractParamsList where' values 
+          let postIdsText = fmap (pack . show . firstNine) params
+          let postCatsIds = fmap seventhNine params 
+          manySuperCats <- mapM foo postCatsIds
+          manyPostPicsIds <- mapM (reverseSelectListFromDb conn "postspics" "pic_id" "post_id") postIdsText  
+          manyPostTagsIds <- mapM (reverseSelectListFromDb conn "poststags" "tag_id" "post_id") postIdsText  
+          hss <- mapM (mapM roo) manyPostTagsIds
+          let allParams = zip4 params manySuperCats manyPostPicsIds hss
+          okHelper $ lazyByteString $ encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tags) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = moo cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = voo picId, post_pics = loo pics (fmap voo pics), post_tags = tags}) allParams}
+        (Left str,_) ->okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack str}
+        (_,Left str) ->okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack str}
     ["deletePost"]  -> do
       case fmap (isExistParam req) ["admin_id","password","post_id"] of
         [True,True,True] -> do
@@ -1018,6 +1022,175 @@ application req send = do
 
 
 
+chooseArgumentsForSelectParams req extractParamsList =  
+  let filterParamsList = ["created_at","created_at_lt","created_at_gt","category_id","tag","tags_in","tags_all","name_in","text_in","everywhere_in"] in
+  case fmap (isExistParam req) filterParamsList of
+        
+        [False,False,False,False,False,False,False,False,False,False] -> 
+          let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+              where'  = "true"
+              values  = []
+          in Right (table,where',values)
+        [True,False,False,False,False,False,False,False,False,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [Just createdAt,_,_,_,_,_,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_create_date = ?"
+                  values  = [createdAt]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,True,False,False,False,False,False,False,False,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,Just createdAtLT,_,_,_,_,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_create_date < ?"
+                  values  = [createdAtLT]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,True,False,False,False,False,False,False,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,_,Just createdAtGT,_,_,_,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_create_date > ?"
+                  values  = [createdAtGT]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        (True:True:_)   -> Left "Invalid combination of parameters"
+        (_:True:True:_) -> Left "Invalid combination of parameters"
+        [False,False,False,True,False,False,False,False,False,False] -> 
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,Just catId,_,_,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_category_id = ?"
+                  values  = [catId]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,False,False,True,False,False,False,False,False] -> 
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,Just tagId,_,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id JOIN (SELECT post_id FROM poststags WHERE tag_id = ?) GROUP BY post_id) AS t ON posts.post_id=tags.post_id "
+                  where'  = "tag_id = ?"
+                  values  = [tagId]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,False,False,False,True,False,False,False,False] -> 
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,_,Just tagsIn,_,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ tagsIn) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id "
+                  where'  = "true"
+                  values  = []
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,False,False,False,False,True,False,False,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,_,_,Just tagsAll,_,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id "
+                  where'  = "tags_id @> ARRAY" ++ unpack tagsAll ++ "::bigint[]"
+                  values  = []
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"  
+        [False,False,False,False,False,False,False,True,False,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,_,_,_,Just nameIn,_,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_name ILIKE ?"
+                  values  = [Data.Text.concat ["%",nameIn,"%"]]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,False,False,False,False,False,False,True,False] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,_,_,_,_,Just textIn,_] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id "
+                  where'  = "post_text ILIKE ?"
+                  values  = [Data.Text.concat ["%",textIn,"%"]]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+        [False,False,False,False,False,False,False,False,False,True] ->
+          case fmap (parseParam req) filterParamsList of
+            [_,_,_,_,_,_,_,_,_,Just everywhereIn] -> 
+              let table   = "posts JOIN authors ON authors.author_id = posts.author_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id "
+                  where'  = "post_text ILIKE ? OR post_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE"
+                  values  = replicate 4 $ Data.Text.concat ["%",everywhereIn,"%"]
+              in Right (table,where',values)
+            _ -> Left "Can`t parse query parameter"
+
+
+
+
+sortArg req =
+  let sortParamsList = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] in
+  case fmap (isExistParam req) sortParamsList of
+        [False,False,False,False] -> 
+          let joinTable   = ""
+              orderBy = "post_create_date DESC, post_id DESC"
+          in Right (joinTable,orderBy)
+        [True,False,False,False] ->
+          case fmap (parseParam req) sortParamsList of
+            [Just sortByPicsNum,_,_,_] ->
+              case Data.Text.toUpper sortByPicsNum of
+                "DESC" ->
+                  let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+                      orderBy = "count_pics DESC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                "ASC" ->
+                  let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+                      orderBy = "count_pics ASC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                _ -> Left "Can`t parse query parameter"
+            _ -> Left "Can`t parse query parameter"   
+        [False,True,False,False] ->
+          case fmap (parseParam req) sortParamsList of
+            [_,Just sortByCategory,_,_] ->
+              case Data.Text.toUpper sortByCategory of
+                "DESC" ->
+                  let joinTable   = " JOIN categories ON posts.post_category_id=categories.category_id "
+                      orderBy = "category_name DESC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                "ASC" ->
+                  let joinTable   = " JOIN categories ON posts.post_category_id=categories.category_id "
+                      orderBy = "categories.category_name ASC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                _ -> Left "Can`t parse query parameter"
+            _ -> Left "Can`t parse query parameter"
+        [False,False,True,False] ->
+          case fmap (parseParam req) sortParamsList of
+            [_,_,Just sortByAuthor,_] ->
+              case Data.Text.toUpper sortByAuthor of
+                "DESC" ->
+                  let joinTable   = " JOIN users AS u ON authors.user_id=u.user_id "
+                      orderBy = "u.first_name DESC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                "ASC" ->
+                  let joinTable   = ""
+                      orderBy = "u.first_name ASC, post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                _ -> Left "Can`t parse query parameter"
+            _ -> Left "Can`t parse query parameter"          
+        [False,False,False,True] -> 
+          case fmap (parseParam req) sortParamsList of
+            [_,_,_,Just sortByDate] ->
+              case Data.Text.toUpper sortByDate of
+                "DESC" ->
+                  let joinTable   = ""
+                      orderBy = "post_create_date DESC, post_id DESC"
+                  in Right (joinTable,orderBy)
+                "ASC" ->
+                  let joinTable   = ""
+                      orderBy = "post_create_date ASC, post_id ASC"
+                  in Right (joinTable,orderBy)
+                _ -> Left "Can`t parse query parameter"
+            _ -> Left "Can`t parse query parameter"
+      
+
+
+
+
+data Sort = ASC | DESC 
+ deriving (Eq,Show,Read)
+
+
+
+                                                                             
 
 isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
   Just _  -> True
@@ -1052,7 +1225,7 @@ selectManyOrderLimitFromDb conn table orderBy page limitNumber params   = do
   return xs
 
 selectManyOrderLimitWhereFromDb conn table orderBy page limitNumber params where' values = do
-  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)) values
+  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber) ) values
   return xs
 
 reverseSelectFromDb conn table param eqParamName eqParamValue = selectFromDb conn table (eqParamName,eqParamValue) param

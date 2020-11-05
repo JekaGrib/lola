@@ -1,0 +1,23 @@
+{
+    "user_id": 3,
+    "password": "654321",
+    "draft_name": "rock",
+    "draft_category_id": 8,
+    "draft_text": "heyhey",
+    "draft_main_pic_url": "https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg",
+    "draft_tags_ids" : [
+        { "tag_id": 3 },
+        { "tag_id": 5 },
+        { "tag_id": 7 }
+    ],
+    "draft_pics_urls": [
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" },
+        { "pic_url": "ffff" }
+    ]
+}
