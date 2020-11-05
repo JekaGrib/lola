@@ -1028,23 +1028,17 @@ chooseArgs req =
   let sortList         = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] in
   case fmap (checkComb req) [filterDateList,filterTagList,filterInList] of
     [True,True,True] -> case ( sequence . concatMap (checkFilterParam req) $ filterParamsList, sequence . concatMap (checkSortParam req) $ sortList) of
-      (Right [],Right []) -> 
-        let table = "posts JOIN authors ON authors.author_id = posts.author_id" 
-            where'    = "true"
-            orderBy   = "post_create_date DESC, post_id DESC"
-            values    = []
-        in Right (table,where',orderBy,values)
       (Right filterArgs, Right sortArgs) -> if not . isDateASC $ sortArgs 
         then 
-          let table     = "posts JOIN authors ON authors.author_id = posts.author_id" ++ (Prelude.concat . firstThree . unzip3 $ filterArgs) ++ (Prelude.concat . firstThree . unzip3 $ sortArgs)  
-              where'    = intercalate "," . secondThree . unzip3 $ filterArgs
-              orderBy   = (intercalate "," . secondThree . unzip3 $ sortArgs) ++ ",post_create_date DESC, post_id DESC"
+          let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs) 
+              where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
+              orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date DESC, post_id DESC"]
               values    = Prelude.concat . thirdThree . unzip3 $ filterArgs
           in Right (table,where',orderBy,values)
         else
-          let table     = "posts JOIN authors ON authors.author_id = posts.author_id" ++ (Prelude.concat . firstThree . unzip3 $ filterArgs) ++ (Prelude.concat . firstThree . unzip3 $ sortArgs)  
-              where'    = intercalate "," . secondThree . unzip3 $ filterArgs
-              orderBy   = (intercalate "," . secondThree . unzip3 $ sortArgs) ++ ",post_create_date ASC, post_id ASC"
+          let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs)  
+              where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
+              orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date ASC, post_id ASC"]
               values    = Prelude.concat . thirdThree . unzip3 $ filterArgs
           in Right (table,where',orderBy,values)
       (Left a,_) -> Left a
@@ -1094,32 +1088,32 @@ chooseFilterArgs x param = case param of
               values  = [x]
           in [Right (table,where',values)]
   "tag" ->
-          let table   = " JOIN (SELECT post_id FROM poststags WHERE tag_id = ?) GROUP BY post_id) AS t ON posts.post_id=tags.post_id "
+          let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ?) GROUP BY post_id) AS t ON posts.post_id=tags.post_id"
               where'  = "true"
               values  = []
           in [Right (table,where',values)]
   "tags_in" ->
-          let table   = " JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id "
+          let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
               where'  = "true"
               values  = []
           in [Right (table,where',values)]
   "tags_all" ->
-          let table   = " JOIN authors ON authors.author_id = posts.author_id JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id "
+          let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
               where'  = "tags_id @> ARRAY" ++ unpack x ++ "::bigint[]"
               values  = []
           in [Right (table,where',values)]
   "name_in" ->
-          let table   = " JOIN authors ON authors.author_id = posts.author_id "
+          let table   = ""
               where'  = "post_name ILIKE ?"
               values  = [Data.Text.concat ["%",x,"%"]]          
           in [Right (table,where',values)]
   "text_in" ->
-          let table   = " JOIN authors ON authors.author_id = posts.author_id "
+          let table   = ""
               where'  = "post_text ILIKE ?"
               values  = [Data.Text.concat ["%",x,"%"]]          
           in [Right (table,where',values)]
   "everywhere_in" ->
-          let table   = " JOIN authors ON authors.author_id = posts.author_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id "
+          let table   = "JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
               where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
               values  = replicate 4 $ Data.Text.concat ["%",x,"%"]
           in [Right (table,where',values)]    
@@ -1137,15 +1131,15 @@ checkSortParam req param =
 chooseSortArgs "DESC" param =
   case param of
         "sort_by_pics_number" -> 
-          let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+          let joinTable   = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
               orderBy = "count_pics DESC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_category" ->
-          let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+          let joinTable   = "JOIN categories ON posts.post_category_id=categories.category_id"
               orderBy = "category_name DESC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_author" ->
-          let joinTable   = " JOIN users AS u ON authors.user_id=u.user_id "
+          let joinTable   = "JOIN users AS u ON authors.user_id=u.user_id"
               orderBy = "u.first_name DESC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_date" ->
@@ -1155,15 +1149,15 @@ chooseSortArgs "DESC" param =
 chooseSortArgs "ASC" param =
   case param of
         "sort_by_pics_number" -> 
-          let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+          let joinTable   = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
               orderBy = "count_pics ASC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_category" ->
-          let joinTable   = " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id "
+          let joinTable   = "JOIN categories ON posts.post_category_id=categories.category_id"
               orderBy = "category_name ASC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_author" ->
-          let joinTable   = " JOIN users AS u ON authors.user_id=u.user_id "
+          let joinTable   = "JOIN users AS u ON authors.user_id=u.user_id"
               orderBy = "u.first_name ASC"
           in [Right (joinTable,orderBy,defDateSort)]
         "sort_by_date" ->
@@ -1171,8 +1165,9 @@ chooseSortArgs "ASC" param =
               orderBy = "true"
           in [Right (joinTable,orderBy,DateASC)]
 chooseSortArgs txt param 
-  | Data.Text.toUpper txt == "ASC" || Data.Text.toUpper txt == "DESC" = chooseSortArgs txt param
-  | otherwise                                                         = [Left $ "Invalid sort parameter" ++ unpack param]
+  | Data.Text.toUpper txt == "ASC"  = chooseSortArgs "ASC"  param
+  | Data.Text.toUpper txt == "DESC" = chooseSortArgs "DESC" param
+  | otherwise                       = [Left $ "Invalid sort parameter" ++ unpack param]
 
 
 data SortDate = DateASC | DateDESC 
