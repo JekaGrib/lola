@@ -777,16 +777,20 @@ application req send = do
                       case isExistDraft of
                         True -> do
                           let pageNum = read . unpack $ pageParam
-                          params <- selectManyLimitWhereFromDb conn "drafts" ("author_id",(pack . show $ authorId)) ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] pageNum draftNumberLimit
-                          authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info"
-                          let alldraftIdsText = fmap (pack . show . firstSix) params
-                          let allCatIdsNum = fmap fourthSix params
+                          let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
+                          let orderBy = "draft_id DESC"
+                          let extractParams = ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id","author_info"]
+                          let where' = "drafts.author_id = ?"
+                          let values = [pack . show $ authorId]
+                          params <- selectManyOrderLimitWhereFromDb conn table orderBy pageNum draftNumberLimit extractParams where' values   
+                          let alldraftIdsText = fmap (pack . show . firstSeven) params
+                          let allCatIdsNum = fmap fourthSeven params
                           manyAllSuperCats <- mapM foo allCatIdsNum
                           manyDraftPicsIds <- mapM (reverseSelectListFromDb conn "draftspics" "pic_id" "draft_id") alldraftIdsText  
                           manyDraftTagsIds <- mapM (reverseSelectListFromDb conn "draftstags" "tag_id" "draft_id") alldraftIdsText  
                           hss <- mapM (mapM roo) manyDraftTagsIds
                           let allParams = zip4 params manyAllSuperCats manyDraftPicsIds hss
-                          okHelper $ lazyByteString $ encode $ DraftsResponse { page9 = pageNum , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId),cats,pics,tags) -> DraftResponse { draft_id2 = draftId, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  moo cats , draft_text2 = draftText , draft_main_pic_id2 =  draftMainPicId , draft_main_pic_url2 = voo draftMainPicId , draft_tags2 = tags, draft_pics2 =  loo pics (fmap voo pics)}) allParams }   
+                          okHelper $ lazyByteString $ encode $ DraftsResponse { page9 = pageNum , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tags) -> DraftResponse { draft_id2 = draftId, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) auInfo, draft_name2 = draftName , draft_cat2 =  moo cats , draft_text2 = draftText , draft_main_pic_id2 =  draftMainPicId , draft_main_pic_url2 = voo draftMainPicId , draft_tags2 = tags, draft_pics2 =  loo pics (fmap voo pics)}) allParams }   
                         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Author has not draft"}
                     False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get drafts"}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
@@ -1024,7 +1028,7 @@ chooseArgs req =
   let filterDateList   = ["created_at","created_at_lt","created_at_gt"] in
   let filterTagList    = ["tag","tags_in","tags_all"] in
   let filterInList     = ["name_in","text_in","everywhere_in"] in
-  let filterParamsList = filterDateList ++ ["category_id"] ++ filterTagList ++ filterInList in
+  let filterParamsList = filterDateList ++ ["category_id","author_name"] ++ filterTagList ++ filterInList in
   let sortList         = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] in
   case fmap (checkComb req) [filterDateList,filterTagList,filterInList] of
     [True,True,True] -> case ( sequence . concatMap (checkFilterParam req) $ filterParamsList, sequence . concatMap (checkSortParam req) $ sortList) of
@@ -1033,13 +1037,13 @@ chooseArgs req =
           let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs) 
               where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
               orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date DESC, post_id DESC"]
-              values    = Prelude.concat . thirdThree . unzip3 $ filterArgs
+              values    = (Prelude.concat . fmap fst . thirdThree . unzip3 $ filterArgs) ++  (Prelude.concat . fmap snd . thirdThree . unzip3 $ filterArgs)
           in Right (table,where',orderBy,values)
         else
           let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs)  
               where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
               orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date ASC, post_id ASC"]
-              values    = Prelude.concat . thirdThree . unzip3 $ filterArgs
+              values    = (Prelude.concat . fmap fst . thirdThree . unzip3 $ filterArgs) ++  (Prelude.concat . fmap snd . thirdThree . unzip3 $ filterArgs)
           in Right (table,where',orderBy,values)
       (Left a,_) -> Left a
       (_,Left b) -> Left b
@@ -1058,7 +1062,7 @@ checkComb req list =
 --"posts JOIN authors ON authors.author_id = posts.author_id"
 --", post_create_date DESC, post_id DESC"
 
-checkFilterParam :: Request -> Text -> [Either String (String,String,[Text])]
+checkFilterParam :: Request -> Text -> [Either String (String,String,([Text],[Text]))]
 checkFilterParam req param =
   case isExistParam req param of
     False -> []
@@ -1070,53 +1074,58 @@ chooseFilterArgs x param = case param of
   "created_at" -> 
           let table   = ""
               where'  = "post_create_date = ?"
-              values  = [x]
+              values  = ([],[x])
           in [Right (table,where',values)]
   "created_at_lt" ->
           let table   = ""
               where'  = "post_create_date < ?"
-              values  = [x]
+              values  = ([],[x])
           in [Right (table,where',values)]
   "created_at_gt" ->
           let table   = ""
               where'  = "post_create_date < ?"
-              values  = [x]
+              values  = ([],[x])
           in [Right (table,where',values)]
   "category_id" ->
           let table   = ""
               where'  = "post_category_id = ?"
-              values  = [x]
+              values  = ([],[x])
           in [Right (table,where',values)]
   "tag" ->
-          let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ?) GROUP BY post_id) AS t ON posts.post_id=tags.post_id"
+          let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
               where'  = "true"
-              values  = []
+              values  = ([x],[])
           in [Right (table,where',values)]
   "tags_in" ->
           let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
               where'  = "true"
-              values  = []
+              values  = ([],[])
           in [Right (table,where',values)]
   "tags_all" ->
           let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
               where'  = "tags_id @> ARRAY" ++ unpack x ++ "::bigint[]"
-              values  = []
+              values  = ([],[])
           in [Right (table,where',values)]
   "name_in" ->
           let table   = ""
               where'  = "post_name ILIKE ?"
-              values  = [Data.Text.concat ["%",x,"%"]]          
+              values  = ([],[Data.Text.concat ["%",x,"%"]])          
           in [Right (table,where',values)]
   "text_in" ->
           let table   = ""
               where'  = "post_text ILIKE ?"
-              values  = [Data.Text.concat ["%",x,"%"]]          
+              values  = ([],[Data.Text.concat ["%",x,"%"]])          
           in [Right (table,where',values)]
   "everywhere_in" ->
           let table   = "JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
               where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
-              values  = replicate 4 $ Data.Text.concat ["%",x,"%"]
-          in [Right (table,where',values)]    
+              values  = ([Data.Text.concat ["%",x,"%"]],replicate 3 $ Data.Text.concat ["%",x,"%"])
+          in [Right (table,where',values)]
+  "author_name" ->
+          let table   = "JOIN users AS us ON authors.user_id=us.user_id"
+              where'  = "us.first_name = ?"
+              values  = ([],[x])
+          in [Right (table,where',values)]     
   _ -> [Left $ "Can`t parse query parameter" ++ unpack param]
         
 
