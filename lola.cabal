@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f086c71bb439635d801ead5820887f760cde7bdebb11129523c79ee3c9e14827
+-- hash: faff501974875126d09c04d476318a45a12bb1c5d796aa6d059523aa2bde2a4e
 
 name:           lola
 version:        0.1.0.0
@@ -33,15 +33,19 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson
+      JuicyPixels
+    , aeson
     , base >=4.7 && <5
     , bytestring
+    , exceptions
     , http-conduit
     , http-types
+    , mtl
     , postgresql-libpq
     , postgresql-simple
     , text
     , time
+    , transformers
     , wai
     , warp
   default-language: Haskell2010
@@ -54,16 +58,20 @@ executable lola-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
+      JuicyPixels
+    , aeson
     , base >=4.7 && <5
     , bytestring
+    , exceptions
     , http-conduit
     , http-types
     , lola
+    , mtl
     , postgresql-libpq
     , postgresql-simple
     , text
     , time
+    , transformers
     , wai
     , warp
   default-language: Haskell2010
@@ -77,16 +85,20 @@ test-suite lola-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
+      JuicyPixels
+    , aeson
     , base >=4.7 && <5
     , bytestring
+    , exceptions
     , http-conduit
     , http-types
     , lola
+    , mtl
     , postgresql-libpq
     , postgresql-simple
     , text
     , time
+    , transformers
     , wai
     , warp
   default-language: Haskell2010

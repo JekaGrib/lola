@@ -31,6 +31,10 @@ dependencies:
 - postgresql-simple
 - http-conduit
 - time
+- transformers
+- mtl
+- JuicyPixels
+- exceptions
 
 library:
   source-dirs: src

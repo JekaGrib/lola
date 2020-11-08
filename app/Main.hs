@@ -9,10 +9,10 @@ import           Network.HTTP.Types             ( status200, status404, status30
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
 import           Data.Aeson
-import           Data.Text                      ( pack, unpack, Text, concat, toUpper )
+import           Data.Text                      ( pack, unpack, Text, concat, toUpper, stripPrefix, isPrefixOf )
 import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
-import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS )
+import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS, HttpException )
 import           Data.Maybe                     ( fromJust )
 import           Data.Time.Clock
 import           Data.Time.LocalTime
@@ -21,6 +21,11 @@ import           Data.Time.Calendar             ( showGregorian, Day )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
 import           Data.List                      ( intercalate, zip4 )
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans            ( lift )
+import           Codec.Picture                  ( decodeImage )
+import           Data.ByteString.Lazy           ( toStrict )
+import           Control.Monad.Catch            ( catch, throwM )
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -430,9 +435,114 @@ instance ToJSON CommentsResponse where
         pairs ( "page" .= page <> "post_id" .= post_id <> "comments" .= comments )
 
 
-
-
 application req send = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  ansE <- runExceptT $ answerEx conn req
+  send ( fromEx ansE )
+
+fromEx :: Either ReqError Response -> Response
+fromEx ansE = 
+  let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString . encode in
+  case ansE of
+    Right a              -> a
+    Left (SimpleError str) -> okHelper $ OkInfoResponse {ok7 = False, info7 = pack str}
+    Left SecretError      -> responseBuilder status404 [] $ "Status 404 Not Found"
+
+answerEx :: Connection -> Request -> ExceptT ReqError IO Response
+answerEx conn req = do
+   let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString . encode
+   case pathInfo req of
+    ["createUser"] -> do
+      let paramsNames = ["password","first_name","last_name","user_pic_url"]
+      [pwdParam,firstNameParam,lastNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      picId <- getPicId conn picUrlParam
+      day <- lift getDay
+      let insNames  = ["password","first_name"  ,"last_name"  ,"user_pic_id"    ,"user_create_date","admin"]
+      let insValues = [pwdParam  ,firstNameParam,lastNameParam,pack (show picId),pack day          ,"FALSE"]
+      usId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"
+      return . okHelper $ UserResponse {user_id = usId, first_name = firstNameParam, last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day}
+    ["getUser", usId] -> do
+      let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
+      isExistInDbE conn "users" "user_id=?" [usId] "user_id"
+      [(fName,lName,picId,usCreateDate)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",usId) selectParams
+      return . okHelper $ UserResponse {user_id = read . unpack $ usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ usCreateDate}
+    ["deleteUser"] -> do
+      let paramsNames = ["user_id","admin_id","password"]
+      xs@[usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [usIdNum,admIdNum,_]               <- mapM tryRead xs
+      [(pwd,admBool)] <- selectManyWhereFromDb conn "users" ("user_id",(pack . read $ admIdNum)) ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      execute conn "UPDATE comments SET user_id = ? WHERE user_id = ?" [pack . show $ defUsId,usIdParam]
+      check <- isExistInDb conn "authors" "user_id=?" [usIdParam] "author_id"
+
+
+      
+    
+
+isMyUrl url
+  | isPrefixOf "http://localhost:3000" url = True
+  | otherwise                              = False
+
+picUrlEnd url = stripPrefix "http://localhost:3000/picture/" url
+
+getValidMyPicUrl :: Connection -> Text -> ExceptT ReqError IO Text
+getValidMyPicUrl conn url = do
+  case picUrlEnd url of
+    Just ""     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+    Just urlEnd -> return url
+    Nothing     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url 
+
+readUrlEnd conn url = do
+  picIdNum <- tryRead (fromJust . picUrlEnd $ url) :: ExceptT ReqError IO Integer
+  check    <- lift $ isExistInDb conn "pics" "pic_id=?" [(pack . show $ picIdNum)] "pic_id"
+  case check of 
+    True  -> return picIdNum
+    False -> throwE $ SimpleError $ "Invalid end of picture url:" ++ unpack url
+
+--getIfExistInDb conn table where' values checkName = do
+  --check    <- lift $ isExistInDb conn table where' values checkName
+  --case check of 
+    --True  -> return picIdNum
+    --False -> throwE $ SimpleError $ unpack checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+
+getValidPicUrl :: Text -> ExceptT ReqError IO Text
+getValidPicUrl url = do
+  res <- (lift $ httpLBS . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HttpException))) )
+  let bs = getResponseBody res
+  case decodeImage $ toStrict bs of
+    Right _ -> return url
+    Left _  -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+
+getPicId conn url 
+  |isMyUrl url = do
+    picId <- (getValidMyPicUrl conn url >>= \validUrl -> readUrlEnd conn validUrl)
+    return picId
+  |otherwise = do
+    validUrl <- getValidPicUrl url
+    picId    <- lift $ insertReturnInDb conn "pics" ["pic_url"] [validUrl] "pic_id"
+    return picId
+
+
+
+
+
+isExistInDb conn table where' values checkName = do
+  [Only check]  <- query conn (fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")") values
+  return check
+
+isExistInDbE conn table where' values checkName = do
+  check  <- isExistInDb conn table where' values checkName
+  case check of
+    True -> return True
+    False -> throwE $ SimpleError $ unpack checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+ 
+
+--insertReturnInDb :: Connection
+insertReturnInDb conn table insNames insValues returnName = do
+  [Only x] <- query conn (fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) RETURNING " ++ returnName) insValues
+  return x
+
+application1 req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   case pathInfo req of
@@ -1190,7 +1300,38 @@ isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
   Just _  -> True
   Nothing -> False
 
-parseParam req txt = fromJust . lookup txt $ queryToQueryText $ queryString req 
+data ReqError = SecretError | SimpleError String
+  deriving Show
+
+isExistParamE :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe Text)
+isExistParamE req param = case lookup param $ queryToQueryText $ queryString req of
+  Just x  -> return x
+  Nothing -> throwE $ SimpleError $ "Can't find param" ++ unpack param
+
+parseParam req txt = fromJust . lookup txt $ queryToQueryText $ queryString req
+
+parseParamE req param = case fromJust . lookup param $ queryToQueryText $ queryString req of
+  Just x  -> Right x
+  Nothing -> Left $ SimpleError $ "Can't parse param" ++ unpack param
+
+checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
+checkParam req param = case lookup param $ queryToQueryText $ queryString req of
+  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
+  Just (Just x)  -> return x
+  Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
+  Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
+
+
+
+tryRead :: (Read a, Monad m) => Text -> ExceptT ReqError m a
+tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryRead xs = case reads . unpack $ xs of
+  [(a,"")] -> return a
+  _        -> throwE $ SimpleError $ "Can`t parse value:" ++ unpack xs
+
+
+--checkParam req txt = isExistParam1 req txt >>= \x -> parseParam1 req x
+
 
 --selectFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO a
 selectFromDb conn table (eqParamName,eqParamValue) param = do
@@ -1265,6 +1406,12 @@ findAllSubCat catId = do
       ys <- mapM findAllSubCat xs
       return $ catId : (Prelude.concat  ys)
 
+
+adminAuth pwdParam pwd admBool
+  | admBool && (pwd == pwdParam) = return True
+  | admBool                      = throwE . SimpleError $ "INVALID pwd, admin = True "
+  | (pwd == pwdParam)            = throwE . SimpleError $ "valid pwd, user is NOT admin"
+  | otherwise                    = throwE . SimpleError $ "INVALID pwd, user is NOT admin"
 
 zoo pwdParam pwd admBool 
   | admBool && (pwd == pwdParam) = "Success"
