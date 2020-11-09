@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+
 
 module Main where
 
@@ -442,42 +442,79 @@ application req send = do
 
 fromEx :: Either ReqError Response -> Response
 fromEx ansE = 
-  let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString . encode in
+  let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString in
   case ansE of
     Right a              -> a
-    Left (SimpleError str) -> okHelper $ OkInfoResponse {ok7 = False, info7 = pack str}
+    Left (SimpleError str) -> okHelper . encode $ OkInfoResponse {ok7 = False, info7 = pack str}
     Left SecretError      -> responseBuilder status404 [] $ "Status 404 Not Found"
 
 answerEx :: Connection -> Request -> ExceptT ReqError IO Response
 answerEx conn req = do
-   let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString . encode
+   let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString 
    case pathInfo req of
     ["createUser"] -> do
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
-      [pwdParam,firstNameParam,lastNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
       picId <- getPicId conn picUrlParam
       day <- lift getDay
-      let insNames  = ["password","first_name"  ,"last_name"  ,"user_pic_id"    ,"user_create_date","admin"]
-      let insValues = [pwdParam  ,firstNameParam,lastNameParam,pack (show picId),pack day          ,"FALSE"]
+      let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
+      let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
       usId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"
-      return . okHelper $ UserResponse {user_id = usId, first_name = firstNameParam, last_name = lastNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day}
+      return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day}
     ["getUser", usId] -> do
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE conn "users" "user_id=?" [usId] "user_id"
       [(fName,lName,picId,usCreateDate)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",usId) selectParams
-      return . okHelper $ UserResponse {user_id = read . unpack $ usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ usCreateDate}
+      return . okHelper . encode $ UserResponse {user_id = read . unpack $ usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       let paramsNames = ["user_id","admin_id","password"]
       xs@[usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum,admIdNum,_]               <- mapM tryRead xs
-      [(pwd,admBool)] <- selectManyWhereFromDb conn "users" ("user_id",(pack . read $ admIdNum)) ["password","admin"]
+      [usIdNum,admIdNum,_]               <- mapM tryRead xs :: ExceptT ReqError IO [Integer]
+      [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
       adminAuth pwdParam pwd admBool
-      execute conn "UPDATE comments SET user_id = ? WHERE user_id = ?" [pack . show $ defUsId,usIdParam]
-      check <- isExistInDb conn "authors" "user_id=?" [usIdParam] "author_id"
-
-
-      
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      lift $ updateInDb conn "comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
+      check <- lift $ isExistInDb conn "authors" "user_id=?" [usIdParam] "author_id"
+      case check of
+        True -> do
+          authorId <- selectFromDbE conn "authors" "user_id=?" [usIdParam] "author_id" :: ExceptT ReqError IO Integer
+          lift $ updateInDb conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ authorId]
+          draftsIds <- selectListFromDbE conn "drafts" "author_id=?" [pack . show $ authorId] "draft_id" :: ExceptT ReqError IO [Integer]
+          let table  = "draftspics draftstags drafts"
+          let values = fmap (pack . show) draftsIds
+          let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
+          lift $ deleteFromDb conn table where' values
+          lift $ deleteFromDb conn "authors" "authors_id=?" [pack . show $ authorId] 
+          lift $ deleteFromDb conn "users" "user_id=?" [usIdParam]
+          return . okHelper . encode $ OkResponse {ok = True} 
+        False -> do
+          lift $ deleteFromDb conn "users" "user_id=?" [usIdParam]
+          return . okHelper . encode $ OkResponse {ok = True} 
+    ["createAdmin"]        -> do
+      let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
+      [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      key <- selectFromDbEText conn "key" "true" [] "create_admin_key" :: ExceptT ReqError IO Text
+      checkKeyE keyParam key
+      picId <- getPicId conn picUrlParam 
+      day <- lift getDay
+      let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
+      let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
+      admId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"  
+      return . okHelper . encode $ UserResponse {user_id = admId , first_name = fNameParam , last_name = lNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day }
     
+
+checkKeyE :: Text -> Text -> ExceptT ReqError IO Bool
+checkKeyE keyParam key 
+  | keyParam == key = return True
+  | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
+
+
+
+updateInDb conn table set where' values = do
+  execute conn (fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' ) values
+
+deleteFromDb conn table where' values = do
+  execute conn (fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where') values   
 
 isMyUrl url
   | isPrefixOf "http://localhost:3000" url = True
@@ -530,11 +567,12 @@ isExistInDb conn table where' values checkName = do
   [Only check]  <- query conn (fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")") values
   return check
 
+isExistInDbE :: Connection -> String -> String -> [Text] -> String -> ExceptT ReqError IO Bool
 isExistInDbE conn table where' values checkName = do
-  check  <- isExistInDb conn table where' values checkName
+  check  <- lift $ isExistInDb conn table where' values checkName
   case check of
     True -> return True
-    False -> throwE $ SimpleError $ unpack checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+    False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
  
 
 --insertReturnInDb :: Connection
@@ -731,7 +769,7 @@ application1 req send = do
                   let allSubCats = fmap (pack . show) . Prelude.reverse $ xs
                   mapM (updateDb conn "posts" ("post_category_id", pack . show $ defCatId) "post_category_id") allSubCats
                   mapM (updateDb conn "drafts" ("draft_category_id", pack . show $ defCatId) "draft_category_id") allSubCats
-                  mapM (deleteFromDb conn "categories" "category_id") allSubCats
+                  mapM (deleteFromDb1 conn "categories" "category_id") allSubCats
                   okHelper $ lazyByteString $ encode (OkResponse { ok = True })
                 "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
                 "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
@@ -854,14 +892,14 @@ application1 req send = do
               [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
               case pwdParam == usPwd of
                 True -> do
-                  authorId <- selectFromDb conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
-                  usDraftId <- selectFromDb conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
+                  authorId <- selectFromDb1 conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
+                  usDraftId <- selectFromDb1 conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
                   case usDraftId == (read . unpack $ usIdParam) of
                     True -> do
                       [Only postId] <- query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-                      [draftCatId,draftPicId] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
-                      [draftName,draftText] <- mapM (selectFromDb conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
-                      authorInfo <- selectFromDb conn "authors" ("author_id",pack . show $ authorId) "author_info" 
+                      [draftCatId,draftPicId] <- mapM (selectFromDb1 conn "drafts" ("draft_id",draftIdParam)) ["draft_category_id","draft_main_pic_id"]
+                      [draftName,draftText] <- mapM (selectFromDb1 conn "drafts" ("draft_id",draftIdParam)) ["draft_name","draft_text"]
+                      authorInfo <- selectFromDb1 conn "authors" ("author_id",pack . show $ authorId) "author_info" 
                       allSuperCats <- foo draftCatId  
                       draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
                       draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
@@ -882,7 +920,7 @@ application1 req send = do
                   [Only isAuthor]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
                   case isAuthor of
                     True -> do
-                      authorId <- selectFromDb conn "authors" ("user_id",usIdParam) "author_id" :: IO Integer
+                      authorId <- selectFromDb1 conn "authors" ("user_id",usIdParam) "author_id" :: IO Integer
                       [Only isExistDraft]  <- query conn "SELECT EXISTS (SELECT draft_id FROM drafts WHERE author_id = ?)" [(pack . show $ authorId)]
                       case isExistDraft of
                         True -> do
@@ -920,8 +958,8 @@ application1 req send = do
       [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
       case pwdParam == pwd of
         True -> do
-          authorUsId <- selectFromDb conn "authors" ("user_id",pack .show $ usIdParam) "author_id" :: IO Integer
-          authorDraftId <- selectFromDb conn "drafts" ("draft_id",draftId) "author_id" :: IO Integer
+          authorUsId <- selectFromDb1 conn "authors" ("user_id",pack .show $ usIdParam) "author_id" :: IO Integer
+          authorDraftId <- selectFromDb1 conn "drafts" ("draft_id",draftId) "author_id" :: IO Integer
           case (authorUsId == authorDraftId) of
             True -> do
               [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [pack .show $ usIdParam]
@@ -946,8 +984,8 @@ application1 req send = do
               [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
               case pwdParam == usPwd of
                 True -> do
-                  authorId <- selectFromDb conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
-                  usDraftId <- selectFromDb conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
+                  authorId <- selectFromDb1 conn "drafts" ("draft_id",draftIdParam) "author_id" :: IO Integer
+                  usDraftId <- selectFromDb1 conn "authors" ("author_id",(pack . show $ authorId)) "user_id" :: IO Integer
                   case usDraftId == (read . unpack $ usIdParam) of
                     True -> do
                       execute conn "DELETE FROM draftstags WHERE draft_id = ?" [draftIdParam]
@@ -1079,14 +1117,14 @@ application1 req send = do
         [True,True,True,True] -> do
           case fmap (parseParam req) ["user_id","password","comment_id","comment_text"] of
             [Just usIdParam,Just pwdParam,Just commentIdParam,Just commentTextParam] -> do
-              pwd <- selectFromDb conn "users" ("user_id",usIdParam) "password"
+              pwd <- selectFromDb1 conn "users" ("user_id",usIdParam) "password"
               case pwd == pwdParam of
                 True -> do
-                  usCommentId <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
+                  usCommentId <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
                   case usCommentId == (read . unpack $ usIdParam) of
                     True -> do
                       execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
-                      postId  <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
+                      postId  <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
                       okHelper $ lazyByteString $ encode $ CommentResponse { comment_id = (read . unpack $ commentIdParam) , comment_text = commentTextParam, post_id6 = postId, user_id6 = usCommentId}
                     _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this comment"}
                 _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
@@ -1097,13 +1135,13 @@ application1 req send = do
         [True,False,True,True] -> do
           case fmap (parseParam req) ["user_id","password","comment_id"] of
             [Just usIdParam,Just pwdParam,Just commentIdParam] -> do
-              pwd <- selectFromDb conn "users" ("user_id",usIdParam) "password"
+              pwd <- selectFromDb1 conn "users" ("user_id",usIdParam) "password"
               case pwd == pwdParam of
                 True -> do
-                  usCommentId <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
-                  postId      <- (selectFromDb conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
-                  authPostId  <- (selectFromDb conn "posts" ("post_id",pack . show $ postId) "author_id") :: IO Integer
-                  usPostId  <- (selectFromDb conn "authors" ("author_id",pack . show $ authPostId) "user_id") :: IO Integer
+                  usCommentId <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
+                  postId      <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
+                  authPostId  <- (selectFromDb1 conn "posts" ("post_id",pack . show $ postId) "author_id") :: IO Integer
+                  usPostId  <- (selectFromDb1 conn "authors" ("author_id",pack . show $ authPostId) "user_id") :: IO Integer
                   case (usCommentId == (read . unpack $ usIdParam)) || (usPostId == (read . unpack $ usIdParam)) of
                     True -> do
                       execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
@@ -1126,7 +1164,7 @@ application1 req send = do
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
         _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
     ["picture",picId]  -> do
-      picUrl <- selectFromDb conn "pics" ("pic_id",picId) "pic_url"
+      picUrl <- selectFromDb1 conn "pics" ("pic_id",picId) "pic_url"
       res <- httpLBS $ fromString $ unpack $ picUrl
       send $ responseBuilder 
         status200 
@@ -1332,9 +1370,35 @@ tryRead xs = case reads . unpack $ xs of
 
 --checkParam req txt = isExistParam1 req txt >>= \x -> parseParam1 req x
 
+selectFromDb conn table where' values param = do
+  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
+  return xs
+  
 
---selectFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO a
-selectFromDb conn table (eqParamName,eqParamValue) param = do
+selectFromDbE conn table where' values param = do
+  xs <- lift $ selectFromDb conn table where' values param
+  case xs of
+    [Only value] -> return value
+    _            -> throwE $ SimpleError "DatabaseError"
+
+
+selectFromDbEText :: Connection -> String -> String -> [Text] -> String -> ExceptT ReqError IO Text
+selectFromDbEText conn table where' values param = do
+  xs <- lift $ (selectFromDb conn table where' values param :: IO [Only Text])
+  case xs of
+    [Only value] -> return value
+    _            -> throwE $ SimpleError "DatabaseError"
+
+
+selectListFromDbE conn table where' values param = do
+  xs <- lift $ selectFromDb conn table where' values param
+  case xs of
+    ((Only value):ys) -> return . fmap fromOnly $ xs
+    _                 -> throwE $ SimpleError "DatabaseError"
+
+
+--selectFromDb1 :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO a
+selectFromDb1 conn table (eqParamName,eqParamValue) param = do
   [Only value] <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return value
 
@@ -1363,7 +1427,7 @@ selectManyOrderLimitWhereFromDb conn table orderBy page limitNumber params where
   xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber) ) values
   return xs
 
-reverseSelectFromDb conn table param eqParamName eqParamValue = selectFromDb conn table (eqParamName,eqParamValue) param
+reverseselectFromDb1 conn table param eqParamName eqParamValue = selectFromDb1 conn table (eqParamName,eqParamValue) param
 
 --selectListFromDb :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO [a]
 selectListFromDb conn table (eqParamName,eqParamValue) param  = do
@@ -1384,8 +1448,8 @@ updateDb conn table (setName,setValue) eqParamName eqParamValue  = do
   
 
 
---deleteFromDb :: Connection -> String -> String -> Text -> IO GHC.Int.Int64
-deleteFromDb conn table eqParamName eqParamValue = do
+--deleteFromDb1 :: Connection -> String -> String -> Text -> IO GHC.Int.Int64
+deleteFromDb1 conn table eqParamName eqParamValue = do
   execute conn (fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   
 
