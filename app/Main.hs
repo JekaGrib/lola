@@ -465,12 +465,13 @@ answerEx conn req = do
       usIdNum <- tryRead usId
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE conn "users" "user_id=?" [usId] "user_id"
-      [(fName,lName,picId,usCreateDate)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",usId) selectParams
+      (fName,lName,picId,usCreateDate) <- selectTupleFromDbE conn "users" "user_id=?" [usId] selectParams
       return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       let paramsNames = ["user_id","admin_id","password"]
       [usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [usIdNum,admIdNum]              <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
@@ -503,6 +504,7 @@ answerEx conn req = do
       let paramsNames = ["user_id","author_info","admin_id","password"]
       [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [usIdNum,admIdNum]                          <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE      conn "users"   "user_id=?" [usIdParam] "user_id"
@@ -513,6 +515,7 @@ answerEx conn req = do
       let paramsNames = ["author_id","admin_id","password"]
       [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
@@ -522,8 +525,10 @@ answerEx conn req = do
       let paramsNames = ["author_id","user_id","author_info","admin_id","password"]
       [auIdParam,usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [auIdNum,usIdNum,admIdNum]                            <- mapM tryRead [auIdParam,usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
       isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
       checkRelationUsAu conn usIdParam auIdParam
       lift $ updateInDb conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
@@ -532,6 +537,7 @@ answerEx conn req = do
       let paramsNames = ["author_id","admin_id","password"]
       [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
@@ -544,6 +550,7 @@ answerEx conn req = do
       let paramsNames = ["category_name","admin_id","password"]
       [catNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       admIdNum                           <- tryRead admIdParam :: ExceptT ReqError IO Integer
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       catId <- lift $ insertReturnInDb conn "categories" ["category_name"] [catNameParam] "category_id"
@@ -552,6 +559,7 @@ answerEx conn req = do
       let paramsNames = ["category_name","super_category_id","admin_id","password"]
       [catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [superCatIdNum,admIdNum]                           <- mapM tryRead [superCatIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "categories" "category_id=?" [superCatIdParam] "category_id"
@@ -563,10 +571,57 @@ answerEx conn req = do
       isExistInDbE conn "categories" "category_id=?" [catId] "category_id"
       allSuperCats <- findAllSuperCats conn catIdNum
       return . okHelper . encode $ inCatResp allSuperCats
+    ["updateCategory"] -> do
+      let paramsNames = ["category_id","category_name","super_category_id","admin_id","password"]
+      [catIdParam,catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [catIdNum,superCatIdNum,admIdNum]                             <- mapM tryRead [catIdParam,superCatIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "categories" "category_id=?" [catIdParam]      "category_id"
+      isExistInDbE conn "categories" "category_id=?" [superCatIdParam] "category_id"
+      checkRelationCats conn catIdNum superCatIdNum
+      lift $ updateInDb conn "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
+      allSuperCats <- findAllSuperCats conn catIdNum
+      return . okHelper . encode $ inCatResp allSuperCats 
+    ["deleteCategory"] -> do
+      let paramsNames = ["category_id","admin_id","password"]
+      [catIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [catIdNum,admIdNum]              <- mapM tryRead [catIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "categories" "category_id=?" [catIdParam] "category_id"
+      allSubCats <- lift $ findAllSubCats conn catIdNum
+      let values = fmap (pack . show) (defCatId:allSubCats)
+      let where'  = intercalate " OR " . fmap (const "post_category_id=?")  $ allSubCats
+      let where'' = intercalate " OR " . fmap (const "draft_category_id=?") $ allSubCats
+      lift $ updateInDb conn "posts"  "post_category_id=?"  where'  values
+      lift $ updateInDb conn "drafts" "draft_category_id=?" where'' values
+      let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
+      lift $ deleteFromDb conn "categories" where''' (fmap (pack . show) allSubCats)
+      return . okHelper . encode $ OkResponse {ok = True}
+    
     
 
+checkRelationCats conn catIdNum superCatIdNum 
+  |catIdNum == superCatIdNum = throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " equal to category_id."
+  |otherwise                 = do
+    allSubCats <- lift $ findAllSubCats conn catIdNum
+    if superCatIdNum `elem` allSubCats
+      then throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
+      else return ()
 
-   
+
+findAllSubCats :: Connection -> Integer -> IO [Integer]
+findAllSubCats conn catId = do
+  check <- isExistInDb conn "categories" "super_category_id=?" [pack . show $ catId] "category_id"
+  case check of
+    False -> return [catId]
+    True  -> do
+      xs <- selectListFromDb conn "categories" ("super_category_id",(pack . show $ catId)) "category_id"
+      ys <- mapM (findAllSubCats conn) xs
+      return $ catId : (Prelude.concat  ys)   
     
 findAllSuperCats :: Connection -> Integer -> ExceptT ReqError IO [(Integer,Text)]
 findAllSuperCats conn catId = do
