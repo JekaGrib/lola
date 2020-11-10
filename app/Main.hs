@@ -468,8 +468,8 @@ answerEx conn req = do
       return . okHelper . encode $ UserResponse {user_id = read . unpack $ usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       let paramsNames = ["user_id","admin_id","password"]
-      xs@[usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum,admIdNum,_]               <- mapM tryRead xs :: ExceptT ReqError IO [Integer]
+      [usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [usIdNum,admIdNum]              <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
       [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
@@ -493,7 +493,7 @@ answerEx conn req = do
     ["createAdmin"]        -> do
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
       [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
-      key <- selectFromDbEText conn "key" "true" [] "create_admin_key" :: ExceptT ReqError IO Text
+      key <- selectFromDbE conn "key" "true" ([]::[Text]) "create_admin_key" 
       checkKeyE keyParam key
       picId <- getPicId conn picUrlParam 
       day <- lift getDay
@@ -501,14 +501,103 @@ answerEx conn req = do
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"  
       return . okHelper . encode $ UserResponse {user_id = admId , first_name = fNameParam , last_name = lNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day }
+    ["createAuthor"]        -> do
+      let paramsNames = ["user_id","author_info","admin_id","password"]
+      [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [usIdNum,admIdNum]                          <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE      conn "users"   "user_id=?" [usIdParam] "user_id"
+      ifExistInDbThrowE conn "authors" "user_id=?" [usIdParam] "user_id"
+      auId <- lift $ insertReturnInDb conn "authors" ["user_id","author_info"] [usIdParam,auInfoParam] "user_id"
+      return . okHelper . encode $ AuthorResponse { author_id = auId , auth_user_id = usIdNum , author_info = auInfoParam}
+    ["getAuthor"]        -> do
+      let paramsNames = ["author_id","admin_id","password"]
+      [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
+      (usId,auInfo) <- selectManyFromDbE conn "authors" "author_id=?" [auIdParam] ["user_id","author_info"]
+      return . okHelper . encode $ AuthorResponse { author_id = auIdNum , auth_user_id = usId , author_info = auInfo}
+      
     
+         
+
 
 checkKeyE :: Text -> Text -> ExceptT ReqError IO Bool
 checkKeyE keyParam key 
   | keyParam == key = return True
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
 
+checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
+checkParam req param = case lookup param $ queryToQueryText $ queryString req of
+  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
+  Just (Just x)  -> return x
+  Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
+  Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
+
+
+tryRead :: (Read a, Monad m) => Text -> ExceptT ReqError m a
+tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryRead xs = case reads . unpack $ xs of
+  [(a,"")] -> return a
+  _        -> throwE $ SimpleError $ "Can`t parse value:" ++ unpack xs
+
+
+--checkParam req txt = isExistParam1 req txt >>= \x -> parseParam1 req x
+
+selectFromDb conn table where' values param = do
+  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
+  return xs
+  
+
+selectFromDbE conn table where' values param = do
+  xs <- lift $ selectFromDb conn table where' values param
+  case xs of
+    [Only value] -> return value
+    _            -> throwE $ SimpleError "DatabaseError"
+
+{-
+selectFromDbEText :: Connection -> String -> String -> [Text] -> String -> ExceptT ReqError IO Text
+selectFromDbEText conn table where' values param = do
+  xs <- lift $ (selectFromDb conn table where' values param :: IO [Only Text])
+  case xs of
+    [Only value] -> return value
+    _            -> throwE $ SimpleError "DatabaseError"
+-}
+
+selectListFromDbE conn table where' values param = do
+  xs <- lift $ selectFromDb conn table where' values param
+  case xs of
+    ((Only value):ys) -> return . fmap fromOnly $ xs
+    _                 -> throwE $ SimpleError "DatabaseError"
+
+selectManyFromDb conn table where' values params = do
+  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
+  return xs
+
+selectManyFromDbE conn table where' values params = do
+  xs <- lift $ selectManyFromDb conn table where' values params
+  case xs of
+    [tuple] -> return tuple
+    _       -> throwE $ SimpleError "DatabaseError"
+
+selectManyListFromDbE conn table where' values params = do
+  xs <- lift $ selectManyFromDb conn table where' values params
+  case xs of
+    (tuple:tuples) -> return xs
+    _              -> throwE $  SimpleError "DatabaseError"
+
+func = do
+  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
+  let table = "drafts"
+  let where' = "draft_id=5"
+  let values = [] :: [Text]
+  let params = ["draft_name","draft_category_id"] :: [String]
+  xs  <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ) values :: IO [(Text,Integer)]
+  print (xs :: [(Text,Integer)])
 
 updateInDb conn table set where' values = do
   execute conn (fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' ) values
@@ -574,6 +663,13 @@ isExistInDbE conn table where' values checkName = do
     True -> return True
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
  
+ifExistInDbThrowE :: Connection -> String -> String -> [Text] -> String -> ExceptT ReqError IO Bool
+ifExistInDbThrowE conn table where' values checkName = do
+  check  <- lift $ isExistInDb conn table where' values checkName
+  case check of
+    True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
+    False -> return False
+
 
 --insertReturnInDb :: Connection
 insertReturnInDb conn table insNames insValues returnName = do
@@ -1352,49 +1448,7 @@ parseParamE req param = case fromJust . lookup param $ queryToQueryText $ queryS
   Just x  -> Right x
   Nothing -> Left $ SimpleError $ "Can't parse param" ++ unpack param
 
-checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
-checkParam req param = case lookup param $ queryToQueryText $ queryString req of
-  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
-  Just (Just x)  -> return x
-  Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
-  Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
-
-
-tryRead :: (Read a, Monad m) => Text -> ExceptT ReqError m a
-tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryRead xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value:" ++ unpack xs
-
-
---checkParam req txt = isExistParam1 req txt >>= \x -> parseParam1 req x
-
-selectFromDb conn table where' values param = do
-  xs <- query conn (fromString $ "SELECT " ++ param ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
-  return xs
-  
-
-selectFromDbE conn table where' values param = do
-  xs <- lift $ selectFromDb conn table where' values param
-  case xs of
-    [Only value] -> return value
-    _            -> throwE $ SimpleError "DatabaseError"
-
-
-selectFromDbEText :: Connection -> String -> String -> [Text] -> String -> ExceptT ReqError IO Text
-selectFromDbEText conn table where' values param = do
-  xs <- lift $ (selectFromDb conn table where' values param :: IO [Only Text])
-  case xs of
-    [Only value] -> return value
-    _            -> throwE $ SimpleError "DatabaseError"
-
-
-selectListFromDbE conn table where' values param = do
-  xs <- lift $ selectFromDb conn table where' values param
-  case xs of
-    ((Only value):ys) -> return . fmap fromOnly $ xs
-    _                 -> throwE $ SimpleError "DatabaseError"
 
 
 --selectFromDb1 :: (Database.PostgreSQL.Simple.FromField.FromField a) => Connection -> String -> (String,Text) -> String -> IO a
@@ -1406,7 +1460,7 @@ selectManyWhereFromDb conn table (eqParamName,eqParamValue) params = do
   xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ eqParamName ++ " = ?") [eqParamValue]
   return xs
 
-selectManyFromDb conn table params = do
+selectManyFromDb1 conn table params = do
   xs <- query_ conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table) 
   return xs
 
