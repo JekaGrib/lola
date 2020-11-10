@@ -601,8 +601,43 @@ answerEx conn req = do
       let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
       lift $ deleteFromDb conn "categories" where''' (fmap (pack . show) allSubCats)
       return . okHelper . encode $ OkResponse {ok = True}
+    ["createTag"]  -> do
+      let paramsNames = ["tag_name","admin_id","password"]
+      [tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [admIdNum]                         <- mapM tryRead [admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      tagId <- lift $ insertReturnInDb conn "tags" ["tag_name"] [tagNameParam] "tag_id"
+      return . okHelper . encode $ TagResponse tagId tagNameParam
+    ["getTag",tagId]  -> do
+      tagIdNum <- tryRead tagId
+      isExistInDbE conn "tags" "tag_id=?" [tagId] "tag_id"
+      tagName <- selectFromDbE conn "tags" "tag_id=?" [tagId] "tag_name"
+      return . okHelper . encode $ TagResponse tagIdNum tagName
+    ["updateTag"]        -> do
+      let paramsNames = ["tag_id","tag_name","admin_id","password"]
+      [tagIdParam,tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "tags" "tag_id=?" [tagIdParam] "tag_id"
+      lift $ updateInDb conn "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
+      return . okHelper . encode $ TagResponse tagIdNum tagNameParam
+    ["deleteTag"]        -> do
+      let paramsNames = ["tag_id","admin_id","password"]
+      [tagIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      lift $ deleteFromDb conn "draftstags poststags" "tag_id=?" [tagIdParam]
+      lift $ deleteFromDb conn "tags" "tag_id=?" [tagIdParam]
+      return . okHelper . encode $ OkResponse {ok = True}
+
     
-    
+
 
 checkRelationCats conn catIdNum superCatIdNum 
   |catIdNum == superCatIdNum = throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " equal to category_id."
