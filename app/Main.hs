@@ -56,7 +56,7 @@ getTime = do
 createAuthorsTable :: IO ()
 createAuthorsTable = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000) NOT NULL, user_id BIGINT NOT NULL REFERENCES users(user_id))"
+  execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000) NOT NULL, user_id BIGINT NOT NULL REFERENCES users(user_id), UNIQUE (user_id) )"
   print "kk"
 
 createPicsTable :: IO ()
@@ -480,11 +480,8 @@ answerEx conn req = do
           authorId <- selectFromDbE conn "authors" "user_id=?" [usIdParam] "author_id" :: ExceptT ReqError IO Integer
           lift $ updateInDb conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ authorId]
           draftsIds <- selectListFromDbE conn "drafts" "author_id=?" [pack . show $ authorId] "draft_id" :: ExceptT ReqError IO [Integer]
-          let table  = "draftspics draftstags drafts"
-          let values = fmap (pack . show) draftsIds
-          let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-          lift $ deleteFromDb conn table where' values
-          lift $ deleteFromDb conn "authors" "authors_id=?" [pack . show $ authorId] 
+          deleteAllAboutDrafts conn draftsIds
+          lift $ deleteFromDb conn "authors" "author_id=?" [pack . show $ authorId] 
           lift $ deleteFromDb conn "users" "user_id=?" [usIdParam]
           return . okHelper . encode $ OkResponse {ok = True} 
         False -> do
@@ -500,7 +497,7 @@ answerEx conn req = do
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"  
-      return . okHelper . encode $ UserResponse {user_id = admId , first_name = fNameParam , last_name = lNameParam, user_pic_id = picId, user_pic_url = voo picId,user_create_date = pack day }
+      return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = voo picId, user_create_date = pack day }
     ["createAuthor"]        -> do
       let paramsNames = ["user_id","author_info","admin_id","password"]
       [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
@@ -510,7 +507,7 @@ answerEx conn req = do
       isExistInDbE      conn "users"   "user_id=?" [usIdParam] "user_id"
       ifExistInDbThrowE conn "authors" "user_id=?" [usIdParam] "user_id"
       auId <- lift $ insertReturnInDb conn "authors" ["user_id","author_info"] [usIdParam,auInfoParam] "user_id"
-      return . okHelper . encode $ AuthorResponse { author_id = auId , auth_user_id = usIdNum , author_info = auInfoParam}
+      return . okHelper . encode $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
     ["getAuthor"]        -> do
       let paramsNames = ["author_id","admin_id","password"]
       [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
@@ -519,9 +516,50 @@ answerEx conn req = do
       adminAuth pwdParam pwd admBool
       isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
       (usId,auInfo) <- selectManyFromDbE conn "authors" "author_id=?" [auIdParam] ["user_id","author_info"]
-      return . okHelper . encode $ AuthorResponse { author_id = auIdNum , auth_user_id = usId , author_info = auInfo}
-      
+      return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
+    ["updateAuthor"]        -> do
+      let paramsNames = ["author_id","user_id","author_info","admin_id","password"]
+      [auIdParam,usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [auIdNum,usIdNum,admIdNum]                            <- mapM tryRead [auIdParam,usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
+      checkRelationUsAu conn usIdParam auIdParam
+      lift $ updateInDb conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
+      return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
+    ["deleteAuthor"]   -> do
+      let paramsNames = ["author_id","admin_id","password"]
+      [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      [(pwd,admBool)] <- lift $ selectManyWhereFromDb conn "users" ("user_id",admIdParam) ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      isExistInDbE conn "authors" "author_id=?" [auIdParam] "author_id"
+      lift $ updateInDb conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,auIdParam]
+      draftsIds <- selectListFromDbE conn "drafts" "author_id=?" [auIdParam] "draft_id" :: ExceptT ReqError IO [Integer]
+      deleteAllAboutDrafts conn draftsIds
+      lift $ deleteFromDb conn "authors" "author_id=?" [auIdParam]
+      return . okHelper . encode $ OkResponse {ok = True}
     
+deleteAllAboutDrafts conn [] = return ()
+deleteAllAboutDrafts conn draftsIds = do
+  let table  = "draftspics draftstags"
+  let values = fmap (pack . show) draftsIds
+  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
+  lift $ deleteFromDb conn table where' values
+  lift $ deleteFromDb conn "drafts" where' values
+  return ()
+
+      
+checkRelationUsAu conn usIdParam auIdParam = do
+  check <- lift $ isExistInDb conn "authors" "user_id=?" [usIdParam] "user_id"
+  case check of
+    True -> do
+      [Only auId] <- lift $ selectFromDb conn "authors" "user_id=?" [usIdParam] "author_id"
+      case (auId :: Integer) == (read . unpack $ auIdParam) of
+        True  -> return True
+        False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
+    False -> return True 
+
          
 
 
@@ -556,6 +594,7 @@ selectFromDb conn table where' values param = do
 selectFromDbE conn table where' values param = do
   xs <- lift $ selectFromDb conn table where' values param
   case xs of
+    []           -> throwE $ SimpleError "DatabaseError.Empty output"
     [Only value] -> return value
     _            -> throwE $ SimpleError "DatabaseError"
 
@@ -571,8 +610,9 @@ selectFromDbEText conn table where' values param = do
 selectListFromDbE conn table where' values param = do
   xs <- lift $ selectFromDb conn table where' values param
   case xs of
+    []                -> return []
     ((Only value):ys) -> return . fmap fromOnly $ xs
-    _                 -> throwE $ SimpleError "DatabaseError"
+
 
 selectManyFromDb conn table where' values params = do
   xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
@@ -581,14 +621,16 @@ selectManyFromDb conn table where' values params = do
 selectManyFromDbE conn table where' values params = do
   xs <- lift $ selectManyFromDb conn table where' values params
   case xs of
+    []      -> throwE $ SimpleError "DatabaseError.Empty output"
     [tuple] -> return tuple
     _       -> throwE $ SimpleError "DatabaseError"
 
 selectManyListFromDbE conn table where' values params = do
   xs <- lift $ selectManyFromDb conn table where' values params
   case xs of
+    []             -> return []
     (tuple:tuples) -> return xs
-    _              -> throwE $  SimpleError "DatabaseError"
+
 
 func = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
