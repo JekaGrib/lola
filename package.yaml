@@ -35,6 +35,7 @@ dependencies:
 - mtl
 - JuicyPixels
 - exceptions
+- unordered-containers
 
 library:
   source-dirs: src
