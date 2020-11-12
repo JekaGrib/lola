@@ -11,7 +11,7 @@
         { "tag_id": 7 }
     ],
     "draft_pics_urls": [
-        { "pic_url": "ffff" },
-        { "pic_url": "ffff" }
+        { "pic_url": "https://cdn.pixabay.com/photo/2019/12/17/17/09/woman-4702060_960_720.jpg" },
+        { "pic_url": "https://cdn.pixabay.com/photo/2019/03/20/23/03/florence-4069756_960_720.jpg" }
     ]
 }
