@@ -461,13 +461,13 @@ answerEx conn req = do
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
       usId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"
-      return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = myPicUrl picId, user_create_date = pack day}
+      return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
     ["getUser", usId] -> do
       usIdNum <- tryRead usId
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE conn "users" "user_id=?" [usId] "user_id"
       (fName,lName,picId,usCreateDate) <- selectTupleFromDbE conn "users" "user_id=?" [usId] selectParams
-      return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = myPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
+      return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       let paramsNames = ["user_id","admin_id","password"]
       [usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
@@ -500,7 +500,7 @@ answerEx conn req = do
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <- lift $ insertReturnInDb conn "users" insNames insValues "user_id"  
-      return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = myPicUrl picId, user_create_date = pack day }
+      return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
     ["createAuthor"]        -> do
       let paramsNames = ["user_id","author_info","admin_id","password"]
       [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
@@ -629,7 +629,7 @@ answerEx conn req = do
     ["deleteTag"]        -> do
       let paramsNames = ["tag_id","admin_id","password"]
       [tagIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      [tagIdNum,admIdNum]              <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
       isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
       (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
       adminAuth pwdParam pwd admBool
@@ -665,15 +665,46 @@ answerEx conn req = do
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
       tagsMap <- selectTupleListFromDbE conn "tags" where' tagsIds ["tag_id","tag_name"]
       allSuperCats <- findAllSuperCats conn catIdParam  
-      return . okHelper . encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = myPicUrl picId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+      return . okHelper . encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+    ["getDraft"]  -> do
+      let paramsNames = ["draft_id","user_id","password"]
+      [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+      userAuth pwdParam pwd
+      auId <- isDraftAuthor conn draftIdParam usIdParam
+      let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
+      let params = ["draft_id","COALESCE (post_id, '0') AS post_id","author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
+      (draftId,postId,auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE conn table "draft_id=?" [draftIdParam] params :: ExceptT ReqError IO (Integer,Integer,Text,Text,Integer,Text,Integer)       
+      picsIds <- selectListFromDbE conn "draftspics" "draft_id=?" [draftIdParam] "pic_id"
+      tagsIds <- selectListFromDbE conn "draftstags" "draft_id=?" [draftIdParam] "tag_id"
+      let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
+      tagsMap <- selectTupleListFromDbE conn "tags" where' (tagsIds::[Integer]) ["tag_id","tag_name"]
+      allSuperCats <- findAllSuperCats conn draftCatId
+      return . okHelper . encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId , author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats , draft_text2 = draftTxt , draft_main_pic_id2 =  mPicId , draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
 
 
- 
+
+isNULL 0      = PostText    "NULL" 
+isNULL postId = PostInteger postId
+
+isDraftAuthor conn draftIdParam usIdParam = do
+  auId <- selectFromDbE conn "drafts" "draft_id=?" [draftIdParam] "author_id" :: ExceptT ReqError IO Integer
+  usDraftId <- selectFromDbE conn "authors" "author_id=?" [pack . show $ auId] "user_id" :: ExceptT ReqError IO Integer
+  case usDraftId == (read . unpack $ usIdParam) of
+    True -> return auId
+    False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of draft_id: " ++ unpack draftIdParam
+
+
+
+
 inTagResp (tagId,tagName) = TagResponse tagId tagName
 
-myPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
+makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
 
-inPicIdUrl picId    = PicIdUrl picId (myPicUrl picId)
+inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
 
 
 checkDraftReqJson json = do 
@@ -848,8 +879,8 @@ isMyUrl url
 
 picUrlEnd url = stripPrefix "http://localhost:3000/picture/" url
 
-getValidMyPicUrl :: Connection -> Text -> ExceptT ReqError IO Text
-getValidMyPicUrl conn url = do
+getValidmakeMyPicUrl :: Connection -> Text -> ExceptT ReqError IO Text
+getValidmakeMyPicUrl conn url = do
   case picUrlEnd url of
     Just ""     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
     Just urlEnd -> return url
@@ -878,7 +909,7 @@ getValidPicUrl url = do
 
 getPicId conn url 
   |isMyUrl url = do
-    picId <- (getValidMyPicUrl conn url >>= \validUrl -> readUrlEnd conn validUrl)
+    picId <- (getValidmakeMyPicUrl conn url >>= \validUrl -> readUrlEnd conn validUrl)
     return picId
   |otherwise = do
     validUrl <- getValidPicUrl url
@@ -949,7 +980,7 @@ application1 req send = do
               draftPicsIds <- mapM goo draftPicsUrls
               mapM (poo draftId) draftPicsIds
               ys <- mapM roo draftTagsIds
-              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  inCatResp xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = myPicUrl picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap myPicUrl draftPicsIds)}
+              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse authorId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  inCatResp xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap makeMyPicUrl draftPicsIds)}
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["createPostsDraft"]  -> do
@@ -980,7 +1011,7 @@ application1 req send = do
                   mapM (poo draftId) picsIds
                   zs <- foo postCatId
                   hs <- mapM roo tagsIds
-                  okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostInteger $ read . unpack $ postIdParam, author2 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name2 = postName , draft_cat2 =  inCatResp zs , draft_text2 = postText , draft_main_pic_id2 =  postMainPicId , draft_main_pic_url2 = myPicUrl postMainPicId , draft_tags2 = hs, draft_pics2 =  loo picsIds (fmap myPicUrl picsIds)}
+                  okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostInteger $ read . unpack $ postIdParam, author2 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name2 = postName , draft_cat2 =  inCatResp zs , draft_text2 = postText , draft_main_pic_id2 =  postMainPicId , draft_main_pic_url2 = makeMyPicUrl postMainPicId , draft_tags2 = hs, draft_pics2 =  loo picsIds (fmap makeMyPicUrl picsIds)}
                 False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
             False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
@@ -1004,7 +1035,7 @@ application1 req send = do
                       draftPicsIds <- selectListFromDb conn "draftspics" ("draft_id",draftIdParam) "pic_id"
                       draftTagsIds <- selectListFromDb conn "draftstags" ("draft_id",draftIdParam) "tag_id"
                       hs <- mapM roo draftTagsIds
-                      okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = myPicUrl draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap myPicUrl draftPicsIds)}   
+                      okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = read . unpack $ draftIdParam, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) authorInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats , draft_text2 = draftText , draft_main_pic_id2 =  draftPicId , draft_main_pic_url2 = makeMyPicUrl draftPicId , draft_tags2 = hs, draft_pics2 =  loo draftPicsIds (fmap makeMyPicUrl draftPicsIds)}   
                     False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get this draft"}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
             _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
@@ -1038,7 +1069,7 @@ application1 req send = do
                           manyDraftTagsIds <- mapM (reverseSelectListFromDb conn "draftstags" "tag_id" "draft_id") alldraftIdsText  
                           hss <- mapM (mapM roo) manyDraftTagsIds
                           let allParams = zip4 params manyAllSuperCats manyDraftPicsIds hss
-                          okHelper $ lazyByteString $ encode $ DraftsResponse { page9 = pageNum , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tags) -> DraftResponse { draft_id2 = draftId, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp cats , draft_text2 = draftText , draft_main_pic_id2 =  draftMainPicId , draft_main_pic_url2 = myPicUrl draftMainPicId , draft_tags2 = tags, draft_pics2 =  loo pics (fmap myPicUrl pics)}) allParams }   
+                          okHelper $ lazyByteString $ encode $ DraftsResponse { page9 = pageNum , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tags) -> DraftResponse { draft_id2 = draftId, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorId (read . unpack $ usIdParam) auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp cats , draft_text2 = draftText , draft_main_pic_id2 =  draftMainPicId , draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = tags, draft_pics2 =  loo pics (fmap makeMyPicUrl pics)}) allParams }   
                         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Author has not draft"}
                     False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot get drafts"}
                 False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
@@ -1073,7 +1104,7 @@ application1 req send = do
               mapM (poo draftIdNum) draftPicsIds
               xs <- foo draftCatIdParam
               [Only postId]   <- (query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftId]) :: IO [Only Integer]
-              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorDraftId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  inCatResp xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = myPicUrl picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap myPicUrl draftPicsIds)}
+              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorDraftId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  inCatResp xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap makeMyPicUrl draftPicsIds)}
             False -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this draft"}
         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
     ["deleteDraft"]  -> do
@@ -1123,7 +1154,7 @@ application1 req send = do
             mapM (woo postId) tagsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = myPicUrl draftMainPicId, post_pics = loo picsIds (fmap myPicUrl picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = makeMyPicUrl draftMainPicId, post_pics = loo picsIds (fmap makeMyPicUrl picsIds), post_tags = hs}
           _ -> do 
             [Only postId] <- query conn "SELECT post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
             [Only draftName] <- query conn "SELECT draft_name FROM drafts WHERE draft_id = ?" [draftIdParam]
@@ -1143,7 +1174,7 @@ application1 req send = do
             mapM (qoo postId) picsIds
             zs <- foo draftCatId
             hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = myPicUrl draftMainPicId, post_pics = loo picsIds (fmap myPicUrl picsIds), post_tags = hs}
+            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = makeMyPicUrl draftMainPicId, post_pics = loo picsIds (fmap makeMyPicUrl picsIds), post_tags = hs}
         False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
     ["getPost",postId]  -> do
       [Only isExistPost]  <- query conn "SELECT EXISTS (SELECT post_id FROM posts WHERE post_id = ?)" [postId]
@@ -1154,7 +1185,7 @@ application1 req send = do
           picsIds <- selectListFromDb conn "postspics" ("post_id",postId) "pic_id"
           tagsIds <- selectListFromDb conn "poststags" ("post_id",postId) "tag_id"
           hs <- mapM roo tagsIds
-          okHelper $ lazyByteString $ encode $ PostResponse { post_id = (read . unpack $ postId), author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = myPicUrl picId, post_pics = loo picsIds (fmap myPicUrl picsIds), post_tags = hs}
+          okHelper $ lazyByteString $ encode $ PostResponse { post_id = (read . unpack $ postId), author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = loo picsIds (fmap makeMyPicUrl picsIds), post_tags = hs}
         False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Post id:" ++ unpack postId ++ " doesn`t exist"}
     ["getPosts", page] -> do
       let pageNum = read . unpack $ page :: Integer
@@ -1169,7 +1200,7 @@ application1 req send = do
           manyPostTagsIds <- mapM (reverseSelectListFromDb conn "poststags" "tag_id" "post_id") postIdsText  
           hss <- mapM (mapM roo) manyPostTagsIds
           let allParams = zip4 params manySuperCats manyPostPicsIds hss
-          okHelper $ lazyByteString $ encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tags) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = myPicUrl picId, post_pics = loo pics (fmap myPicUrl pics), post_tags = tags}) allParams}
+          okHelper $ lazyByteString $ encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tags) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = loo pics (fmap makeMyPicUrl pics), post_tags = tags}) allParams}
         Left str -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack str}
     ["deletePost"]  -> do
       case fmap (isExistParam req) ["admin_id","password","post_id"] of
