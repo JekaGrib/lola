@@ -649,10 +649,10 @@ answerEx conn req = do
       let tagsIds      = fmap tag_id3 . draft_tags_ids $ body
       let picsUrls     = fmap pic_url . draft_pics_urls $ body
       isExistInDbE conn "users" "user_id=?" [pack . show $ usIdParam] "user_id"
-      isExistInDbE conn "categories" "category_id=?" [pack . show $ catIdParam] "category_id"
-      mapM (reverseIsExistInDbE conn "tags" "tag_id=?" "tag_id") $ fmap ( (:[]) . pack . show) tagsIds
       pwd <- selectFromDbE conn "users" "user_id=?" [pack . show $ usIdParam] "password"
       userAuth pwdParam pwd
+      isExistInDbE conn "categories" "category_id=?" [pack . show $ catIdParam] "category_id"
+      mapM (reverseIsExistInDbE conn "tags" "tag_id=?" "tag_id") $ fmap ( (:[]) . pack . show) tagsIds
       isExistInDbE conn "authors" "user_id=?" [pack . show $ usIdParam] "user_id"
       (auId,auInfo) <- selectTupleFromDbE conn "authors" "user_id=?" [pack . show $ usIdParam] ["author_id","author_info"] :: ExceptT ReqError IO (Integer,Text)
       picId <- getPicId conn mPicUrlParam
@@ -724,10 +724,40 @@ answerEx conn req = do
       return . okHelper . encode $ DraftsResponse 
         { page9 = pageNum
         , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tagsMap) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
-    
+    ["updateDraft",draftId]  -> do
+      draftIdNum <- tryRead draftId
+      json <- lift $ strictRequestBody req
+      body <- checkDraftReqJson json
+      let usIdParam    = user_id1     body
+      let pwdParam     = password1    body
+      let nameParam    = draft_name   body
+      let catIdParam   = draft_cat_id body
+      let txtParam     = draft_text1  body
+      let mPicUrlParam = draft_main_pic_url body
+      let tagsIds      = fmap tag_id3 . draft_tags_ids $ body
+      let picsUrls     = fmap pic_url . draft_pics_urls $ body
+      isExistInDbE conn "users" "user_id=?" [pack . show $ usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [pack . show $ usIdParam] "password"
+      userAuth pwdParam pwd
+      isExistInDbE conn "drafts" "draft_id=?" [draftId] "draft_id"
+      isExistInDbE conn "categories" "category_id=?" [pack . show $ catIdParam] "category_id"
+      mapM (reverseIsExistInDbE conn "tags" "tag_id=?" "tag_id") $ fmap ( (:[]) . pack . show) tagsIds
+      isExistInDbE conn "authors" "user_id=?" [pack . show $ usIdParam] "user_id"
+      (auId,auInfo) <- selectTupleFromDbE conn "authors" "user_id=?" [pack . show $ usIdParam] ["author_id","author_info"] :: ExceptT ReqError IO (Integer,Text)
+      postId <- selectFromDbE conn "drafts" "draft_id=?" [draftId] "COALESCE (post_id, '0') AS post_id"
+      picId <- getPicId conn mPicUrlParam
+      deleteDraftsPicsTags conn [draftIdNum]
+      lift $ updateInDb conn "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftId]
+      picsIds <- mapM (getPicId conn) picsUrls
+      lift $ insertManyInDb conn "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
+      lift $ insertManyInDb conn "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
+      let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
+      tagsMap <- selectTupleListFromDbE conn "tags" where' tagsIds ["tag_id","tag_name"]
+      allSuperCats <- findAllSuperCats conn catIdParam  
+      return . okHelper . encode $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
 
 
-      
+     
 
 isNULL 0      = PostText    "NULL" 
 isNULL postId = PostInteger postId
@@ -818,10 +848,15 @@ deleteAllAboutDrafts conn [] = return ()
 deleteAllAboutDrafts conn draftsIds = do
   let values = fmap (pack . show) draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  lift $ deleteFromDb conn "draftspics" where' values
-  lift $ deleteFromDb conn "draftstags" where' values
+  deleteDraftsPicsTags conn draftsIds
   lift $ deleteFromDb conn "drafts" where' values
   return ()
+
+deleteDraftsPicsTags conn draftsIds = do
+  let values = fmap (pack . show) draftsIds
+  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
+  lift $ deleteFromDb conn "draftspics" where' values
+  lift $ deleteFromDb conn "draftstags" where' values
 
       
 checkRelationUsAu conn usIdParam auIdParam = do
