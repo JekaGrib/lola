@@ -671,10 +671,10 @@ answerEx conn req = do
       [postIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [postIdNum,usIdNum]              <- mapM tryRead [postIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
       isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
-      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
-      isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
       pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
       userAuth pwdParam pwd
+      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
+      isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
       auId <- isPostAuthor conn postIdParam usIdParam
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       let params = ["author_info","post_name","post_category_id","post_text","post_main_pic_id"]
@@ -691,9 +691,9 @@ answerEx conn req = do
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
       isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
-      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
       pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
       userAuth pwdParam pwd
+      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
       auId <- isDraftAuthor conn draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["draft_id","COALESCE (post_id, '0') AS post_id","author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -707,6 +707,8 @@ answerEx conn req = do
       [pageParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [pageNum,usIdNum]              <- mapM tryRead [pageParam,usIdParam] :: ExceptT ReqError IO [Integer]
       isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+      userAuth pwdParam pwd
       isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
       auId <- selectFromDbE conn "authors" "user_id=?" [usIdParam] "author_id" 
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
@@ -755,6 +757,19 @@ answerEx conn req = do
       tagsMap <- selectTupleListFromDbE conn "tags" where' tagsIds ["tag_id","tag_name"]
       allSuperCats <- findAllSuperCats conn catIdParam  
       return . okHelper . encode $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+    ["deleteDraft"]  -> do
+      let paramsNames = ["draft_id","user_id","password"]
+      [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+      userAuth pwdParam pwd
+      isExistInDbE conn "drafts" "draft_id=?" [draftIdParam] "draft_id"
+      isExistInDbE conn "authors" "user_id=?" [usIdParam] "user_id"
+      isDraftAuthor conn draftIdParam usIdParam
+      deleteAllAboutDrafts conn [draftIdNum]
+      return . okHelper . encode $ OkResponse { ok = True }
+
 
 
      
