@@ -680,7 +680,7 @@ answerEx conn req = do
       let params = ["author_info","post_name","post_category_id","post_text","post_main_pic_id"]
       (auInfo,postName,postCatId,postTxt,mPicId) <- selectTupleFromDbE conn table "post_id=?" [postIdParam] params :: ExceptT ReqError IO (Text,Text,Integer,Text,Integer)       
       picsIds <- selectListFromDbE conn "postspics" "post_id=?" [postIdParam] "pic_id"
-      tagsMap <- selectTupleListFromDbE conn "poststags AS pt JOIN tags ON p.tag_id=tags.tag_id" "post_id=?" [postIdParam] ["tags.tag_id","tag_name"]
+      tagsMap <- selectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" "post_id=?" [postIdParam] ["tags.tag_id","tag_name"]
       allSuperCats <- findAllSuperCats conn postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
@@ -808,7 +808,28 @@ answerEx conn req = do
           allSuperCats <- findAllSuperCats conn draftCatId
           day <- selectFromDbE conn "posts" "post_id=?" [pack . show $ draftPostId] "post_create_date"    
           return . okHelper . encode $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
-      
+    ["getPost",postId]  -> do
+      postIdNum <- tryRead postId
+      isExistInDbE conn "users" "user_id=?" [postId] "user_id"
+      (auId,usId,auInfo,pName,pDate,pCatId,pText,picId) <- selectTupleFromDbE conn "posts JOIN authors ON authors.author_id = posts.author_id " "post_id=?" [postId] ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+      picsIds <- selectListFromDbE conn "postspics" "post_id=?" [postId] "pic_id"
+      tagsMap <- selectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" "post_id=?" [postId] ["tags.tag_id","tag_name"]
+      allSuperCats <- findAllSuperCats conn pCatId
+      return . okHelper . encode $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
+    ["getPosts", page] -> do
+      pageNum <- tryRead page
+      let extractParamsList = ["posts.post_id","posts.author_id","authors.user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+      case chooseArgs req of
+        Right (table,where',orderBy,values)-> do
+          params <- lift $ selectListLimitFromDb conn table orderBy pageNum postNumberLimit extractParamsList where' values 
+          let postIdsText = fmap (pack . show . firstNine) params
+          let postCatsIds = fmap seventhNine params 
+          manySuperCats <- mapM (findAllSuperCats conn) postCatsIds
+          manyPostPicsIds <- lift $ mapM (reverseSelectListFromDb conn "postspics" "pic_id" "post_id") postIdsText  
+          tagsMaps <- mapM (reverseSelectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" "post_id=?" ["tags.tag_id","tag_name"] ) $ fmap (:[]) postIdsText  
+          let allParams = zip4 params manySuperCats manyPostPicsIds tagsMaps
+          return . okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = loo pics (fmap makeMyPicUrl pics), post_tags = fmap inTagResp tagsMap}) allParams}
+    
 
 
      
@@ -906,17 +927,29 @@ deleteAllAboutDrafts conn draftsIds = do
   lift $ deleteFromDb conn "drafts" where' values
   return ()
 
+deleteDraftsPicsTags conn [] = return ()
 deleteDraftsPicsTags conn draftsIds = do
   let values = fmap (pack . show) draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
   lift $ deleteFromDb conn "draftspics" where' values
   lift $ deleteFromDb conn "draftstags" where' values
+  return ()
 
+deleteAllAboutPosts conn [] = return ()
+deleteAllAboutPosts conn postsIds = do
+  let values = fmap (pack . show) postsIds
+  let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
+  deletePostsPicsTags conn postsIds
+  lift $ deleteFromDb conn "posts" where' values
+  return ()
+
+deletePostsPicsTags conn [] = return ()
 deletePostsPicsTags conn postsIds = do
   let values = fmap (pack . show) postsIds
   let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
   lift $ deleteFromDb conn "postspics" where' values
   lift $ deleteFromDb conn "poststags" where' values
+  return ()
 
       
 checkRelationUsAu conn usIdParam auIdParam = do
@@ -1100,121 +1133,7 @@ application1 req send = do
   let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   case pathInfo req of  
-    ["createPostsDraft"]  -> do
-      let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
-      let pwdParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
-      let postIdParam  = fromJust . fromJust . lookup "post_id"     $ queryToQueryText $ queryString req
-      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
-      case pwdParam == pwd of
-        True -> do
-          [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
-          case check of
-            True -> do
-              [Only authorUsId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
-              [Only authorPostId] <- (query conn "SELECT author_id FROM posts WHERE post_id = ?" [postIdParam]) :: IO [Only Integer]
-              case (authorUsId == authorPostId) of
-                True -> do
-                  [Only postName] <- query conn "SELECT post_name FROM posts WHERE post_id = ?" [postIdParam]
-                  [Only postText] <- query conn "SELECT post_text FROM posts WHERE post_id = ?" [postIdParam]
-                  [Only postCatId] <- query conn "SELECT post_category_id  FROM posts WHERE post_id = ?" [postIdParam]
-                  [Only postMainPicId] <- query conn "SELECT post_main_pic_id FROM posts WHERE post_id = ?" [postIdParam]                  
-                  [Only draftId] <- query conn "INSERT INTO drafts (post_id, author_id, draft_name, draft_category_id, draft_text, draft_main_pic_id) VALUES (?,?,?,?,?,?) RETURNING draft_id" [postIdParam,pack . show $ authorUsId,postName,pack . show $ postCatId,postText,pack . show $ postMainPicId]
-                  [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
-                  xs <- query conn "SELECT pic_id FROM postspics WHERE post_id = ?" [postIdParam]
-                  let picsIds = fmap fromOnly xs
-                  ys <- query conn "SELECT tag_id FROM poststags WHERE post_id = ?" [postIdParam] 
-                  let tagsIds = fmap fromOnly ys
-                  mapM (koo draftId) tagsIds
-                  mapM (poo draftId) picsIds
-                  zs <- foo postCatId
-                  hs <- mapM roo tagsIds
-                  okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostInteger $ read . unpack $ postIdParam, author2 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo  , draft_name2 = postName , draft_cat2 =  inCatResp zs , draft_text2 = postText , draft_main_pic_id2 =  postMainPicId , draft_main_pic_url2 = makeMyPicUrl postMainPicId , draft_tags2 = hs, draft_pics2 =  loo picsIds (fmap makeMyPicUrl picsIds)}
-                False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
-            False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
-        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
-        
-    ["updateDraft",draftId]  -> do
-      let draftIdNum = read . unpack $ draftId
-      body <- strictRequestBody req
-      let usIdParam = user_id1 . fromJust . decode $ body
-      let pwdParam  = password1 . fromJust . decode $ body
-      let draftNameParam  = draft_name . fromJust . decode $ body
-      let draftCatIdParam  = draft_cat_id . fromJust . decode $ body
-      let draftTextParam  = draft_text1 . fromJust . decode $ body
-      let draftMainPicUrlParam  = draft_main_pic_url . fromJust . decode $ body
-      let draftTagsIds  = fmap tag_id3 . draft_tags_ids . fromJust . decode $ body
-      let draftPicsUrls  = fmap pic_url . draft_pics_urls . fromJust . decode $ body
-      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
-      case pwdParam == pwd of
-        True -> do
-          authorUsId <- selectFromDb1 conn "authors" ("user_id",pack .show $ usIdParam) "author_id" :: IO Integer
-          authorDraftId <- selectFromDb1 conn "drafts" ("draft_id",draftId) "author_id" :: IO Integer
-          case (authorUsId == authorDraftId) of
-            True -> do
-              [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [pack .show $ usIdParam]
-              [Only picId]  <- query conn "INSERT INTO pics ( pic_url ) VALUES (?) RETURNING pic_id" [draftMainPicUrlParam]
-              execute conn "DELETE FROM draftstags WHERE draft_id = ?" [draftId]
-              execute conn "DELETE FROM draftspics WHERE draft_id = ?" [draftId]
-              execute conn "UPDATE drafts SET draft_name = ?, draft_category_id = ?, draft_text = ?, draft_main_pic_id = ? WHERE draft_id = ?" [draftNameParam,pack . show $ draftCatIdParam,draftTextParam,pack . show $ picId,draftId]
-              mapM (koo draftIdNum) draftTagsIds
-              ys <- mapM roo draftTagsIds
-              draftPicsIds <- mapM goo draftPicsUrls
-              mapM (poo draftIdNum) draftPicsIds
-              xs <- foo draftCatIdParam
-              [Only postId]   <- (query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftId]) :: IO [Only Integer]
-              okHelper $ lazyByteString $ encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = (\pId -> if pId == 0 then PostText "NULL" else PostInteger pId) postId , author2 = AuthorResponse authorDraftId usIdParam authorInfo, draft_name2 = draftNameParam , draft_cat2 =  inCatResp xs , draft_text2 = draftTextParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = ys, draft_pics2 =  loo draftPicsIds (fmap makeMyPicUrl draftPicsIds)}
-            False -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this draft"}
-        False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
-
-    ["publishDraft"]  -> do
-      let usIdParam   = fromJust . fromJust . lookup "user_id"          $ queryToQueryText $ queryString req
-      let passwordParam = fromJust . fromJust . lookup "password"          $ queryToQueryText $ queryString req
-      let draftIdParam  = fromJust . fromJust . lookup "draft_id"     $ queryToQueryText $ queryString req
-      [Only check]  <- query conn "SELECT EXISTS (SELECT author_id FROM authors WHERE user_id = ?)" [usIdParam]
-      [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
-      [Only authorUsId] <- (query conn "SELECT author_id FROM authors WHERE user_id = ?" [usIdParam]) :: IO [Only Integer]
-      [Only authorDraftId] <- (query conn "SELECT author_id FROM drafts WHERE draft_id = ?" [draftIdParam]) :: IO [Only Integer]
-      [Only postId]   <- (query conn "SELECT COALESCE (post_id, '0') AS post_id FROM drafts WHERE draft_id = ?" [draftIdParam]) :: IO [Only Integer]
-      case (passwordParam == pwd) && (authorUsId == authorDraftId) && check of
-        True  -> case postId of
-          0 -> do
-            [Only draftName] <- query conn "SELECT draft_name FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftCatId] <- query conn "SELECT draft_category_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftText] <- query conn "SELECT draft_text FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftMainPicId] <- query conn "SELECT draft_main_pic_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
-            day <- getDay
-            [Only postId] <- query conn "INSERT INTO posts (author_id, post_name, post_create_date, post_category_id, post_text, post_main_pic_id) VALUES (?,?,?,?,?,?) RETURNING post_id" [pack . show $ authorUsId,draftName,pack day,pack . show $ draftCatId,draftText,pack . show $ draftMainPicId]
-            xs <- query conn "SELECT pic_id FROM draftspics WHERE draft_id = ?" [draftIdParam]
-            let picsIds = fmap fromOnly xs
-            mapM (qoo postId) picsIds
-            ys <- query conn "SELECT tag_id FROM draftstags WHERE draft_id = ?" [draftIdParam] 
-            let tagsIds = fmap fromOnly ys
-            mapM (woo postId) tagsIds
-            zs <- foo draftCatId
-            hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = (pack day), post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = makeMyPicUrl draftMainPicId, post_pics = loo picsIds (fmap makeMyPicUrl picsIds), post_tags = hs}
-          _ -> do 
-            [Only postId] <- query conn "SELECT post_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftName] <- query conn "SELECT draft_name FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftCatId] <- query conn "SELECT draft_category_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftText] <- query conn "SELECT draft_text FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only draftMainPicId] <- query conn "SELECT draft_main_pic_id FROM drafts WHERE draft_id = ?" [draftIdParam]
-            [Only authorInfo] <- query conn "SELECT author_info FROM authors WHERE user_id = ?" [usIdParam]
-            xs <- query conn "SELECT pic_id FROM draftspics WHERE draft_id = ?" [draftIdParam]
-            let picsIds = fmap fromOnly xs
-            ys <- query conn "SELECT tag_id FROM draftstags WHERE draft_id = ?" [draftIdParam] 
-            let tagsIds = fmap fromOnly ys
-            execute conn "UPDATE posts SET post_name = ?, post_category_id = ?, post_text = ? , post_main_pic_id = ? WHERE post_id = ?" [draftName,pack . show $ draftCatId,draftText,pack . show $ draftMainPicId,pack . show $ postId]
-            [Only postCreateDate] <- (query conn "SELECT post_create_date FROM posts WHERE post_id = ?" [pack . show $ postId]) :: IO [Only Day]
-            execute conn "DELETE FROM poststags WHERE post_id = ?" [pack . show $ postId]
-            execute conn "DELETE FROM postspics WHERE post_id = ?" [pack . show $ postId]
-            mapM (woo postId) tagsIds
-            mapM (qoo postId) picsIds
-            zs <- foo draftCatId
-            hs <- mapM roo tagsIds
-            okHelper $ lazyByteString $ encode $ PostResponse { post_id = postId, author4 = AuthorResponse authorUsId (read . unpack $ usIdParam) authorInfo, post_name = draftName , post_create_date = pack . showGregorian $ postCreateDate, post_cat = inCatResp zs, post_text = draftText, post_main_pic_id = draftMainPicId, post_main_pic_url = makeMyPicUrl draftMainPicId, post_pics = loo picsIds (fmap makeMyPicUrl picsIds), post_tags = hs}
-        False -> okHelper $ lazyByteString $ encode (OkResponse {ok = False})
+    
     ["getPost",postId]  -> do
       [Only isExistPost]  <- query conn "SELECT EXISTS (SELECT post_id FROM posts WHERE post_id = ?)" [postId]
       case isExistPost of
