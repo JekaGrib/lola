@@ -445,9 +445,9 @@ fromEx :: Either ReqError Response -> Response
 fromEx ansE = 
   let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString in
   case ansE of
-    Right a              -> a
+    Right a                -> a
     Left (SimpleError str) -> okHelper . encode $ OkInfoResponse {ok7 = False, info7 = pack str}
-    Left SecretError      -> responseBuilder status404 [] $ "Status 404 Not Found"
+    Left SecretError       -> responseBuilder status404 [] $ "Status 404 Not Found"
 
 answerEx :: Connection -> Request -> ExceptT ReqError IO Response
 answerEx conn req = do
@@ -503,11 +503,11 @@ answerEx conn req = do
       return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
     ["createAuthor"]        -> do
       let paramsNames = ["user_id","author_info","admin_id","password"]
-      [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum,admIdNum]                          <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
-      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
-      adminAuth pwdParam pwd admBool
+      [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames 
+      [usIdNum,admIdNum]                          <- mapM tryRead [usIdParam,admIdParam]  :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id" 
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"] 
+      adminAuth pwdParam pwd admBool `catchE` (\_ -> throwE $ SecretError) 
       isExistInDbE      conn "users"   "user_id=?" [usIdParam] "user_id"
       ifExistInDbThrowE conn "authors" "user_id=?" [usIdParam] "user_id"
       auId <- lift $ insertReturnInDb conn "authors" ["user_id","author_info"] [usIdParam,auInfoParam] "user_id"
@@ -828,11 +828,45 @@ answerEx conn req = do
       tagsMaps <- mapM (reverseSelectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" "post_id=?" ["tags.tag_id","tag_name"] ) $ fmap (:[]) postIdsText  
       let allParams = zip4 params manySuperCats manyPostPicsIds tagsMaps
       return . okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse { post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = loo pics (fmap makeMyPicUrl pics), post_tags = fmap inTagResp tagsMap}) allParams}
+    ["deletePost"]  -> do
+      let paramsNames = ["post_id","admin_id","password"]
+      [postIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [postIdNum,admIdNum]              <- mapM tryRead [postIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+      adminAuth pwdParam pwd admBool
+      deleteAllAboutPosts conn [postIdNum]
+      return . okHelper . encode $ OkResponse { ok = True }
+    ["createComment"]  -> do
+      let paramsNames = ["post_id","comment_text","user_id","password"]
+      [postIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [postIdNum,usIdNum]                       <- mapM tryRead [postIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+      userAuth pwdParam pwd
+      isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
+      commentId <- lift $ insertReturnInDb conn "comments" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] "comment_id"
+      return . okHelper . encode $ CommentResponse { comment_id = commentId , comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
+    ["getComments"] -> do
+      let paramsNames = ["post_id","page"]
+      [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
+      [postIdNum,pageNum]     <- mapM tryRead [postIdParam,pageParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
+      comms <- lift $ selectListLimitFromDb conn "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","comment_text","user_id"] "post_id=?" [postIdParam]
+      return . okHelper . encode $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
+    ["picture",picId]  -> do
+      picIdNum <- tryRead picId :: ExceptT ReqError IO Integer
+      isExistInDbE conn "pics" "pic_id=?" [picId] "pic_id"
+      picUrl <- selectFromDbE conn "pics" "pic_id=?" [picId] "pic_url"
+      res <- httpLBS $ fromString $ unpack $ picUrl
+      return $ responseBuilder 
+        status200 
+        [("Content-Type", "image/jpeg")] 
+        $ lazyByteString $ getResponseBody res
 
-    
 
 
-     
+inCommResp (a,b,c) = CommentIdTextUserResponse a b c     
 
 isNULL 0      = PostText    "NULL" 
 isNULL postId = PostInteger postId
@@ -935,11 +969,16 @@ deleteDraftsPicsTags conn draftsIds = do
   lift $ deleteFromDb conn "draftstags" where' values
   return ()
 
+
 deleteAllAboutPosts conn [] = return ()
 deleteAllAboutPosts conn postsIds = do
   let values = fmap (pack . show) postsIds
   let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
   deletePostsPicsTags conn postsIds
+  lift $ deleteFromDb conn "comments" where' values
+  draftIds <- selectListFromDbE conn "drafts" where' values "draft_id" :: ExceptT ReqError IO [Integer]
+  deleteAllAboutDrafts conn draftIds
+  lift $ deleteFromDb conn "drafts" where' values
   lift $ deleteFromDb conn "posts" where' values
   return ()
 
