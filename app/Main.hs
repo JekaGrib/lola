@@ -26,7 +26,8 @@ import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
 import           Data.ByteString.Lazy           ( toStrict )
 import           Control.Monad.Catch            ( catch, throwM )
-import           Data.HashMap.Strict            ( toList )
+import           Data.HashMap.Strict            ( toList, fromList )
+import qualified Data.Vector                    as V
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -503,11 +504,12 @@ answerEx conn req = do
       return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
     ["createAuthor"]        -> do
       let paramsNames = ["user_id","author_info","admin_id","password"]
-      [usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames 
-      [usIdNum,admIdNum]                          <- mapM tryRead [usIdParam,admIdParam]  :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id" 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"] 
-      adminAuth pwdParam pwd admBool `catchE` (\_ -> throwE $ SecretError) 
+      [usIdParam,auInfoParam,admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) paramsNames 
+      admIdNum                                    <- hideErr $ tryRead admIdParam  :: ExceptT ReqError IO Integer
+      hideErr $ isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id" 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"] 
+      hideErr $ adminAuth pwdParam pwd admBool  
+      usIdNum <- tryRead usIdParam  
       isExistInDbE      conn "users"   "user_id=?" [usIdParam] "user_id"
       ifExistInDbThrowE conn "authors" "user_id=?" [usIdParam] "user_id"
       auId <- lift $ insertReturnInDb conn "authors" ["user_id","author_info"] [usIdParam,auInfoParam] "user_id"
@@ -865,6 +867,7 @@ answerEx conn req = do
         $ lazyByteString $ getResponseBody res
 
 
+hideErr m = m `catchE` (\_ -> throwE $ SecretError)
 
 inCommResp (a,b,c) = CommentIdTextUserResponse a b c     
 
@@ -902,12 +905,36 @@ checkDraftReqJson json = do
         let numParams = ["user_id","draft_category_id"]
         let textParams = ["password","draft_name","draft_text","draft_main_pic_url"]
         let arrayParams = ["draft_tags_ids","draft_pics_urls"]
-        let params = numParams ++ textParams ++ arrayParams 
+        let params = numParams ++ textParams ++ arrayParams
         [usIdVal,catIdVal,pwdVal,nameVal,txtVal,mainPicUrlVal,tagsIdsVal,picsUrlsVal] <- mapM (isExistInObj obj) params
         mapM checkNumVal [usIdVal,catIdVal]
         mapM checkStrVal [pwdVal,nameVal,txtVal,mainPicUrlVal]
-        throwE $ SimpleError $ "Can`t parse  \"draft_tags_ids\"  or/and  \"draft_pics_urls\"  parameters"
+        checkTagArrVal tagsIdsVal
+        checkPicArrVal picsUrlsVal
+        throwE $ SimpleError $ "Can`t parse request body"
       Nothing -> throwE $ SimpleError $ "Invalid request body"
+
+checkTagArrVal val = do
+  case val of
+    Array arr -> case V.toList arr of
+      [] -> return ()
+      xs@((Object obj) : objs) -> mapM_ checkTagObj xs
+      _ -> throwE $ SimpleError $ "Can`t parse  \"draft_tags_ids\"  parameters"
+
+checkTagObj (Object obj) = case toList obj of
+  [("tag_id",Number _)] -> return ()
+  _                     -> throwE $ SimpleError $ "Can`t parse  \"draft_tags_ids\"  parameter"
+
+checkPicArrVal val = do
+  case val of
+    Array arr -> case V.toList arr of
+      [] -> return ()
+      xs@((Object obj) : objs) -> mapM_ checkPicObj xs
+      _ -> throwE $ SimpleError $ "Can`t parse  \"draft_pics_urls\"  parameters"
+
+checkPicObj (Object obj) = case toList obj of
+  [("pic_url",String _)] -> return ()
+  _                      -> throwE $ SimpleError $ "Can`t parse  \"draft_pics_urls\"  parameter"
 
 isExistInObj obj param = do
   case lookup param . toList $ obj of

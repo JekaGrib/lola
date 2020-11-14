@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ab7e0ac693d95251f55ec7204dd09994c72824ec01681897ebdda458e8190596
+-- hash: 03fe04626b74c44006b20fc5ea7f8f55e963fd5b8084d53d1111ad39d14f74da
 
 name:           lola
 version:        0.1.0.0
@@ -47,6 +47,7 @@ library
     , time
     , transformers
     , unordered-containers
+    , vector
     , wai
     , warp
   default-language: Haskell2010
@@ -74,6 +75,7 @@ executable lola-exe
     , time
     , transformers
     , unordered-containers
+    , vector
     , wai
     , warp
   default-language: Haskell2010
@@ -102,6 +104,7 @@ test-suite lola-test
     , time
     , transformers
     , unordered-containers
+    , vector
     , wai
     , warp
   default-language: Haskell2010

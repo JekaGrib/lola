@@ -36,6 +36,7 @@ dependencies:
 - JuicyPixels
 - exceptions
 - unordered-containers
+- vector
 
 library:
   source-dirs: src
