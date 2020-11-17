@@ -884,6 +884,8 @@ answerEx conn req = do
         isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
         pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
         userAuth pwdParam pwd
+        postId <- selectFromDbE conn "comments" "comment_id=?" [commIdParam] "post_id" :: ExceptT ReqError IO Integer
+        isCommOrPostAuthor conn commIdParam (pack . show $ postId) usIdParam
         lift $ deleteFromDb conn "comments" "comment_id=?" [commIdParam]
         return . okHelper . encode $ OkResponse {ok = True}      
     ["picture",picId]  -> do
@@ -895,6 +897,17 @@ answerEx conn req = do
         status200 
         [("Content-Type", "image/jpeg")] 
         $ lazyByteString $ getResponseBody res
+
+isCommOrPostAuthor conn commIdParam postIdParam usIdParam = do
+  isCommAuthor conn commIdParam usIdParam
+    `catchE`
+      (\(SimpleError str) -> 
+        withExceptT 
+          (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
+            isPostAuthor conn postIdParam usIdParam
+            return ())
+
+
 
 accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
   [True,_] -> UserMode
@@ -1649,3 +1662,15 @@ eighthTen   (a,b,c,d,e,f,g,h,i,j) = h
 
 ninthNine  (a,b,c,d,e,f,g,h,i) = i
 ninthTen   (a,b,c,d,e,f,g,h,i,j) = i
+
+
+{-fee :: Integer -> Integer -> ExceptT String IO Integer
+fee a b 
+  |a <= b = return a
+  | True  = throwE $ "a > b"
+
+lee :: Integer -> Integer -> ExceptT String IO Integer
+lee d c
+  | d + c > 100 = return d
+  | True        = throwE $ "d+c < 100"-}
+
