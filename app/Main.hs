@@ -847,8 +847,8 @@ answerEx conn req = do
       pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
       userAuth pwdParam pwd
       isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
-      commentId <- lift $ insertReturnInDb conn "comments" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] "comment_id"
-      return . okHelper . encode $ CommentResponse { comment_id = commentId , comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
+      commId <- lift $ insertReturnInDb conn "comments" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] "comment_id"
+      return . okHelper . encode $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
       let paramsNames = ["post_id","page"]
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
@@ -856,6 +856,36 @@ answerEx conn req = do
       isExistInDbE conn "posts" "post_id=?" [postIdParam] "post_id"
       comms <- lift $ selectListLimitFromDb conn "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","comment_text","user_id"] "post_id=?" [postIdParam]
       return . okHelper . encode $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
+    ["updateComment"]  -> do
+      let paramsNames = ["comment_id","comment_text","user_id","password"]
+      [commIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [commIdNum,usIdNum]                       <- mapM tryRead [commIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
+      isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+      pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+      userAuth pwdParam pwd
+      isCommAuthor conn commIdParam usIdParam
+      lift $ updateInDb conn "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
+      postId <- selectFromDbE conn "comments" "comment_id=?" [commIdParam] "post_id"
+      return . okHelper . encode $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
+    ["deleteComment"]  -> case accessMode req of
+      AdminMode -> do
+        let paramsNames = ["comment_id","admin_id","password"]
+        [commIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+        [commIdNum,admIdNum]              <- mapM tryRead [commIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
+        isExistInDbE conn "users" "user_id=?" [admIdParam] "user_id"
+        (pwd,admBool) <- selectTupleFromDbE conn "users" "user_id=?" [admIdParam] ["password","admin"]
+        adminAuth pwdParam pwd admBool
+        lift $ deleteFromDb conn "comments" "comment_id=?" [commIdParam]
+        return . okHelper . encode $ OkResponse { ok = True }
+      UserMode -> do
+        let paramsNames = ["comment_id","user_id","password"]
+        [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+        [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
+        isExistInDbE conn "users" "user_id=?" [usIdParam] "user_id"
+        pwd <- selectFromDbE conn "users" "user_id=?" [usIdParam] "password"
+        userAuth pwdParam pwd
+        lift $ deleteFromDb conn "comments" "comment_id=?" [commIdParam]
+        return . okHelper . encode $ OkResponse {ok = True}      
     ["picture",picId]  -> do
       picIdNum <- tryRead picId :: ExceptT ReqError IO Integer
       isExistInDbE conn "pics" "pic_id=?" [picId] "pic_id"
@@ -865,6 +895,19 @@ answerEx conn req = do
         status200 
         [("Content-Type", "image/jpeg")] 
         $ lazyByteString $ getResponseBody res
+
+accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
+  [True,_] -> UserMode
+  [_,True] -> AdminMode
+  _        -> UserMode
+
+data AccessMode = UserMode | AdminMode
+
+isCommAuthor conn commIdParam usIdParam = do
+  usId <- selectFromDbE conn "comments" "comment_id=?" [commIdParam] "user_id" :: ExceptT ReqError IO Integer
+  case usId == (read . unpack $ usIdParam) of
+    True -> return ()
+    False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of comment_id: " ++ unpack commIdParam
 
 
 hideErr m = m `catchE` (\_ -> throwE $ SecretError)
@@ -1195,109 +1238,6 @@ insertReturnInDb conn table insNames insValues returnName = do
 insertManyInDb conn table insNames insValues = do
   executeMany conn (fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) " ) insValues
 
-application1 req send = do
-  let okHelper = send . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")]
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  case pathInfo req of  
-    ["deletePost"]  -> do
-      case fmap (isExistParam req) ["admin_id","password","post_id"] of
-        [True,True,True] -> do
-          case fmap (parseParam req) ["admin_id","password","post_id"] of
-            [Just adminIdParam,Just pwdParam,Just postIdParam] -> do
-              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-              case zoo pwdParam pwd admBool of
-                "Success" -> do
-                  execute conn "DELETE FROM poststags WHERE post_id = ?" [postIdParam]
-                  execute conn "DELETE FROM postspics WHERE post_id = ?" [postIdParam]
-                  execute conn "DELETE FROM comments  WHERE post_id = ?" [postIdParam]
-                  execute conn "DELETE FROM drafts    WHERE post_id = ?" [postIdParam]
-                  execute conn "DELETE FROM posts     WHERE post_id = ?" [postIdParam]
-                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
-                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
-        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}      
-    ["createComment"]  -> do
-      case fmap (isExistParam req) ["user_id","password","post_id","comment_text"] of
-        [True,True,True,True] -> do
-          case fmap (parseParam req) ["user_id","password","post_id","comment_text"] of
-            [Just usIdParam,Just pwdParam,Just postIdParam,Just commentTextParam] -> do
-              [Only usPwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [usIdParam]
-              case pwdParam == usPwd of
-                True -> do
-                  [Only commentId] <- query conn "INSERT INTO comments (comment_text, post_id, user_id) VALUES (?,?,?) RETURNING comment_id" [ commentTextParam, postIdParam, usIdParam ]
-                  okHelper $ lazyByteString $ encode $ CommentResponse { comment_id = commentId , comment_text = commentTextParam, post_id6 = read . unpack $ postIdParam, user_id6 = read . unpack $ usIdParam}
-                False ->  okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
-            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
-        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
-    ["getComments"] -> do
-      case fmap (isExistParam req) ["post_id","page"] of
-        [True,True] -> do
-          case fmap (parseParam req) ["post_id","page"] of
-            [Just postIdParam, Just pageParam] -> do
-              let pageNum = read . unpack $ pageParam
-              xs <- (query conn (fromString $ "SELECT comment_id, comment_text, user_id FROM comments WHERE post_id = ? OFFSET " ++ show ((pageNum-1)*commentNumberLimit) ++ " LIMIT " ++ show (pageNum*commentNumberLimit)) [postIdParam]) :: IO [(Integer,Text,Integer)]
-              okHelper $ lazyByteString $ encode $ CommentsResponse {page = pageNum, post_id9 = (read . unpack $ postIdParam), comments = coo xs }
-    ["updateMyComment"]  -> do
-      case fmap (isExistParam req) ["user_id","password","comment_id","comment_text"] of
-        [True,True,True,True] -> do
-          case fmap (parseParam req) ["user_id","password","comment_id","comment_text"] of
-            [Just usIdParam,Just pwdParam,Just commentIdParam,Just commentTextParam] -> do
-              pwd <- selectFromDb1 conn "users" ("user_id",usIdParam) "password"
-              case pwd == pwdParam of
-                True -> do
-                  usCommentId <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
-                  case usCommentId == (read . unpack $ usIdParam) of
-                    True -> do
-                      execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
-                      postId  <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
-                      okHelper $ lazyByteString $ encode $ CommentResponse { comment_id = (read . unpack $ commentIdParam) , comment_text = commentTextParam, post_id6 = postId, user_id6 = usCommentId}
-                    _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot update this comment"}
-                _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
-            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
-    ["deleteComment"]  -> do
-      case fmap (isExistParam req) ["user_id","admin_id","password","comment_id"] of
-        [True,True,True,True] -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Too much query parameters"}
-        [True,False,True,True] -> do
-          case fmap (parseParam req) ["user_id","password","comment_id"] of
-            [Just usIdParam,Just pwdParam,Just commentIdParam] -> do
-              pwd <- selectFromDb1 conn "users" ("user_id",usIdParam) "password"
-              case pwd == pwdParam of
-                True -> do
-                  usCommentId <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "user_id") :: IO Integer
-                  postId      <- (selectFromDb1 conn "comments" ("comment_id",commentIdParam) "post_id") :: IO Integer
-                  authPostId  <- (selectFromDb1 conn "posts" ("post_id",pack . show $ postId) "author_id") :: IO Integer
-                  usPostId  <- (selectFromDb1 conn "authors" ("author_id",pack . show $ authPostId) "user_id") :: IO Integer
-                  case (usCommentId == (read . unpack $ usIdParam)) || (usPostId == (read . unpack $ usIdParam)) of
-                    True -> do
-                      execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
-                      okHelper $ lazyByteString $ encode (OkResponse { ok = True })
-                    _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "User cannot delete this comment"}
-                _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "INVALID password"}
-            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
-        [False,True,True,True] -> do
-          case fmap (parseParam req) ["admin_id","password","comment_id"] of
-            [Just adminIdParam,Just pwdParam,Just commentIdParam] -> do
-              [Only admBool] <- query conn "SELECT admin FROM users WHERE user_id = ? " [adminIdParam]
-              [Only pwd] <- query conn "SELECT password FROM users WHERE user_id = ? " [adminIdParam]
-              case zoo pwdParam pwd admBool of
-                "Success" -> do
-                  execute conn "DELETE FROM comments WHERE comment_id = ?" [commentIdParam]
-                  okHelper $ lazyByteString $ encode (OkResponse { ok = True })
-                "INVALID pwd, admin = True "     -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-                "valid pwd, user is NOT admin"   -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-                "INVALID pwd, user is NOT admin" -> send . responseBuilder status404 [] $ "Status 404 Not Found"
-            _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t parse query parameter"}
-        _ -> okHelper $ lazyByteString $ encode $ OkInfoResponse {ok7 = False, info7 = pack $ "Can`t find query parameter"}
-    ["picture",picId]  -> do
-      picUrl <- selectFromDb1 conn "pics" ("pic_id",picId) "pic_url"
-      res <- httpLBS $ fromString $ unpack $ picUrl
-      send $ responseBuilder 
-        status200 
-        [("Content-Type", "image/jpeg")] 
-        $ lazyByteString $ getResponseBody res 
 
 
 chooseArgs req = do
