@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Main where
 
-import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS )
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301 )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
@@ -12,7 +13,7 @@ import           Data.Aeson
 import           Data.Text                      ( pack, unpack, Text, concat, toUpper, stripPrefix, isPrefixOf )
 import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
-import           Network.HTTP.Simple            ( parseRequest, setRequestBody, getResponseBody, httpLBS, HttpException )
+import qualified Network.HTTP.Simple            as HT
 import           Data.Maybe                     ( fromJust )
 import           Data.Time.Clock
 import           Data.Time.LocalTime
@@ -24,10 +25,25 @@ import           Data.List                      ( intercalate, zip4 )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
-import           Data.ByteString.Lazy           ( toStrict )
-import           Control.Monad.Catch            ( catch, throwM )
+import           Data.ByteString                ( ByteString )
+import qualified Data.ByteString.Lazy           as BSL
+import           Control.Monad.Catch            ( catch, throwM, MonadCatch )
 import           Data.HashMap.Strict            ( toList, fromList )
 import qualified Data.Vector                    as V
+import           Data.Int                       ( Int64 )
+import qualified Database.PostgreSQL.Simple.FromField as FF
+
+data Handle m = Handle 
+  { dbQuery          :: forall q r. (ToRow q, FromRow r) => Connection -> Query -> q -> m [r],
+    dbExecute        :: forall q. ToRow q => Connection -> Query ->  q  -> m Int64 ,
+    dbExecuteMany    :: forall q. ToRow q => Connection -> Query -> [q] -> m Int64 ,
+    httpAction       :: HT.Request -> m (HT.Response BSL.ByteString),
+    getDay           :: m String,
+    connectPSQL      :: ByteString -> m Connection,
+    getBody          :: Request -> m BSL.ByteString
+    }
+
+--forall (m :: * -> *) q r.(Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -41,8 +57,8 @@ draftNumberLimit = 5
 postNumberLimit = 5
 
 
-getDay :: IO String
-getDay = do
+getDay' :: IO String
+getDay' = do
   time    <- getZonedTime
   let day = showGregorian . localDay . zonedTimeToLocalTime $ time
   return day
@@ -75,7 +91,7 @@ createDefaultPicture = do
 
 createDefaultUser picId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  day <- getDay  
+  day <- getDay'  
   [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( '12345678','DELETED','DELETED',?,?, false ) RETURNING user_id" [ pack (show picId), pack day ]
   return userId
 
@@ -447,10 +463,17 @@ instance ToJSON CommentsResponse where
         pairs ( "page" .= page <> "post_id" .= post_id <> "comments" .= comments )
 
 
+main :: IO ()
+main = do
+  createDbStructure
+  addDefaultParameters
+  let h = Handle query execute executeMany HT.httpLBS getDay' connectPostgreSQL strictRequestBody
+  run 3000 (application h)
 
-application req send = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  ansE <- runExceptT $ answerEx conn req
+application :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> (Response -> m ResponseReceived) -> m ResponseReceived
+application h req send = do
+  conn <- (connectPSQL h) (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
+  ansE <- runExceptT $ answerEx h conn req
   send ( fromEx ansE )
 
 fromEx :: Either ReqError Response -> Response
@@ -461,197 +484,197 @@ fromEx ansE =
     Left (SimpleError str) -> okHelper . encode $ OkInfoResponse {ok7 = False, info7 = pack str}
     Left SecretError       -> responseBuilder status404 [] $ "Status 404 Not Found"
 
-answerEx :: Connection -> Request -> ExceptT ReqError IO Response
-answerEx conn req = do
+answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> Request -> ExceptT ReqError m Response
+answerEx h conn req = do
    let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString 
    case pathInfo req of
     ["createUser"] -> do
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
       [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
-      picId <- getPicId conn picUrlParam
-      day <- lift getDay
+      picId <- getPicId h conn picUrlParam
+      day <- lift $ getDay h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
-      usId <- lift $ insertReturnInDb conn "users" "user_id" insNames insValues 
+      usId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues 
       return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
     ["getUser", usId] -> do
       usIdNum <- tryRead usId
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usId] 
-      (fName,lName,picId,usCreateDate) <- selectTupleFromDbE conn "users" selectParams "user_id=?" [usId]
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usId] 
+      (fName,lName,picId,usCreateDate) <- selectTupleFromDbE h conn "users" selectParams "user_id=?" [usId]
       return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       let paramsNames = ["user_id","admin_id","password"]
       [usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum,admIdNum]              <- mapM tryRead [usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [usIdNum,admIdNum]              <- mapM tryRead [usIdParam,admIdParam]
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      lift $ updateInDb conn "comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
-      check <- lift $ isExistInDb conn "authors" "author_id" "user_id=?" [usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      lift $ updateInDb h conn "comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
+      check <- lift $ isExistInDb h conn "authors" "author_id" "user_id=?" [usIdParam] 
       case check of
         True -> do
-          authorId <- selectFromDbE conn "authors" ["author_id"] "user_id=?" [usIdParam]  :: ExceptT ReqError IO Integer
-          lift $ updateInDb conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ authorId]
-          draftsIds <- selectListFromDbE conn "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  :: ExceptT ReqError IO [Integer]
-          deleteAllAboutDrafts conn draftsIds
-          lift $ deleteFromDb conn "authors" "author_id=?" [pack . show $ authorId] 
-          lift $ deleteFromDb conn "users" "user_id=?" [usIdParam]
+          authorId <- selectFromDbE h conn "authors" ["author_id"] "user_id=?" [usIdParam]  
+          lift $ updateInDb h conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ (authorId :: Integer)]
+          draftsIds <- selectListFromDbE h conn "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
+          deleteAllAboutDrafts h conn draftsIds
+          lift $ deleteFromDb h conn "authors" "author_id=?" [pack . show $ authorId] 
+          lift $ deleteFromDb h conn "users" "user_id=?" [usIdParam]
           return . okHelper . encode $ OkResponse {ok = True} 
         False -> do
-          lift $ deleteFromDb conn "users" "user_id=?" [usIdParam]
+          lift $ deleteFromDb h conn "users" "user_id=?" [usIdParam]
           return . okHelper . encode $ OkResponse {ok = True} 
     ["createAdmin"]        -> do
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
       [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
-      key <- selectFromDbE conn "key" ["create_admin_key"] "true" ([]::[Text])  
+      key <- selectFromDbE h conn "key" ["create_admin_key"] "true" ([]::[Text])  
       checkKeyE keyParam key
-      picId <- getPicId conn picUrlParam 
-      day <- lift getDay
+      picId <- getPicId h conn picUrlParam 
+      day <- lift $ getDay h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
-      admId <- lift $ insertReturnInDb conn "users" "user_id" insNames insValues 
+      admId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues 
       return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
     ["createAuthor"]        -> do
       let paramsNames = ["user_id","author_info","admin_id","password"]
       [usIdParam,auInfoParam,admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) paramsNames 
-      admIdNum                                    <- hideErr $ tryRead admIdParam  :: ExceptT ReqError IO Integer
-      hideErr $ isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- hideErr $ selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam]  
+      admIdNum                                    <- hideErr $ tryRead admIdParam  
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam]  
       hideErr $ adminAuth pwdParam pwd admBool  
       usIdNum <- tryRead usIdParam  
-      isExistInDbE      conn "users" "user_id"  "user_id=?" [usIdParam] 
-      ifExistInDbThrowE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <- lift $ insertReturnInDb conn "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam] 
+      isExistInDbE h      conn "users" "user_id"  "user_id=?" [usIdParam] 
+      ifExistInDbThrowE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      auId <- lift $ insertReturnInDb h conn "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam] 
       return . okHelper . encode $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
     ["getAuthor"]        -> do
       let paramsNames = ["author_id","admin_id","password"]
       [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "authors" "author_id" "author_id=?" [auIdParam] 
-      (usId,auInfo) <- selectTupleFromDbE conn "authors" ["user_id","author_info"] "author_id=?" [auIdParam] 
+      isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
+      (usId,auInfo) <- selectTupleFromDbE h conn "authors" ["user_id","author_info"] "author_id=?" [auIdParam] 
       return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       let paramsNames = ["author_id","user_id","author_info","admin_id","password"]
       [auIdParam,usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,usIdNum,admIdNum]                            <- mapM tryRead [auIdParam,usIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [auIdNum,usIdNum,admIdNum]                            <- mapM tryRead [auIdParam,usIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      isExistInDbE conn "authors" "author_id" "author_id=?" [auIdParam] 
-      checkRelationUsAu conn usIdParam auIdParam
-      lift $ updateInDb conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
+      checkRelationUsAu h conn usIdParam auIdParam
+      lift $ updateInDb h conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
       return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
     ["deleteAuthor"]   -> do
       let paramsNames = ["author_id","admin_id","password"]
       [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "authors" "author_id" "author_id=?" [auIdParam] 
-      lift $ updateInDb conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,auIdParam]
-      draftsIds <- selectListFromDbE conn "drafts" ["draft_id"] "author_id=?" [auIdParam]  :: ExceptT ReqError IO [Integer]
-      deleteAllAboutDrafts conn draftsIds
-      lift $ deleteFromDb conn "authors" "author_id=?" [auIdParam]
+      isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
+      lift $ updateInDb h conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,auIdParam]
+      draftsIds <- selectListFromDbE h conn "drafts" ["draft_id"] "author_id=?" [auIdParam] 
+      deleteAllAboutDrafts h conn draftsIds
+      lift $ deleteFromDb h conn "authors" "author_id=?" [auIdParam]
       return . okHelper . encode $ OkResponse {ok = True}
     ["createCategory"]        -> do
       let paramsNames = ["category_name","admin_id","password"]
       [catNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      admIdNum                           <- tryRead admIdParam :: ExceptT ReqError IO Integer
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      admIdNum                           <- tryRead admIdParam 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      catId <- lift $ insertReturnInDb conn "categories" "category_id" ["category_name"] [catNameParam] 
+      catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name"] [catNameParam] 
       return . okHelper . encode $ CatResponse {cat_id = catId, cat_name = catNameParam, super_cat = "NULL"}
     ["createSubCategory"]        -> do
       let paramsNames = ["category_name","super_category_id","admin_id","password"]
       [catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [superCatIdNum,admIdNum]                           <- mapM tryRead [superCatIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [superCatIdNum,admIdNum]                           <- mapM tryRead [superCatIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "categories" "category_id" "category_id=?" [superCatIdParam] 
-      catId <- lift $ insertReturnInDb conn "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
-      allSuperCats <- findAllSuperCats conn catId
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [superCatIdParam] 
+      catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
+      allSuperCats <- findAllSuperCats h conn catId
       return . okHelper . encode $ inCatResp allSuperCats
     ["getCategory", catId] -> do
       catIdNum <- tryRead catId
-      isExistInDbE conn "categories" "category_id" "category_id=?" [catId] 
-      allSuperCats <- findAllSuperCats conn catIdNum
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [catId] 
+      allSuperCats <- findAllSuperCats h conn catIdNum
       return . okHelper . encode $ inCatResp allSuperCats
     ["updateCategory"] -> do
       let paramsNames = ["category_id","category_name","super_category_id","admin_id","password"]
       [catIdParam,catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,superCatIdNum,admIdNum]                             <- mapM tryRead [catIdParam,superCatIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [catIdNum,superCatIdNum,admIdNum]                             <- mapM tryRead [catIdParam,superCatIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "categories" "category_id" "category_id=?" [catIdParam]      
-      isExistInDbE conn "categories" "category_id" "category_id=?" [superCatIdParam] 
-      checkRelationCats conn catIdNum superCatIdNum
-      lift $ updateInDb conn "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
-      allSuperCats <- findAllSuperCats conn catIdNum
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [catIdParam]      
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [superCatIdParam] 
+      checkRelationCats h conn catIdNum superCatIdNum
+      lift $ updateInDb h conn "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
+      allSuperCats <- findAllSuperCats h conn catIdNum
       return . okHelper . encode $ inCatResp allSuperCats 
     ["deleteCategory"] -> do
       let paramsNames = ["category_id","admin_id","password"]
       [catIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,admIdNum]              <- mapM tryRead [catIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [catIdNum,admIdNum]              <- mapM tryRead [catIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "categories" "category_id" "category_id=?" [catIdParam] 
-      allSubCats <- findAllSubCats conn catIdNum
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [catIdParam] 
+      allSubCats <- findAllSubCats h conn catIdNum
       let values = fmap (pack . show) (defCatId:allSubCats)
       let where'  = intercalate " OR " . fmap (const "post_category_id=?")  $ allSubCats
       let where'' = intercalate " OR " . fmap (const "draft_category_id=?") $ allSubCats
-      lift $ updateInDb conn "posts"  "post_category_id=?"  where'  values
-      lift $ updateInDb conn "drafts" "draft_category_id=?" where'' values
+      lift $ updateInDb h conn "posts"  "post_category_id=?"  where'  values
+      lift $ updateInDb h conn "drafts" "draft_category_id=?" where'' values
       let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
-      lift $ deleteFromDb conn "categories" where''' (fmap (pack . show) allSubCats)
+      lift $ deleteFromDb h conn "categories" where''' (fmap (pack . show) allSubCats)
       return . okHelper . encode $ OkResponse {ok = True}
     ["createTag"]  -> do
       let paramsNames = ["tag_name","admin_id","password"]
       [tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [admIdNum]                         <- mapM tryRead [admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [admIdNum]                         <- mapM tryRead [admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      tagId <- lift $ insertReturnInDb conn "tags" "tag_id" ["tag_name"] [tagNameParam] 
+      tagId <- lift $ insertReturnInDb h conn "tags" "tag_id" ["tag_name"] [tagNameParam] 
       return . okHelper . encode $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
       tagIdNum <- tryRead tagId
-      isExistInDbE conn "tags" "tag_id" "tag_id=?" [tagId] 
-      tagName <- selectFromDbE conn "tags" ["tag_name"] "tag_id=?" [tagId] 
+      isExistInDbE h conn "tags" "tag_id" "tag_id=?" [tagId] 
+      tagName <- selectFromDbE h conn "tags" ["tag_name"] "tag_id=?" [tagId] 
       return . okHelper . encode $ TagResponse tagIdNum tagName
     ["updateTag"]        -> do
       let paramsNames = ["tag_id","tag_name","admin_id","password"]
       [tagIdParam,tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam]
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      isExistInDbE conn "tags" "tag_id" "tag_id=?" [tagIdParam] 
-      lift $ updateInDb conn "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
+      isExistInDbE h conn "tags" "tag_id" "tag_id=?" [tagIdParam] 
+      lift $ updateInDb h conn "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
       return . okHelper . encode $ TagResponse tagIdNum tagNameParam
     ["deleteTag"]        -> do
       let paramsNames = ["tag_id","admin_id","password"]
       [tagIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum,admIdNum]              <- mapM tryRead [tagIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [tagIdNum,admIdNum]              <- mapM tryRead [tagIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      lift $ deleteFromDb conn "draftstags" "tag_id=?" [tagIdParam]
-      lift $ deleteFromDb conn "poststags" "tag_id=?" [tagIdParam]
-      lift $ deleteFromDb conn "tags" "tag_id=?" [tagIdParam]
+      lift $ deleteFromDb h conn "draftstags" "tag_id=?" [tagIdParam]
+      lift $ deleteFromDb h conn "poststags" "tag_id=?" [tagIdParam]
+      lift $ deleteFromDb h conn "tags" "tag_id=?" [tagIdParam]
       return . okHelper . encode $ OkResponse {ok = True}
     ["createNewDraft"]  -> do
-      json <- lift $ strictRequestBody req
+      json <- lift $ getBody h req
       body <- checkDraftReqJson json
       let usIdParam    = user_id1     body
       let pwdParam     = password1    body
@@ -661,87 +684,87 @@ answerEx conn req = do
       let mPicUrlParam = draft_main_pic_url body
       let tagsIds      = fmap tag_id3 . draft_tags_ids $ body
       let picsUrls     = fmap pic_url . draft_pics_urls $ body
-      isExistInDbE conn "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
-      mapM (isExistInDbE conn "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
-      isExistInDbE conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      (auId,auInfo) <- selectTupleFromDbE conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam] :: ExceptT ReqError IO (Integer,Text)
-      picId <- getPicId conn mPicUrlParam
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
+      mapM (isExistInDbE h conn "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      (auId,auInfo) <- selectTupleFromDbE h conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
+      picId <- getPicId h conn mPicUrlParam
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [pack . show $ auId,nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId]
-      draftId <- lift $ insertReturnInDb conn "drafts" "draft_id" insNames insValues    
-      picsIds <- mapM (getPicId conn) picsUrls
-      lift $ insertManyInDb conn "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
-      lift $ insertManyInDb conn "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
+      draftId <- lift $ insertReturnInDb h conn "drafts" "draft_id" insNames insValues    
+      picsIds <- mapM (getPicId h conn) picsUrls
+      lift $ insertManyInDb h conn "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
+      lift $ insertManyInDb h conn "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      tagsMap <- selectTupleListFromDbE conn "tags" ["tag_id","tag_name"] where' tagsIds 
-      allSuperCats <- findAllSuperCats conn catIdParam  
+      tagsMap <- selectTupleListFromDbE h conn "tags" ["tag_id","tag_name"] where' tagsIds 
+      allSuperCats <- findAllSuperCats h conn catIdParam  
       return . okHelper . encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["createPostsDraft"]  -> do
       let paramsNames = ["post_id","user_id","password"]
       [postIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,usIdNum]              <- mapM tryRead [postIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [postIdNum,usIdNum]              <- mapM tryRead [postIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      isExistInDbE conn "posts" "post_id" "post_id=?" [postIdParam] 
-      auId <- isPostAuthor conn postIdParam usIdParam
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
+      auId <- isPostAuthor h conn postIdParam usIdParam
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       let params = ["author_info","post_name","post_category_id","post_text","post_main_pic_id"]
-      (auInfo,postName,postCatId,postTxt,mPicId) <- selectTupleFromDbE conn table params "post_id=?" [postIdParam]  :: ExceptT ReqError IO (Text,Text,Integer,Text,Integer)       
-      picsIds <- selectListFromDbE conn "postspics" ["pic_id"] "post_id=?" [postIdParam] 
-      tagsMap <- selectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
-      allSuperCats <- findAllSuperCats conn postCatId
+      (auInfo,postName,postCatId,postTxt,mPicId) <- selectTupleFromDbE h conn table params "post_id=?" [postIdParam]         
+      picsIds <- selectListFromDbE h conn "postspics" ["pic_id"] "post_id=?" [postIdParam] 
+      tagsMap <- selectTupleListFromDbE h conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
+      allSuperCats <- findAllSuperCats h conn postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
-      draftId <- lift $ insertReturnInDb conn "drafts" "draft_id" insNames insValues 
+      draftId <- lift $ insertReturnInDb h conn "drafts" "draft_id" insNames insValues 
       return . okHelper . encode $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDraft"]  -> do
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <- isDraftAuthor conn draftIdParam usIdParam
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      auId <- isDraftAuthor h conn draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
-      let params = ["draft_id","COALESCE (post_id, '0') AS post_id","author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      (draftId,postId,auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE conn table params "draft_id=?" [draftIdParam]  :: ExceptT ReqError IO (Integer,Integer,Text,Text,Integer,Text,Integer)       
-      picsIds <- selectListFromDbE conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-      tagsMap <- selectTupleListFromDbE conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
-      allSuperCats <- findAllSuperCats conn draftCatId
+      let params = ["COALESCE (post_id, '0') AS post_id","author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
+      (postId,auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE h conn table params "draft_id=?" [draftIdParam]        
+      picsIds <- selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+      tagsMap <- selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+      allSuperCats <- findAllSuperCats h conn draftCatId
       return . okHelper . encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDrafts"]  -> do
       let paramsNames = ["page","user_id","password"]
       [pageParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [pageNum,usIdNum]              <- mapM tryRead [pageParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [pageNum,usIdNum]              <- mapM tryRead [pageParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <- selectFromDbE conn "authors" ["author_id"] "user_id=?" [usIdParam]  
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      auId <- selectFromDbE h conn "authors" ["author_id"] "user_id=?" [usIdParam]  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
       let orderBy = "draft_id DESC"
       let extractParams = ["draft_id","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id","author_info"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
-      params <- lift $ selectListLimitFromDb conn table orderBy pageNum draftNumberLimit extractParams where' values :: ExceptT ReqError IO [(Integer,Integer,Text,Integer,Text,Integer,Text)]
+      params <- selectListLimitFromDbE h conn table orderBy pageNum draftNumberLimit extractParams where' values 
       let alldraftIdsText = fmap (pack . show . firstSeven) params
       let allCatIdsNum = fmap fourthSeven params
-      manyAllSuperCats <- mapM (findAllSuperCats conn) allCatIdsNum
-      manyDraftPicsIds <- mapM (selectListFromDbE conn "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
-      tagsMaps <- mapM (selectTupleListFromDbE conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
+      manyAllSuperCats <- mapM (findAllSuperCats h conn) allCatIdsNum
+      manyDraftPicsIds <- mapM (selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
+      tagsMaps <- mapM (selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
       let allParams = zip4 params manyAllSuperCats manyDraftPicsIds tagsMaps
       return . okHelper . encode $ DraftsResponse 
         { page9 = pageNum
         , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tagsMap) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
     ["updateDraft",draftId]  -> do
       draftIdNum <- tryRead draftId
-      json <- lift $ strictRequestBody req
+      json <- lift $ getBody h req
       body <- checkDraftReqJson json
       let usIdParam    = user_id1     body
       let pwdParam     = password1    body
@@ -751,172 +774,172 @@ answerEx conn req = do
       let mPicUrlParam = draft_main_pic_url body
       let tagsIds      = fmap tag_id3 . draft_tags_ids $ body
       let picsUrls     = fmap pic_url . draft_pics_urls $ body
-      isExistInDbE conn "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "drafts" "draft_id" "draft_id=?" [draftId] 
-      isExistInDbE conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
-      mapM (isExistInDbE conn "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
-      isExistInDbE conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      (auId,auInfo) <- selectTupleFromDbE conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam]  :: ExceptT ReqError IO (Integer,Text)
-      postId <- selectFromDbE conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
-      picId <- getPicId conn mPicUrlParam
-      deleteDraftsPicsTags conn [draftIdNum]
-      lift $ updateInDb conn "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftId]
-      picsIds <- mapM (getPicId conn) picsUrls
-      lift $ insertManyInDb conn "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
-      lift $ insertManyInDb conn "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
+      isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftId] 
+      isExistInDbE h conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
+      mapM (isExistInDbE h conn "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      (auId,auInfo) <- selectTupleFromDbE h conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
+      postId <- selectFromDbE h conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
+      picId <- getPicId h conn mPicUrlParam
+      deleteDraftsPicsTags h conn [draftIdNum]
+      lift $ updateInDb h conn "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftId]
+      picsIds <- mapM (getPicId h conn) picsUrls
+      lift $ insertManyInDb h conn "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
+      lift $ insertManyInDb h conn "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      tagsMap <- selectTupleListFromDbE conn "tags" ["tag_id","tag_name"] where' tagsIds 
-      allSuperCats <- findAllSuperCats conn catIdParam  
+      tagsMap <- selectTupleListFromDbE h conn "tags" ["tag_id","tag_name"] where' tagsIds 
+      allSuperCats <- findAllSuperCats h conn catIdParam  
       return . okHelper . encode $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["deleteDraft"]  -> do
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
-      isExistInDbE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      isDraftAuthor conn draftIdParam usIdParam
-      deleteAllAboutDrafts conn [draftIdNum]
+      isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isDraftAuthor h conn draftIdParam usIdParam
+      deleteAllAboutDrafts h conn [draftIdNum]
       return . okHelper . encode $ OkResponse { ok = True }
     ["publishDraft"]  -> do
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
-      isExistInDbE conn "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <- isDraftAuthor conn draftIdParam usIdParam
-      draftPostId <- selectFromDbE conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
+      isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
+      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      auId <- isDraftAuthor h conn draftIdParam usIdParam
+      draftPostId <- selectFromDbE h conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
       case draftPostId of
         0 -> do
           let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
           let params = ["author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-          (auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE conn table params "draft_id=?" [draftIdParam]  :: ExceptT ReqError IO (Text,Text,Integer,Text,Integer)       
-          picsIds <- selectListFromDbE conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          tagsMap <- selectTupleListFromDbE conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
-          day <- lift getDay 
+          (auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE h conn table params "draft_id=?" [draftIdParam]         
+          picsIds <- selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          tagsMap <- selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+          day <- lift $ getDay h 
           let insNames  = ["author_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
           let insValues = [pack . show $ auId,draftName,pack day,pack . show $ draftCatId,draftTxt,pack . show $ mPicId]          
-          postId <- lift $ insertReturnInDb conn "posts" "post_id" insNames insValues          
-          lift $ insertManyInDb conn "postspics" ["post_id","pic_id"] (zip (repeat postId) picsIds)
-          lift $ insertManyInDb conn "poststags" ["post_id","tag_id"] (zip (repeat postId) (fmap fst tagsMap))
-          allSuperCats <- findAllSuperCats conn draftCatId 
+          postId <- lift $ insertReturnInDb h conn "posts" "post_id" insNames insValues          
+          lift $ insertManyInDb h conn "postspics" ["post_id","pic_id"] (zip (repeat postId) picsIds)
+          lift $ insertManyInDb h conn "poststags" ["post_id","tag_id"] (zip (repeat postId) (fmap fst tagsMap))
+          allSuperCats <- findAllSuperCats h conn draftCatId 
           return . okHelper . encode $ PostResponse {post_id = postId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
         _ -> do
           let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
           let params = ["author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-          (auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE conn table params "draft_id=?" [draftIdParam]  :: ExceptT ReqError IO (Text,Text,Integer,Text,Integer)       
-          picsIds <- selectListFromDbE conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          tagsMap <- selectTupleListFromDbE conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
-          lift $ updateInDb conn "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [draftName,pack . show $ draftCatId,draftTxt,pack . show $ mPicId,pack . show $ draftPostId]
-          deletePostsPicsTags conn [draftPostId]
-          lift $ insertManyInDb conn "postspics" ["post_id","pic_id"] (zip (repeat draftPostId) picsIds)
-          lift $ insertManyInDb conn "poststags" ["post_id","tag_id"] (zip (repeat draftPostId) (fmap fst tagsMap))
-          allSuperCats <- findAllSuperCats conn draftCatId
-          day <- selectFromDbE conn "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
+          (auInfo,draftName,draftCatId,draftTxt,mPicId) <- selectTupleFromDbE h conn table params "draft_id=?" [draftIdParam]         
+          picsIds <- selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          tagsMap <- selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+          lift $ updateInDb h conn "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [draftName,pack . show $ draftCatId,draftTxt,pack . show $ mPicId,pack . show $ draftPostId]
+          deletePostsPicsTags h conn [draftPostId]
+          lift $ insertManyInDb h conn "postspics" ["post_id","pic_id"] (zip (repeat draftPostId) picsIds)
+          lift $ insertManyInDb h conn "poststags" ["post_id","tag_id"] (zip (repeat draftPostId) (fmap fst tagsMap))
+          allSuperCats <- findAllSuperCats h conn draftCatId
+          day <- selectFromDbE h conn "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
           return . okHelper . encode $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
     ["getPost",postId]  -> do
       postIdNum <- tryRead postId
-      isExistInDbE conn "users" "user_id" "user_id=?" [postId] 
-      (auId,usId,auInfo,pName,pDate,pCatId,pText,picId) <- selectTupleFromDbE conn "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
-      picsIds <- selectListFromDbE conn "postspics" ["pic_id"] "post_id=?" [postId] 
-      tagsMap <- selectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
-      allSuperCats <- findAllSuperCats conn pCatId
+      isExistInDbE h conn "users" "user_id" "user_id=?" [postId] 
+      (auId,usId,auInfo,pName,pDate,pCatId,pText,picId) <- selectTupleFromDbE h conn "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
+      picsIds <- selectListFromDbE h conn "postspics" ["pic_id"] "post_id=?" [postId] 
+      tagsMap <- selectTupleListFromDbE h conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
+      allSuperCats <- findAllSuperCats h conn pCatId
       return . okHelper . encode $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
     ["getPosts", page] -> do
       pageNum <- tryRead page
       let extractParamsList = ["posts.post_id","posts.author_id","authors.user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
       (table,where',orderBy,values) <- chooseArgs req       
-      params <- lift $ selectListLimitFromDb conn table orderBy pageNum postNumberLimit extractParamsList where' values 
+      params <- selectListLimitFromDbE h conn table orderBy pageNum postNumberLimit extractParamsList where' values 
       let postIdsText = fmap (pack . show . firstNine) params
       let postCatsIds = fmap seventhNine params 
-      manySuperCats <- mapM (findAllSuperCats conn) postCatsIds
-      manyPostPicsIds <- mapM (selectListFromDbE conn "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
-      tagsMaps <- mapM (selectTupleListFromDbE conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
+      manySuperCats <- mapM (findAllSuperCats h conn) postCatsIds
+      manyPostPicsIds <- mapM (selectListFromDbE h conn "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
+      tagsMaps <- mapM (selectTupleListFromDbE h conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
       let allParams = zip4 params manySuperCats manyPostPicsIds tagsMaps
       return . okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse {post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagsMap}) allParams}
     ["deletePost"]  -> do
       let paramsNames = ["post_id","admin_id","password"]
       [postIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,admIdNum]              <- mapM tryRead [postIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      [postIdNum,admIdNum]              <- mapM tryRead [postIdParam,admIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       adminAuth pwdParam pwd admBool
-      deleteAllAboutPosts conn [postIdNum]
+      deleteAllAboutPosts h conn [postIdNum]
       return . okHelper . encode $ OkResponse { ok = True }
     ["createComment"]  -> do
       let paramsNames = ["post_id","comment_text","user_id","password"]
       [postIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,usIdNum]                       <- mapM tryRead [postIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [postIdNum,usIdNum]                       <- mapM tryRead [postIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE conn "posts" "post_id" "post_id=?" [postIdParam] 
-      commId <- lift $ insertReturnInDb conn "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
+      isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
+      commId <- lift $ insertReturnInDb h conn "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
       return . okHelper . encode $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
       let paramsNames = ["post_id","page"]
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,pageNum]     <- mapM tryRead [postIdParam,pageParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "posts" "post_id" "post_id=?" [postIdParam] 
-      comms <- lift $ selectListLimitFromDb conn "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","comment_text","user_id"] "post_id=?" [postIdParam]
+      [postIdNum,pageNum]     <- mapM tryRead [postIdParam,pageParam] 
+      isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
+      comms <- selectListLimitFromDbE h conn "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","comment_text","user_id"] "post_id=?" [postIdParam]
       return . okHelper . encode $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       let paramsNames = ["comment_id","comment_text","user_id","password"]
       [commIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [commIdNum,usIdNum]                       <- mapM tryRead [commIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-      isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-      pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+      [commIdNum,usIdNum]                       <- mapM tryRead [commIdParam,usIdParam] 
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+      pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isCommAuthor conn commIdParam usIdParam
-      lift $ updateInDb conn "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
-      postId <- selectFromDbE conn "comments" ["post_id"] "comment_id=?" [commIdParam] 
+      isCommAuthor h conn commIdParam usIdParam
+      lift $ updateInDb h conn "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
+      postId <- selectFromDbE h conn "comments" ["post_id"] "comment_id=?" [commIdParam] 
       return . okHelper . encode $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
     ["deleteComment"]  -> case accessMode req of
       AdminMode -> do
         let paramsNames = ["comment_id","admin_id","password"]
         [commIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-        [commIdNum,admIdNum]              <- mapM tryRead [commIdParam,admIdParam] :: ExceptT ReqError IO [Integer]
-        isExistInDbE conn "users" "user_id" "user_id=?" [admIdParam] 
-        (pwd,admBool) <- selectTupleFromDbE conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+        [commIdNum,admIdNum]              <- mapM tryRead [commIdParam,admIdParam]
+        isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+        (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
         adminAuth pwdParam pwd admBool
-        lift $ deleteFromDb conn "comments" "comment_id=?" [commIdParam]
+        lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
         return . okHelper . encode $ OkResponse { ok = True }
       UserMode -> do
         let paramsNames = ["comment_id","user_id","password"]
         [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-        [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam] :: ExceptT ReqError IO [Integer]
-        isExistInDbE conn "users" "user_id" "user_id=?" [usIdParam] 
-        pwd <- selectFromDbE conn "users" ["password"] "user_id=?" [usIdParam] 
+        [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam]
+        isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+        pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
         userAuth pwdParam pwd
-        postId <- selectFromDbE conn "comments" ["post_id"] "comment_id=?" [commIdParam]  :: ExceptT ReqError IO Integer
-        isCommOrPostAuthor conn commIdParam (pack . show $ postId) usIdParam
-        lift $ deleteFromDb conn "comments" "comment_id=?" [commIdParam]
+        postId <- selectFromDbE h conn "comments" ["post_id"] "comment_id=?" [commIdParam]  
+        isCommOrPostAuthor h conn commIdParam (pack . show $ (postId :: Integer)) usIdParam
+        lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
         return . okHelper . encode $ OkResponse {ok = True}      
     ["picture",picId]  -> do
-      picIdNum <- tryRead picId :: ExceptT ReqError IO Integer
-      isExistInDbE conn "pics" "pic_id" "pic_id=?" [picId] 
-      picUrl <- selectFromDbE conn "pics" ["pic_url"] "pic_id=?" [picId] 
-      res <- httpLBS $ fromString $ unpack $ picUrl
+      picIdNum <- tryRead picId 
+      isExistInDbE h conn "pics" "pic_id" "pic_id=?" [picId] 
+      picUrl <- selectFromDbE h conn "pics" ["pic_url"] "pic_id=?" [picId] 
+      res <- lift $ (httpAction h) $ fromString $ unpack $ picUrl
       return $ responseBuilder 
         status200 
         [("Content-Type", "image/jpeg")] 
-        $ lazyByteString $ getResponseBody res
+        $ lazyByteString $ HT.getResponseBody res
 
 
-isCommOrPostAuthor conn commIdParam postIdParam usIdParam = do
-  isCommAuthor conn commIdParam usIdParam
+isCommOrPostAuthor h conn commIdParam postIdParam usIdParam = do
+  isCommAuthor h conn commIdParam usIdParam
     `catchE`
       (\(SimpleError str) -> 
         withExceptT 
           (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
-            isPostAuthor conn postIdParam usIdParam
+            isPostAuthor h conn postIdParam usIdParam
             return ())
 
 accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
@@ -926,9 +949,9 @@ accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
 
 data AccessMode = UserMode | AdminMode
 
-isCommAuthor conn commIdParam usIdParam = do
-  usId <- selectFromDbE conn "comments" ["user_id"] "comment_id=?" [commIdParam]  :: ExceptT ReqError IO Integer
-  case usId == (read . unpack $ usIdParam) of
+isCommAuthor h conn commIdParam usIdParam = do
+  usId <- selectFromDbE h conn "comments" ["user_id"] "comment_id=?" [commIdParam]  
+  case (usId :: Integer) == (read . unpack $ usIdParam) of
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of comment_id: " ++ unpack commIdParam
 
@@ -939,17 +962,17 @@ inCommResp (a,b,c) = CommentIdTextUserResponse a b c
 isNULL 0      = PostText    "NULL" 
 isNULL postId = PostInteger postId
 
-isDraftAuthor conn draftIdParam usIdParam = do
-  auId <- selectFromDbE conn "drafts" ["author_id"] "draft_id=?" [draftIdParam]  :: ExceptT ReqError IO Integer
-  usDraftId <- selectFromDbE conn "authors" ["user_id"] "author_id=?" [pack . show $ auId]  :: ExceptT ReqError IO Integer
-  case usDraftId == (read . unpack $ usIdParam) of
+isDraftAuthor h conn draftIdParam usIdParam = do
+  auId <- selectFromDbE h conn "drafts" ["author_id"] "draft_id=?" [draftIdParam] 
+  usDraftId <- selectFromDbE h conn "authors" ["user_id"] "author_id=?" [pack . show $ (auId :: Integer)]  
+  case (usDraftId :: Integer) == (read . unpack $ usIdParam) of
     True -> return auId
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of draft_id: " ++ unpack draftIdParam
 
-isPostAuthor conn postIdParam usIdParam = do
-  auId <- selectFromDbE conn "posts" ["author_id"] "post_id=?" [postIdParam]  :: ExceptT ReqError IO Integer
-  usPostId <- selectFromDbE conn "authors" ["user_id"] "author_id=?" [pack . show $ auId]  :: ExceptT ReqError IO Integer
-  case usPostId == (read . unpack $ usIdParam) of
+isPostAuthor h conn postIdParam usIdParam = do
+  auId <- selectFromDbE h conn "posts" ["author_id"] "post_id=?" [postIdParam] 
+  usPostId <- selectFromDbE h conn "authors" ["user_id"] "author_id=?" [pack . show $ (auId :: Integer)]  
+  case (usPostId :: Integer) == (read . unpack $ usIdParam) of
     True -> return auId
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of post_id: " ++ unpack postIdParam
 
@@ -1013,81 +1036,85 @@ checkStrVal val = do
     String _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val
 
-checkRelationCats conn catIdNum superCatIdNum 
+checkRelationCats h conn catIdNum superCatIdNum 
   |catIdNum == superCatIdNum = throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " equal to category_id."
   |otherwise                 = do
-    allSubCats <- findAllSubCats conn catIdNum
+    allSubCats <- findAllSubCats h conn catIdNum
     if superCatIdNum `elem` allSubCats
       then throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
       else return ()
 
-findAllSubCats :: Connection -> Integer -> ExceptT ReqError IO [Integer]
-findAllSubCats conn catId = do
-  check <- lift $ isExistInDb conn "categories" "category_id" "super_category_id=?" [pack . show $ catId] 
+findAllSubCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> Integer -> ExceptT ReqError m [Integer]
+findAllSubCats h conn catId = do
+  check <- lift $ isExistInDb h conn "categories" "category_id" "super_category_id=?" [pack . show $ catId] 
   case check of
     False -> return [catId]
     True  -> do
-      xs <- selectListFromDbE conn "categories" ["category_id"] "super_category_id=?" [pack . show $ catId] 
-      ys <- mapM (findAllSubCats conn) xs
+      xs <- selectListFromDbE h conn "categories" ["category_id"] "super_category_id=?" [pack . show $ catId] 
+      ys <- mapM (findAllSubCats h conn) xs
       return $ catId : (Prelude.concat  ys)   
     
-findAllSuperCats :: Connection -> Integer -> ExceptT ReqError IO [(Integer,Text)]
-findAllSuperCats conn catId = do
-  (catName,superCatId) <- selectTupleFromDbE conn "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
+findAllSuperCats :: (Monad m, MonadCatch m) => Handle m -> Connection -> Integer -> ExceptT ReqError m [(Integer,Text)]
+findAllSuperCats h conn catId = do
+  (catName,superCatId) <- selectTupleFromDbE h conn "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
   case superCatId of 
     0 -> return $ [(catId,catName)]
     _ -> do
-      xs <- findAllSuperCats conn superCatId
+      xs <- findAllSuperCats h conn superCatId
       return $ ((catId,catName) : xs) 
 
-deleteAllAboutDrafts conn [] = return ()
-deleteAllAboutDrafts conn draftsIds = do
+deleteAllAboutDrafts :: (Monad m) => Handle m -> Connection -> [Integer] -> ExceptT ReqError m ()
+deleteAllAboutDrafts h conn [] = return ()
+deleteAllAboutDrafts h conn draftsIds = do
   let values = fmap (pack . show) draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  deleteDraftsPicsTags conn draftsIds
-  lift $ deleteFromDb conn "drafts" where' values
+  deleteDraftsPicsTags h conn draftsIds
+  lift $ deleteFromDb h conn "drafts" where' values
   return ()
 
-deleteDraftsPicsTags conn [] = return ()
-deleteDraftsPicsTags conn draftsIds = do
+deleteDraftsPicsTags :: (Monad m) => Handle m -> Connection -> [Integer] -> ExceptT ReqError m ()
+deleteDraftsPicsTags h conn [] = return ()
+deleteDraftsPicsTags h conn draftsIds = do
   let values = fmap (pack . show) draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  lift $ deleteFromDb conn "draftspics" where' values
-  lift $ deleteFromDb conn "draftstags" where' values
+  lift $ deleteFromDb h conn "draftspics" where' values
+  lift $ deleteFromDb h conn "draftstags" where' values
   return ()
 
-deleteAllAboutPosts conn [] = return ()
-deleteAllAboutPosts conn postsIds = do
+deleteAllAboutPosts :: (Monad m, MonadCatch m) => Handle m -> Connection -> [Integer] -> ExceptT ReqError m ()
+deleteAllAboutPosts h conn [] = return ()
+deleteAllAboutPosts h conn postsIds = do
   let values = fmap (pack . show) postsIds
   let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
-  deletePostsPicsTags conn postsIds
-  lift $ deleteFromDb conn "comments" where' values
-  draftIds <- selectListFromDbE conn "drafts" ["draft_id"] where' values  :: ExceptT ReqError IO [Integer]
-  deleteAllAboutDrafts conn draftIds
-  lift $ deleteFromDb conn "drafts" where' values
-  lift $ deleteFromDb conn "posts" where' values
+  deletePostsPicsTags h conn postsIds
+  lift $ deleteFromDb h conn "comments" where' values
+  draftIds <- selectListFromDbE h conn "drafts" ["draft_id"] where' values  
+  deleteAllAboutDrafts h conn draftIds
+  lift $ deleteFromDb h conn "drafts" where' values
+  lift $ deleteFromDb h conn "posts" where' values
   return ()
 
-deletePostsPicsTags conn [] = return ()
-deletePostsPicsTags conn postsIds = do
+deletePostsPicsTags :: (Monad m) => Handle m -> Connection -> [Integer] -> ExceptT ReqError m ()
+deletePostsPicsTags h conn [] = return ()
+deletePostsPicsTags h conn postsIds = do
   let values = fmap (pack . show) postsIds
   let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
-  lift $ deleteFromDb conn "postspics" where' values
-  lift $ deleteFromDb conn "poststags" where' values
+  lift $ deleteFromDb h conn "postspics" where' values
+  lift $ deleteFromDb h conn "poststags" where' values
   return ()
 
 
-checkRelationUsAu conn usIdParam auIdParam = do
-  check <- lift $ isExistInDb conn "authors" "user_id" "user_id=?" [usIdParam] 
+checkRelationUsAu h conn usIdParam auIdParam = do
+  check <- lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [usIdParam] 
   case check of
     True -> do
-      auId <- selectFromDbE conn "authors" ["author_id"] "user_id=?" [usIdParam] 
+      auId <- selectFromDbE h conn "authors" ["author_id"] "user_id=?" [usIdParam] 
       case (auId :: Integer) == (read . unpack $ auIdParam) of
         True  -> return ()
         False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
     False -> return ()  
 
-checkKeyE :: Text -> Text -> ExceptT ReqError IO Bool
+checkKeyE :: (Monad m) => Text -> Text -> ExceptT ReqError m Bool
 checkKeyE keyParam key 
   | keyParam == key = return True
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
@@ -1099,86 +1126,98 @@ checkParam req param = case lookup param $ queryToQueryText $ queryString req of
   Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
   Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
-tryRead :: (Read a, Monad m) => Text -> ExceptT ReqError m a
+tryRead :: (Monad m) => Text -> ExceptT ReqError m Integer
 tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
 tryRead xs = case reads . unpack $ xs of
   [(a,"")] -> return a
   _        -> throwE $ SimpleError $ "Can`t parse value:" ++ unpack xs
 
-selectFromDb conn table params where' values = do
-  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ) values
+toSelQ table params where' = 
+  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where'
+toSelLimQ table orderBy page limitNumber params where' = 
+  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)
+toUpdQ table set where' = 
+  fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' 
+toDelQ table where' =
+  fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where'
+toExQ table checkName where' =
+  fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")"
+toInsRetQ table returnName insNames =
+  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) RETURNING " ++ returnName
+toInsManyQ table insNames =
+  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) "
+
+selectFromDb :: (Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
+selectFromDb h conn q values = do
+  xs <- dbQuery h conn q values
   return xs
 
-selectFromDbE conn table params where' values = do
-  xs <- lift $ selectFromDb conn table params where' values
+selectFromDbE :: (Monad m, MonadCatch m, ToRow q, FF.FromField a) => Handle m -> Connection -> String -> [String] -> String -> q -> ExceptT ReqError m a
+selectFromDbE h conn table params where' values = do
+  xs <- lift $ selectFromDb h conn (toSelQ table params where') values
   case xs of
     []           -> throwE $ SimpleError "DatabaseError.Empty output"
     [Only value] -> return value
     _            -> throwE $ SimpleError "DatabaseError"
 
-selectListFromDbE conn table params where' values = do
-  xs <- lift $ selectFromDb conn table params where' values 
+selectListFromDbE :: (Monad m, MonadCatch m, ToRow q, FF.FromField a) => Handle m -> Connection -> String -> [String] -> String -> q -> ExceptT ReqError m [a]
+selectListFromDbE h conn table params where' values = do
+  xs <- lift $ selectFromDb h conn (toSelQ table params where') values 
   case xs of
     []                -> return []
     ((Only value):ys) -> return . fmap fromOnly $ xs
 
-selectTupleFromDbE conn table params where' values = do
-  xs <- lift $ selectFromDb conn table params where' values
+
+selectTupleFromDbE h conn table params where' values = do
+  xs <- lift $ selectFromDb h conn (toSelQ table params where') values
   case xs of
     []      -> throwE $ SimpleError "DatabaseError.Empty output"
     [tuple] -> return tuple
     _       -> throwE $ SimpleError "DatabaseError"
 
-selectTupleListFromDbE conn table params where' values = do
-  xs <- lift $ selectFromDb conn table params where' values 
+selectTupleListFromDbE h conn table params where' values = do
+  xs <- lift $ selectFromDb h conn (toSelQ table params where') values 
   case xs of
     []             -> return []
     (tuple:tuples) -> return xs
 
---reverseSelectTupleListFromDbE conn table where' params values = selectListFromDbE conn table where' values param
-
-selectListLimitFromDb conn table orderBy page limitNumber params where' values = do
-  xs <- query conn (fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber) ) values
+--selectListLimitFromDbE :: (Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
+selectListLimitFromDbE h conn table orderBy page limitNumber params where' values = do
+  xs <- lift $ selectFromDb h conn (toSelLimQ table orderBy page limitNumber params where') values
   return xs
 
---reverseSelectListFromDbE conn table param eqParamName eqParamValue = selectListFromDbE conn table (eqParamName,eqParamValue) param
+updateInDb h conn table set where' values = do
+  (dbExecute h) conn (toUpdQ table set where') values
 
-updateInDb conn table set where' values = do
-  execute conn (fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' ) values
+deleteFromDb h conn table where' values = do
+  (dbExecute h) conn (toDelQ table where') values   
 
-deleteFromDb conn table where' values = do
-  execute conn (fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where') values   
-
-isExistInDb conn table checkName where' values = do
-  [Only check]  <- query conn (fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")") values
+isExistInDb :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> Connection -> String -> String -> String -> [Text] -> m Bool
+isExistInDb h conn table checkName where' values = do
+  [Only check]  <- dbQuery h conn (toExQ table checkName where') values
   return check
 
-isExistInDbE :: Connection -> String -> String -> String -> [Text] -> ExceptT ReqError IO Bool
-isExistInDbE conn table checkName where' values = do
-  check  <- lift $ isExistInDb conn table checkName where' values 
+isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE h conn table checkName where' values = do
+  check  <- lift $ isExistInDb h conn table checkName where' values 
   case check of
-    True -> return True
+    True -> return ()
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
- 
---reverseIsExistInDbE :: Connection -> String -> String -> String -> [Text] -> ExceptT ReqError IO Bool
---reverseIsExistInDbE conn table where' checkName values = isExistInDbE conn table where' values checkName
   
-
-ifExistInDbThrowE :: Connection -> String -> String -> String -> [Text] -> ExceptT ReqError IO Bool
-ifExistInDbThrowE conn table checkName where' values = do
-  check  <- lift $ isExistInDb conn table checkName where' values 
+ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+ifExistInDbThrowE h conn table checkName where' values = do
+  check  <- lift $ isExistInDb h conn table checkName where' values 
   case check of
     True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
-    False -> return False
+    False -> return ()
 
-
---insertReturnInDb :: Connection
-insertReturnInDb conn table returnName insNames insValues = do
-  [Only x] <- query conn (fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) RETURNING " ++ returnName) insValues
+insertReturnInDb :: forall m a. (Monad m, MonadCatch m, MonadFail m, FF.FromField a) => Handle m -> Connection -> String -> String -> [String] -> [Text] -> m a
+insertReturnInDb h conn table returnName insNames insValues = do
+  [Only x] <- dbQuery h conn ( toInsRetQ table returnName insNames ) insValues
   return x
 
-insertManyInDb conn table insNames insValues = do
-  executeMany conn (fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) " ) insValues
+insertManyInDb h conn table insNames insValues = do
+  (dbExecuteMany h) conn ( toInsManyQ table insNames ) insValues
 
 
 
@@ -1191,40 +1230,38 @@ isMyUrl url
 
 picUrlEnd url = stripPrefix "http://localhost:3000/picture/" url
 
-getValidmakeMyPicUrl :: Connection -> Text -> ExceptT ReqError IO Text
+getValidmakeMyPicUrl :: (Monad m) =>  Connection -> Text -> ExceptT ReqError m Text
 getValidmakeMyPicUrl conn url = do
   case picUrlEnd url of
     Just ""     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
     Just urlEnd -> return urlEnd
     Nothing     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url 
 
-readUrlEnd conn url urlEnd = do
-  picIdNum <- tryRead urlEnd :: ExceptT ReqError IO Integer
-  check    <- lift $ isExistInDb conn "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
+readUrlEnd :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Connection -> Text -> Text -> ExceptT ReqError m Integer
+readUrlEnd h conn url urlEnd = do
+  picIdNum <- tryRead urlEnd 
+  check    <- lift $ isExistInDb h conn "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
   case check of 
-    True  -> return picIdNum
+    True  -> return picIdNum 
     False -> throwE $ SimpleError $ "Invalid end of picture url:" ++ unpack url
 
-getValidPicUrl :: Text -> ExceptT ReqError IO Text
-getValidPicUrl url = do
-  res <- (lift $ httpLBS . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HttpException))) )
-  let bs = getResponseBody res
-  case decodeImage $ toStrict bs of
+getValidPicUrl :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m Text
+getValidPicUrl h url = do
+  res <- (lift $ (httpAction h) . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HT.HttpException))) )
+  let bs = HT.getResponseBody res
+  case decodeImage $ BSL.toStrict bs of
     Right _ -> return url
     Left _  -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
 
-getPicId conn url 
+getPicId :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Connection -> Text -> ExceptT ReqError m Integer
+getPicId h conn url 
   |isMyUrl url = do
-    picId <- (getValidmakeMyPicUrl conn url >>= \urlEnd -> readUrlEnd conn url urlEnd)
+    picId <- (getValidmakeMyPicUrl conn url >>= \urlEnd -> readUrlEnd h conn url urlEnd)
     return picId
   |otherwise = do
-    validUrl <- getValidPicUrl url
-    picId    <- lift $ insertReturnInDb conn "pics" "pic_id" ["pic_url"] [validUrl] 
+    validUrl <- getValidPicUrl h url
+    picId    <- lift $ insertReturnInDb h conn "pics" "pic_id" ["pic_url"] [validUrl] 
     return picId
-
-
-
-
 
 
 chooseArgs req = do
@@ -1262,7 +1299,7 @@ checkComb req list = case fmap (isExistParam req) list of
      (True:_:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
      _               -> return ()
 
-checkFilterParam :: Request -> Text -> ExceptT ReqError IO [(String,String,([Text],[Text]))]
+checkFilterParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [(String,String,([Text],[Text]))]
 checkFilterParam req param =
   case isExistParam req param of
     False -> return []
@@ -1329,7 +1366,7 @@ chooseFilterArgs x param = case param of
   _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
         
 
-checkSortParam :: Request -> Text -> ExceptT ReqError IO [(String,String,SortDate)] 
+checkSortParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [(String,String,SortDate)] 
 checkSortParam req param = case isExistParam req param of
   False -> return []
   True  -> do
@@ -1423,11 +1460,7 @@ userAuth pwdParam pwd
 inCatResp [(x,y)] = CatResponse { cat_id = x , cat_name =  y , super_cat = "NULL"}
 inCatResp ((x,y):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , super_category = inCatResp xs} 
       
-main :: IO ()
-main = do
-  createDbStructure
-  addDefaultParameters
-  run 3000 application
+
 
 
 
