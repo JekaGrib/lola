@@ -495,32 +495,45 @@ fromEx ansE =
 
 answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> Request -> ExceptT ReqError m Response
 answerEx h conn req = do
-   let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString 
+   let okHelper = return . responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString 
    lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
    case pathInfo req of
     ["createUser"] -> do
       lift $ logInfo (hLog h) $ "Create user command"
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
       [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      lift $ logInfo (hLog h) $ "All needed query parameters successfully parsed"
       picId <- getPicId h conn picUrlParam
       day <- lift $ getDay h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
       lift $ logDebug (hLog h) "Insert user in DB"
       usId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues
-      lift $ logDebug (hLog h) "DB return user_id" 
-      return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
+      lift $ logDebug (hLog h) $ "DB return user_id" ++ show usId
+      lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
+      let res = encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
+      lift $ logDebug (hLog h) $ "Output response: " ++ show res 
+      okHelper res
     ["getUser", usId] -> do
+      lift $ logInfo (hLog h) $ "Get user command"
       usIdNum <- tryRead usId
+      lift $ logInfo (hLog h) $ "Parameter user_id successfully parsed"
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
+      lift $ logDebug (hLog h) $ "Check is user_id: " ++ show usIdNum ++ " exist in DB"
       isExistInDbE h conn "users" "user_id" "user_id=?" [usId] 
+      lift $ logDebug (hLog h) $ "Select info about user_id: " ++ show usIdNum ++ " from DB"
       (fName,lName,picId,usCreateDate) <- selectTupleFromDbE h conn "users" selectParams "user_id=?" [usId]
-      return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
+      let res = encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
+      lift $ logDebug (hLog h) $ "Output response: " ++ show res
+      okHelper res
     ["deleteUser"] -> do
+      lift $ logInfo (hLog h) $ "Delete user command"
       let paramsNames = ["user_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams
       [admIdNum]            <- hideErr $ mapM tryRead [admIdParam]
+      lift $ logInfo (hLog h) $ "All needed to authorize query parameters successfully parsed"
+      
       hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
       (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
       hideErr $ adminAuth pwdParam pwd admBool
@@ -535,13 +548,16 @@ answerEx h conn req = do
           lift $ updateInDb h conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ (authorId :: Integer)]
           draftsIds <- selectListFromDbE h conn "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
           deleteAllAboutDrafts h conn draftsIds
-          lift $ deleteFromDb h conn "authors" "author_id=?" [pack . show $ authorId] 
-          lift $ deleteFromDb h conn "users" "user_id=?" [usIdParam]
-          return . okHelper . encode $ OkResponse {ok = True} 
-        False -> do
-          lift $ deleteFromDb h conn "users" "user_id=?" [usIdParam]
-          return . okHelper . encode $ OkResponse {ok = True} 
+          lift $ deleteFromDb h conn "authors" "author_id=?" [pack . show $ authorId]
+          return () 
+        False -> return () 
+      lift $ deleteFromDb h conn "users" "user_id=?" [usIdParam]
+      lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " deleted"
+      let res = encode $ OkResponse {ok = True}
+      lift $ logDebug (hLog h) $ "Output response: " ++ show res
+      okHelper res 
     ["createAdmin"]        -> do
+      lift $ logInfo (hLog h) $ "Create admin command"
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
       [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
       key <- selectFromDbE h conn "key" ["create_admin_key"] "true" ([]::[Text])  
@@ -551,8 +567,13 @@ answerEx h conn req = do
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues 
-      return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
+      lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
+      lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
+      let res = encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
+      lift $ logDebug (hLog h) $ "Output response: " ++ show res
+      okHelper res
     ["createAuthor"]        -> do
+      lift $ logInfo (hLog h) $ "Create author command"
       let paramsNames = ["user_id","author_info"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -564,9 +585,14 @@ answerEx h conn req = do
       [usIdNum]               <- mapM tryRead [usIdParam]  
       isExistInDbE h      conn "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h conn "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <- lift $ insertReturnInDb h conn "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam] 
-      return . okHelper . encode $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
+      auId <- lift $ insertReturnInDb h conn "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam]
+      lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
+      lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
+      let res = encode $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
+      lift $ logDebug (hLog h) $ "Output response: " ++ show res
+      okHelper res
     ["getAuthor"]        -> do
+      lift $ logInfo (hLog h) $ "Get author command"
       let paramsNames = ["author_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -578,8 +604,9 @@ answerEx h conn req = do
       [auIdNum]   <- mapM tryRead [auIdParam]
       isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
       (usId,auInfo) <- selectTupleFromDbE h conn "authors" ["user_id","author_info"] "author_id=?" [auIdParam] 
-      return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
+      okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
+      lift $ logInfo (hLog h) $ "Update author command"
       let paramsNames = ["author_id","user_id","author_info","admin_id","password"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -593,8 +620,9 @@ answerEx h conn req = do
       isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
       checkRelationUsAu h conn usIdParam auIdParam
       lift $ updateInDb h conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
-      return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
+      okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
     ["deleteAuthor"]   -> do
+      lift $ logInfo (hLog h) $ "Delete author command"
       let paramsNames = ["author_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -609,8 +637,9 @@ answerEx h conn req = do
       draftsIds <- selectListFromDbE h conn "drafts" ["draft_id"] "author_id=?" [auIdParam] 
       deleteAllAboutDrafts h conn draftsIds
       lift $ deleteFromDb h conn "authors" "author_id=?" [auIdParam]
-      return . okHelper . encode $ OkResponse {ok = True}
+      okHelper . encode $ OkResponse {ok = True}
     ["createCategory"]        -> do
+      lift $ logInfo (hLog h) $ "Create category command"
       let paramsNames = ["category_name"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -620,8 +649,9 @@ answerEx h conn req = do
       hideErr $ adminAuth pwdParam pwd admBool
       [catNameParam] <- mapM (checkParam req) paramsNames
       catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name"] [catNameParam] 
-      return . okHelper . encode $ CatResponse {cat_id = catId, cat_name = catNameParam, super_cat = "NULL"}
+      okHelper . encode $ CatResponse {cat_id = catId, cat_name = catNameParam, super_cat = "NULL"}
     ["createSubCategory"]        -> do
+      lift $ logInfo (hLog h) $ "Create sub category command"
       let paramsNames = ["category_name","super_category_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -634,13 +664,15 @@ answerEx h conn req = do
       isExistInDbE h conn "categories" "category_id" "category_id=?" [superCatIdParam] 
       catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       allSuperCats <- findAllSuperCats h conn catId
-      return . okHelper . encode $ inCatResp allSuperCats
+      okHelper . encode $ inCatResp allSuperCats
     ["getCategory", catId] -> do
+      lift $ logInfo (hLog h) $ "Get category command"
       catIdNum <- tryRead catId
       isExistInDbE h conn "categories" "category_id" "category_id=?" [catId] 
       allSuperCats <- findAllSuperCats h conn catIdNum
-      return . okHelper . encode $ inCatResp allSuperCats
+      okHelper . encode $ inCatResp allSuperCats
     ["updateCategory"] -> do
+      lift $ logInfo (hLog h) $ "Update category command"
       let paramsNames = ["category_id","category_name","super_category_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -655,8 +687,9 @@ answerEx h conn req = do
       checkRelationCats h conn catIdNum superCatIdNum
       lift $ updateInDb h conn "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
       allSuperCats <- findAllSuperCats h conn catIdNum
-      return . okHelper . encode $ inCatResp allSuperCats 
+      okHelper . encode $ inCatResp allSuperCats 
     ["deleteCategory"] -> do
+      lift $ logInfo (hLog h) $ "Delete category command"
       let paramsNames = ["category_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -675,8 +708,9 @@ answerEx h conn req = do
       lift $ updateInDb h conn "drafts" "draft_category_id=?" where'' values
       let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
       lift $ deleteFromDb h conn "categories" where''' (fmap (pack . show) allSubCats)
-      return . okHelper . encode $ OkResponse {ok = True}
+      okHelper . encode $ OkResponse {ok = True}
     ["createTag"]  -> do
+      lift $ logInfo (hLog h) $ "Create tag command"
       let paramsNames = ["tag_name"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -686,13 +720,15 @@ answerEx h conn req = do
       hideErr $ adminAuth pwdParam pwd admBool
       [tagNameParam] <- mapM (checkParam req) paramsNames
       tagId <- lift $ insertReturnInDb h conn "tags" "tag_id" ["tag_name"] [tagNameParam] 
-      return . okHelper . encode $ TagResponse tagId tagNameParam
+      okHelper . encode $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
+      lift $ logInfo (hLog h) $ "Get tag command"
       tagIdNum <- tryRead tagId
       isExistInDbE h conn "tags" "tag_id" "tag_id=?" [tagId] 
       tagName <- selectFromDbE h conn "tags" ["tag_name"] "tag_id=?" [tagId] 
-      return . okHelper . encode $ TagResponse tagIdNum tagName
+      okHelper . encode $ TagResponse tagIdNum tagName
     ["updateTag"]        -> do
+      lift $ logInfo (hLog h) $ "Update tag command"
       let paramsNames = ["tag_id","tag_name"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -704,8 +740,9 @@ answerEx h conn req = do
       [tagIdNum]                <- mapM tryRead [tagIdParam]
       isExistInDbE h conn "tags" "tag_id" "tag_id=?" [tagIdParam] 
       lift $ updateInDb h conn "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
-      return . okHelper . encode $ TagResponse tagIdNum tagNameParam
+      okHelper . encode $ TagResponse tagIdNum tagNameParam
     ["deleteTag"]        -> do
+      lift $ logInfo (hLog h) $ "Delete tag command"
       let paramsNames = ["tag_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -718,8 +755,9 @@ answerEx h conn req = do
       lift $ deleteFromDb h conn "draftstags" "tag_id=?" [tagIdParam]
       lift $ deleteFromDb h conn "poststags" "tag_id=?" [tagIdParam]
       lift $ deleteFromDb h conn "tags" "tag_id=?" [tagIdParam]
-      return . okHelper . encode $ OkResponse {ok = True}
+      okHelper . encode $ OkResponse {ok = True}
     ["createNewDraft"]  -> do
+      lift $ logInfo (hLog h) $ "Create new draft command"
       json <- lift $ getBody h req
       body <- checkDraftReqJson json
       let usIdParam    = user_id1     body
@@ -747,8 +785,9 @@ answerEx h conn req = do
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
       tagsMap <- selectTupleListFromDbE h conn "tags" ["tag_id","tag_name"] where' tagsIds 
       allSuperCats <- findAllSuperCats h conn catIdParam  
-      return . okHelper . encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper . encode $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["createPostsDraft"]  -> do
+      lift $ logInfo (hLog h) $ "Create post`s draft command"
       let paramsNames = ["post_id","user_id","password"]
       [postIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [postIdNum,usIdNum]              <- mapM tryRead [postIdParam,usIdParam] 
@@ -767,8 +806,9 @@ answerEx h conn req = do
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
       draftId <- lift $ insertReturnInDb h conn "drafts" "draft_id" insNames insValues 
-      return . okHelper . encode $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper . encode $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDraft"]  -> do
+      lift $ logInfo (hLog h) $ "Get draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
@@ -783,8 +823,9 @@ answerEx h conn req = do
       picsIds <- selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
       tagsMap <- selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
       allSuperCats <- findAllSuperCats h conn draftCatId
-      return . okHelper . encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper . encode $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDrafts"]  -> do
+      lift $ logInfo (hLog h) $ "Get drafts command"
       let paramsNames = ["page","user_id","password"]
       [pageParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [pageNum,usIdNum]              <- mapM tryRead [pageParam,usIdParam] 
@@ -805,10 +846,11 @@ answerEx h conn req = do
       manyDraftPicsIds <- mapM (selectListFromDbE h conn "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
       tagsMaps <- mapM (selectTupleListFromDbE h conn "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
       let allParams = zip4 params manyAllSuperCats manyDraftPicsIds tagsMaps
-      return . okHelper . encode $ DraftsResponse 
+      okHelper . encode $ DraftsResponse 
         { page9 = pageNum
         , drafts9 = fmap (\((draftId,postId,draftName,draftCat,draftText,draftMainPicId,auInfo),cats,pics,tagsMap) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId usIdNum auInfo, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagsMap, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
     ["updateDraft",draftId]  -> do
+      lift $ logInfo (hLog h) $ "Update draft command"
       draftIdNum <- tryRead draftId
       json <- lift $ getBody h req
       body <- checkDraftReqJson json
@@ -838,8 +880,9 @@ answerEx h conn req = do
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
       tagsMap <- selectTupleListFromDbE h conn "tags" ["tag_id","tag_name"] where' tagsIds 
       allSuperCats <- findAllSuperCats h conn catIdParam  
-      return . okHelper . encode $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper . encode $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId usIdParam auInfo, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagsMap, draft_pics2 = fmap inPicIdUrl picsIds}
     ["deleteDraft"]  -> do
+      lift $ logInfo (hLog h) $ "Delete draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
@@ -850,8 +893,9 @@ answerEx h conn req = do
       isUserAuthorE h conn usIdNum  
       isDraftAuthor h conn draftIdParam usIdParam
       deleteAllAboutDrafts h conn [draftIdNum]
-      return . okHelper . encode $ OkResponse { ok = True }
+      okHelper . encode $ OkResponse { ok = True }
     ["publishDraft"]  -> do
+      lift $ logInfo (hLog h) $ "Publish draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
@@ -876,7 +920,7 @@ answerEx h conn req = do
           lift $ insertManyInDb h conn "postspics" ["post_id","pic_id"] (zip (repeat postId) picsIds)
           lift $ insertManyInDb h conn "poststags" ["post_id","tag_id"] (zip (repeat postId) (fmap fst tagsMap))
           allSuperCats <- findAllSuperCats h conn draftCatId 
-          return . okHelper . encode $ PostResponse {post_id = postId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
+          okHelper . encode $ PostResponse {post_id = postId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
         _ -> do
           let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
           let params = ["author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -889,16 +933,18 @@ answerEx h conn req = do
           lift $ insertManyInDb h conn "poststags" ["post_id","tag_id"] (zip (repeat draftPostId) (fmap fst tagsMap))
           allSuperCats <- findAllSuperCats h conn draftCatId
           day <- selectFromDbE h conn "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
-          return . okHelper . encode $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
+          okHelper . encode $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId usIdNum auInfo, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
     ["getPost",postId]  -> do
+      lift $ logInfo (hLog h) $ "Get post command"
       postIdNum <- tryRead postId
       isExistInDbE h conn "users" "user_id" "user_id=?" [postId] 
       (auId,usId,auInfo,pName,pDate,pCatId,pText,picId) <- selectTupleFromDbE h conn "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.author_id","user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
       picsIds <- selectListFromDbE h conn "postspics" ["pic_id"] "post_id=?" [postId] 
       tagsMap <- selectTupleListFromDbE h conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
       allSuperCats <- findAllSuperCats h conn pCatId
-      return . okHelper . encode $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
+      okHelper . encode $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagsMap}
     ["getPosts", page] -> do
+      lift $ logInfo (hLog h) $ "Get posts command"
       pageNum <- tryRead page
       let extractParamsList = ["posts.post_id","posts.author_id","authors.user_id","author_info","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
       (table,where',orderBy,values) <- chooseArgs req       
@@ -909,8 +955,9 @@ answerEx h conn req = do
       manyPostPicsIds <- mapM (selectListFromDbE h conn "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
       tagsMaps <- mapM (selectTupleListFromDbE h conn "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
       let allParams = zip4 params manySuperCats manyPostPicsIds tagsMaps
-      return . okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse {post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagsMap}) allParams}
+      okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse {post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagsMap}) allParams}
     ["deletePost"]  -> do
+      lift $ logInfo (hLog h) $ "Delete post command"
       let paramsNames = ["post_id"]
       let authParams  = ["admin_id","password"]
       [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
@@ -921,8 +968,9 @@ answerEx h conn req = do
       [postIdParam] <- mapM (checkParam req) paramsNames
       [postIdNum]   <- mapM tryRead [postIdParam] 
       deleteAllAboutPosts h conn [postIdNum]
-      return . okHelper . encode $ OkResponse { ok = True }
+      okHelper . encode $ OkResponse { ok = True }
     ["createComment"]  -> do
+      lift $ logInfo (hLog h) $ "Create comment command"
       let paramsNames = ["post_id","comment_text","user_id","password"]
       [postIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [postIdNum,usIdNum]                       <- mapM tryRead [postIdParam,usIdParam] 
@@ -931,15 +979,17 @@ answerEx h conn req = do
       userAuth pwdParam pwd
       isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
       commId <- lift $ insertReturnInDb h conn "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
-      return . okHelper . encode $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
+      okHelper . encode $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
+      lift $ logInfo (hLog h) $ "Get comments command"
       let paramsNames = ["post_id","page"]
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
       [postIdNum,pageNum]     <- mapM tryRead [postIdParam,pageParam] 
       isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
       comms <- selectListLimitFromDbE h conn "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","comment_text","user_id"] "post_id=?" [postIdParam]
-      return . okHelper . encode $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
+      okHelper . encode $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
+      lift $ logInfo (hLog h) $ "Update comment command"
       let paramsNames = ["comment_id","comment_text","user_id","password"]
       [commIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [commIdNum,usIdNum]                       <- mapM tryRead [commIdParam,usIdParam] 
@@ -949,32 +999,35 @@ answerEx h conn req = do
       isCommAuthor h conn commIdParam usIdParam
       lift $ updateInDb h conn "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
       postId <- selectFromDbE h conn "comments" ["post_id"] "comment_id=?" [commIdParam] 
-      return . okHelper . encode $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
-    ["deleteComment"]  -> case accessMode req of
-      AdminMode -> do
-        let paramsNames = ["comment_id"]
-        let authParams  = ["admin_id","password"]
-        [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
-        admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
-        hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-        (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-        hideErr $ adminAuth pwdParam pwd admBool
-        [commIdParam] <- mapM (checkParam req) paramsNames
-        [commIdNum]   <- mapM tryRead [commIdParam]
-        lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
-        return . okHelper . encode $ OkResponse { ok = True }
-      UserMode -> do
-        let paramsNames = ["comment_id","user_id","password"]
-        [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-        [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam]
-        isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
-        pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
-        userAuth pwdParam pwd
-        postId <- selectFromDbE h conn "comments" ["post_id"] "comment_id=?" [commIdParam]  
-        isCommOrPostAuthor h conn commIdParam (pack . show $ (postId :: Integer)) usIdParam
-        lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
-        return . okHelper . encode $ OkResponse {ok = True}      
+      okHelper . encode $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
+    ["deleteComment"]  -> do
+      lift $ logInfo (hLog h) $ "Delete comment command" 
+      case accessMode req of
+        AdminMode -> do
+          let paramsNames = ["comment_id"]
+          let authParams  = ["admin_id","password"]
+          [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+          admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+          hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+          (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+          hideErr $ adminAuth pwdParam pwd admBool
+          [commIdParam] <- mapM (checkParam req) paramsNames
+          [commIdNum]   <- mapM tryRead [commIdParam]
+          lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
+          okHelper . encode $ OkResponse { ok = True }
+        UserMode -> do
+          let paramsNames = ["comment_id","user_id","password"]
+          [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+          [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam]
+          isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
+          pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
+          userAuth pwdParam pwd
+          postId <- selectFromDbE h conn "comments" ["post_id"] "comment_id=?" [commIdParam]  
+          isCommOrPostAuthor h conn commIdParam (pack . show $ (postId :: Integer)) usIdParam
+          lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
+          okHelper . encode $ OkResponse {ok = True}      
     ["picture",picId]  -> do
+      lift $ logInfo (hLog h) $ "Picture command"
       picIdNum <- tryRead picId 
       isExistInDbE h conn "pics" "pic_id" "pic_id=?" [picId] 
       picUrl <- selectFromDbE h conn "pics" ["pic_url"] "pic_id=?" [picId] 
