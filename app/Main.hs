@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+--{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Main where
 
+import           Logger
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301 )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
@@ -34,7 +35,8 @@ import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
 
 data Handle m = Handle 
-  { dbQuery          :: forall q r. (ToRow q, FromRow r) => Connection -> Query -> q -> m [r],
+  { hLog             :: LogHandle m,
+    dbQuery          :: forall q r. (ToRow q, FromRow r) => Connection -> Query -> q -> m [r],
     dbExecute        :: forall q. ToRow q => Connection -> Query ->  q  -> m Int64 ,
     dbExecuteMany    :: forall q. ToRow q => Connection -> Query -> [q] -> m Int64 ,
     httpAction       :: HT.Request -> m (HT.Response BSL.ByteString),
@@ -462,18 +464,25 @@ instance ToJSON CommentsResponse where
     toEncoding (CommentsResponse page post_id comments) =
         pairs ( "page" .= page <> "post_id" .= post_id <> "comments" .= comments )
 
+logOnErr h m = m `catchE` (\e -> do
+  lift $ logWarning (hLog h) $ show e
+  throwE e)
 
 main :: IO ()
 main = do
   createDbStructure
   addDefaultParameters
-  let h = Handle query execute executeMany HT.httpLBS getDay' connectPostgreSQL strictRequestBody
+  time <- getTime                          
+  let currLogPath = "./PostApp.LogSession: " ++ show time ++ " bot.log"
+  let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
+  let h = Handle handleLog query execute executeMany HT.httpLBS getDay' connectPostgreSQL strictRequestBody 
   run 3000 (application h)
 
 application :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> (Response -> m ResponseReceived) -> m ResponseReceived
 application h req send = do
   conn <- (connectPSQL h) (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
-  ansE <- runExceptT $ answerEx h conn req
+  logDebug (hLog h) "Connect to DB"
+  ansE <- runExceptT $ logOnErr h $ answerEx h conn req 
   send ( fromEx ansE )
 
 fromEx :: Either ReqError Response -> Response
@@ -482,20 +491,24 @@ fromEx ansE =
   case ansE of
     Right a                -> a
     Left (SimpleError str) -> okHelper . encode $ OkInfoResponse {ok7 = False, info7 = pack str}
-    Left SecretError       -> responseBuilder status404 [] $ "Status 404 Not Found"
+    Left (SecretError str) -> responseBuilder status404 [] $ "Status 404 Not Found"
 
 answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> Request -> ExceptT ReqError m Response
 answerEx h conn req = do
    let okHelper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString 
+   lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
    case pathInfo req of
     ["createUser"] -> do
+      lift $ logInfo (hLog h) $ "Create user command"
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
       [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
       picId <- getPicId h conn picUrlParam
       day <- lift $ getDay h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
-      usId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues 
+      lift $ logDebug (hLog h) "Insert user in DB"
+      usId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues
+      lift $ logDebug (hLog h) "DB return user_id" 
       return . okHelper . encode $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
     ["getUser", usId] -> do
       usIdNum <- tryRead usId
@@ -504,12 +517,15 @@ answerEx h conn req = do
       (fName,lName,picId,usCreateDate) <- selectTupleFromDbE h conn "users" selectParams "user_id=?" [usId]
       return . okHelper . encode $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
-      let paramsNames = ["user_id","admin_id","password"]
-      [usIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum,admIdNum]              <- mapM tryRead [usIdParam,admIdParam]
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["user_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams
+      [admIdNum]            <- hideErr $ mapM tryRead [admIdParam]
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [usIdParam] <- mapM (checkParam req) paramsNames
+      [usIdNum]   <- mapM tryRead [usIdParam]
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       lift $ updateInDb h conn "comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
       check <- lift $ isExistInDb h conn "authors" "author_id" "user_id=?" [usIdParam] 
@@ -537,46 +553,57 @@ answerEx h conn req = do
       admId <- lift $ insertReturnInDb h conn "users" "user_id" insNames insValues 
       return . okHelper . encode $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
     ["createAuthor"]        -> do
-      let paramsNames = ["user_id","author_info","admin_id","password"]
-      [usIdParam,auInfoParam,admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) paramsNames 
-      admIdNum                                    <- hideErr $ tryRead admIdParam  
+      let paramsNames = ["user_id","author_info"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam]  
       hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
       (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam]  
-      hideErr $ adminAuth pwdParam pwd admBool  
-      usIdNum <- tryRead usIdParam  
+      hideErr $ adminAuth pwdParam pwd admBool
+      [usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames  
+      [usIdNum]               <- mapM tryRead [usIdParam]  
       isExistInDbE h      conn "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h conn "authors" "user_id" "user_id=?" [usIdParam] 
       auId <- lift $ insertReturnInDb h conn "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam] 
       return . okHelper . encode $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
     ["getAuthor"]        -> do
-      let paramsNames = ["author_id","admin_id","password"]
-      [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["author_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [auIdParam] <- mapM (checkParam req) paramsNames
+      [auIdNum]   <- mapM tryRead [auIdParam]
       isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
       (usId,auInfo) <- selectTupleFromDbE h conn "authors" ["user_id","author_info"] "author_id=?" [auIdParam] 
       return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       let paramsNames = ["author_id","user_id","author_info","admin_id","password"]
-      [auIdParam,usIdParam,auInfoParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,usIdNum,admIdNum]                            <- mapM tryRead [auIdParam,usIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam]     
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [auIdParam,usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames
+      [auIdNum,usIdNum]                 <- mapM tryRead [auIdParam,usIdParam,admIdParam]
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
       checkRelationUsAu h conn usIdParam auIdParam
       lift $ updateInDb h conn "authors" "author_info=?" "author_id=?" [auInfoParam,auIdParam]
       return . okHelper . encode $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
     ["deleteAuthor"]   -> do
-      let paramsNames = ["author_id","admin_id","password"]
-      [auIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,admIdNum]              <- mapM tryRead [auIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["author_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [auIdParam] <- mapM (checkParam req) paramsNames
+      [auIdNum]   <- mapM tryRead [auIdParam]
       isExistInDbE h conn "authors" "author_id" "author_id=?" [auIdParam] 
       lift $ updateInDb h conn "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,auIdParam]
       draftsIds <- selectListFromDbE h conn "drafts" ["draft_id"] "author_id=?" [auIdParam] 
@@ -584,21 +611,26 @@ answerEx h conn req = do
       lift $ deleteFromDb h conn "authors" "author_id=?" [auIdParam]
       return . okHelper . encode $ OkResponse {ok = True}
     ["createCategory"]        -> do
-      let paramsNames = ["category_name","admin_id","password"]
-      [catNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      admIdNum                           <- tryRead admIdParam 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["category_name"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [catNameParam] <- mapM (checkParam req) paramsNames
       catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name"] [catNameParam] 
       return . okHelper . encode $ CatResponse {cat_id = catId, cat_name = catNameParam, super_cat = "NULL"}
     ["createSubCategory"]        -> do
-      let paramsNames = ["category_name","super_category_id","admin_id","password"]
-      [catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [superCatIdNum,admIdNum]                           <- mapM tryRead [superCatIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["category_name","super_category_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
+      [superCatIdNum]                <- mapM tryRead [superCatIdParam] 
       isExistInDbE h conn "categories" "category_id" "category_id=?" [superCatIdParam] 
       catId <- lift $ insertReturnInDb h conn "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       allSuperCats <- findAllSuperCats h conn catId
@@ -609,12 +641,15 @@ answerEx h conn req = do
       allSuperCats <- findAllSuperCats h conn catIdNum
       return . okHelper . encode $ inCatResp allSuperCats
     ["updateCategory"] -> do
-      let paramsNames = ["category_id","category_name","super_category_id","admin_id","password"]
-      [catIdParam,catNameParam,superCatIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,superCatIdNum,admIdNum]                             <- mapM tryRead [catIdParam,superCatIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["category_id","category_name","super_category_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [catIdParam,catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
+      [catIdNum,superCatIdNum]                  <- mapM tryRead [catIdParam,superCatIdParam]     
       isExistInDbE h conn "categories" "category_id" "category_id=?" [catIdParam]      
       isExistInDbE h conn "categories" "category_id" "category_id=?" [superCatIdParam] 
       checkRelationCats h conn catIdNum superCatIdNum
@@ -622,12 +657,15 @@ answerEx h conn req = do
       allSuperCats <- findAllSuperCats h conn catIdNum
       return . okHelper . encode $ inCatResp allSuperCats 
     ["deleteCategory"] -> do
-      let paramsNames = ["category_id","admin_id","password"]
-      [catIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,admIdNum]              <- mapM tryRead [catIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["category_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [catIdParam] <- mapM (checkParam req) paramsNames
+      [catIdNum]              <- mapM tryRead [catIdParam] 
       isExistInDbE h conn "categories" "category_id" "category_id=?" [catIdParam] 
       allSubCats <- findAllSubCats h conn catIdNum
       let values = fmap (pack . show) (defCatId:allSubCats)
@@ -639,12 +677,14 @@ answerEx h conn req = do
       lift $ deleteFromDb h conn "categories" where''' (fmap (pack . show) allSubCats)
       return . okHelper . encode $ OkResponse {ok = True}
     ["createTag"]  -> do
-      let paramsNames = ["tag_name","admin_id","password"]
-      [tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [admIdNum]                         <- mapM tryRead [admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["tag_name"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [tagNameParam] <- mapM (checkParam req) paramsNames
       tagId <- lift $ insertReturnInDb h conn "tags" "tag_id" ["tag_name"] [tagNameParam] 
       return . okHelper . encode $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
@@ -653,22 +693,28 @@ answerEx h conn req = do
       tagName <- selectFromDbE h conn "tags" ["tag_name"] "tag_id=?" [tagId] 
       return . okHelper . encode $ TagResponse tagIdNum tagName
     ["updateTag"]        -> do
-      let paramsNames = ["tag_id","tag_name","admin_id","password"]
-      [tagIdParam,tagNameParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum,admIdNum]                           <- mapM tryRead [tagIdParam,admIdParam]
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["tag_id","tag_name"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [tagIdParam,tagNameParam] <- mapM (checkParam req) paramsNames
+      [tagIdNum]                <- mapM tryRead [tagIdParam]
       isExistInDbE h conn "tags" "tag_id" "tag_id=?" [tagIdParam] 
       lift $ updateInDb h conn "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
       return . okHelper . encode $ TagResponse tagIdNum tagNameParam
     ["deleteTag"]        -> do
-      let paramsNames = ["tag_id","admin_id","password"]
-      [tagIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum,admIdNum]              <- mapM tryRead [tagIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["tag_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [tagIdParam] <- mapM (checkParam req) paramsNames
+      [tagIdNum]              <- mapM tryRead [tagIdParam] 
       lift $ deleteFromDb h conn "draftstags" "tag_id=?" [tagIdParam]
       lift $ deleteFromDb h conn "poststags" "tag_id=?" [tagIdParam]
       lift $ deleteFromDb h conn "tags" "tag_id=?" [tagIdParam]
@@ -689,7 +735,7 @@ answerEx h conn req = do
       userAuth pwdParam pwd
       isExistInDbE h conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h conn "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      isUserAuthorE h conn usIdParam 
       (auId,auInfo) <- selectTupleFromDbE h conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
       picId <- getPicId h conn mPicUrlParam
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -709,7 +755,7 @@ answerEx h conn req = do
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isUserAuthorE h conn usIdNum 
       isExistInDbE h conn "posts" "post_id" "post_id=?" [postIdParam] 
       auId <- isPostAuthor h conn postIdParam usIdParam
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
@@ -729,7 +775,7 @@ answerEx h conn req = do
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isUserAuthorE h conn usIdNum  
       auId <- isDraftAuthor h conn draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["COALESCE (post_id, '0') AS post_id","author_info","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -745,7 +791,7 @@ answerEx h conn req = do
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isUserAuthorE h conn usIdNum  
       auId <- selectFromDbE h conn "authors" ["author_id"] "user_id=?" [usIdParam]  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
       let orderBy = "draft_id DESC"
@@ -780,7 +826,7 @@ answerEx h conn req = do
       isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftId] 
       isExistInDbE h conn "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h conn "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam] 
+      isUserAuthorE h conn usIdParam  
       (auId,auInfo) <- selectTupleFromDbE h conn "authors" ["author_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
       postId <- selectFromDbE h conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
       picId <- getPicId h conn mPicUrlParam
@@ -801,7 +847,7 @@ answerEx h conn req = do
       pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
       isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isUserAuthorE h conn usIdNum  
       isDraftAuthor h conn draftIdParam usIdParam
       deleteAllAboutDrafts h conn [draftIdNum]
       return . okHelper . encode $ OkResponse { ok = True }
@@ -813,7 +859,7 @@ answerEx h conn req = do
       pwd <- selectFromDbE h conn "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
       isExistInDbE h conn "drafts" "draft_id" "draft_id=?" [draftIdParam] 
-      isExistInDbE h conn "authors" "user_id" "user_id=?" [usIdParam] 
+      isUserAuthorE h conn usIdNum  
       auId <- isDraftAuthor h conn draftIdParam usIdParam
       draftPostId <- selectFromDbE h conn "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
       case draftPostId of
@@ -865,12 +911,15 @@ answerEx h conn req = do
       let allParams = zip4 params manySuperCats manyPostPicsIds tagsMaps
       return . okHelper . encode $ PostsResponse {page10 = pageNum , posts10 = fmap (\((pId,auId,usId,auInfo,pName,pDate,pCat,pText,picId),cats,pics,tagsMap) -> PostResponse {post_id = pId, author4 = AuthorResponse auId usId auInfo, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagsMap}) allParams}
     ["deletePost"]  -> do
-      let paramsNames = ["post_id","admin_id","password"]
-      [postIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,admIdNum]              <- mapM tryRead [postIdParam,admIdParam] 
-      isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-      (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-      adminAuth pwdParam pwd admBool
+      let paramsNames = ["post_id"]
+      let authParams  = ["admin_id","password"]
+      [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+      admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+      hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+      (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+      hideErr $ adminAuth pwdParam pwd admBool
+      [postIdParam] <- mapM (checkParam req) paramsNames
+      [postIdNum]   <- mapM tryRead [postIdParam] 
       deleteAllAboutPosts h conn [postIdNum]
       return . okHelper . encode $ OkResponse { ok = True }
     ["createComment"]  -> do
@@ -903,12 +952,15 @@ answerEx h conn req = do
       return . okHelper . encode $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
     ["deleteComment"]  -> case accessMode req of
       AdminMode -> do
-        let paramsNames = ["comment_id","admin_id","password"]
-        [commIdParam,admIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-        [commIdNum,admIdNum]              <- mapM tryRead [commIdParam,admIdParam]
-        isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
-        (pwd,admBool) <- selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
-        adminAuth pwdParam pwd admBool
+        let paramsNames = ["comment_id"]
+        let authParams  = ["admin_id","password"]
+        [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams 
+        admIdNum              <- hideErr $ mapM tryRead [admIdParam] 
+        hideErr $ isExistInDbE h conn "users" "user_id" "user_id=?" [admIdParam] 
+        (pwd,admBool) <- hideErr $ selectTupleFromDbE h conn "users" ["password","admin"] "user_id=?" [admIdParam] 
+        hideErr $ adminAuth pwdParam pwd admBool
+        [commIdParam] <- mapM (checkParam req) paramsNames
+        [commIdNum]   <- mapM tryRead [commIdParam]
         lift $ deleteFromDb h conn "comments" "comment_id=?" [commIdParam]
         return . okHelper . encode $ OkResponse { ok = True }
       UserMode -> do
@@ -955,7 +1007,10 @@ isCommAuthor h conn commIdParam usIdParam = do
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of comment_id: " ++ unpack commIdParam
 
-hideErr m = m `catchE` (\_ -> throwE $ SecretError)
+hideErr m = m `catchE` (\e -> throwE $ toSecret e)
+
+toSecret (SimpleError str) = SecretError str
+toSecret (SecretError str) = SecretError str
 
 inCommResp (a,b,c) = CommentIdTextUserResponse a b c     
 
@@ -1103,6 +1158,12 @@ deletePostsPicsTags h conn postsIds = do
   lift $ deleteFromDb h conn "poststags" where' values
   return ()
 
+isUserAuthorE h conn usIdParam = do
+  check <- lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
+  case check of 
+    True -> return ()
+    False -> throwE $ SimpleError $ "user_id: " ++ show usIdParam ++ " isn`t author."
+    
 
 checkRelationUsAu h conn usIdParam auIdParam = do
   check <- lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [usIdParam] 
@@ -1120,11 +1181,14 @@ checkKeyE keyParam key
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
 
 checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
-checkParam req param = case lookup param $ queryToQueryText $ queryString req of
-  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
-  Just (Just x)  -> return x
-  Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
-  Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
+checkParam req param = (do
+  case lookup param $ queryToQueryText $ queryString req of
+    Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
+    Just (Just x)  -> return x
+    Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
+    Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param)
+
+
 
 tryRead :: (Monad m) => Text -> ExceptT ReqError m Integer
 tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
@@ -1426,7 +1490,7 @@ isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
   Just _  -> True
   Nothing -> False
 
-data ReqError = SecretError | SimpleError String
+data ReqError = SecretError String | SimpleError String
   deriving Show
 
 {-instance Monoid ReqError where

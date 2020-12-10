@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 03fe04626b74c44006b20fc5ea7f8f55e963fd5b8084d53d1111ad39d14f74da
+-- hash: f9bc24eb414bb288fb816857deaee607d9fad0eb795a397018d6fd8ea3e41735
 
 name:           lola
 version:        0.1.0.0
@@ -27,7 +27,7 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Logger
   other-modules:
       Paths_lola
   hs-source-dirs:
