@@ -37,6 +37,8 @@ dependencies:
 - exceptions
 - unordered-containers
 - vector
+- hspec
+- containers
 
 library:
   source-dirs: src

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f9bc24eb414bb288fb816857deaee607d9fad0eb795a397018d6fd8ea3e41735
+-- hash: 0e40f22cefe0271dbc7b9968d6fb57945d5257bd2d55f87e879fd79bfd8be3e4
 
 name:           lola
 version:        0.1.0.0
@@ -37,7 +37,9 @@ library
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , exceptions
+    , hspec
     , http-conduit
     , http-types
     , mtl
@@ -64,7 +66,9 @@ executable lola-exe
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , exceptions
+    , hspec
     , http-conduit
     , http-types
     , lola
@@ -93,7 +97,9 @@ test-suite lola-test
     , aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , exceptions
+    , hspec
     , http-conduit
     , http-types
     , lola

@@ -5,9 +5,12 @@
 
 module Main where
 
+import           Test.Hspec
+import           Control.Monad.State            
+
 import           Logger
 import           Network.Wai
-import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301 )
+import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11 )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
 import           Data.Aeson
@@ -33,12 +36,47 @@ import           Data.HashMap.Strict            ( toList, fromList )
 import qualified Data.Vector                    as V
 import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
+import qualified Data.Map                       as M
+
+data MockAction = EXISTCHEK | LOGMSG
+  deriving (Eq,Show)
+type TestDB = M.Map Integer Text 
+
+logTest :: Priority -> String -> StateT (TestDB,[MockAction]) IO ()
+logTest prio text = StateT $ \(db,acts) -> 
+  return (() , (db,LOGMSG : acts))
+
+
+testDB1 = M.fromList [(1,"fill"),(2,"call"),(3,"bill")]
+
+isExistInDbTest :: Connection -> String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
+isExistInDbTest _ s s' s'' (x:xs) = StateT $ \(db,acts) -> do
+  return ( M.member (read . unpack $ x) db , (db,EXISTCHEK:acts))
+
+
+handleLog1 = LogHandle (LogConfig DEBUG) logTest
+handle1 = Handle 
+  { hLog = handleLog1,
+    isExistInDb = isExistInDbTest
+    }
+
+reqTest = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+
+testT :: IO ()
+testT = hspec $ do
+  describe "CheckExist" $ do
+    it "work" $ do
+      let con = undefined
+      state <- execStateT (runExceptT $ answerEx handle1 con reqTest) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG]
 
 data Handle m = Handle 
   { hLog             :: LogHandle m,
     dbQuery          :: forall q r. (ToRow q, FromRow r) => Connection -> Query -> q -> m [r],
     dbExecute        :: forall q. ToRow q => Connection -> Query ->  q  -> m Int64 ,
     dbExecuteMany    :: forall q. ToRow q => Connection -> Query -> [q] -> m Int64 ,
+    isExistInDb      :: Connection -> String -> String -> String -> [Text] -> m Bool,
     httpAction       :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay           :: m String,
     connectPSQL      :: ByteString -> m Connection,
@@ -475,7 +513,7 @@ main = do
   time <- getTime                          
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " bot.log"
   let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
-  let h = Handle handleLog query execute executeMany HT.httpLBS getDay' connectPostgreSQL strictRequestBody 
+  let h = Handle handleLog query execute executeMany isExistInDb' HT.httpLBS getDay' connectPostgreSQL strictRequestBody 
   run 3000 (application h)
 
 application :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> (Response -> m ResponseReceived) -> m ResponseReceived
@@ -483,12 +521,12 @@ application h req send = do
   conn <- (connectPSQL h) (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h conn req 
-  send ( fromEx ansE )
+  send ( fromE ansE )
 
 
 
-fromEx :: Either ReqError Response -> Response
-fromEx ansE = 
+fromE :: Either ReqError Response -> Response
+fromE ansE = 
   let helper = responseBuilder status200 [("Content-Type", "application/json; charset=utf-8")] . lazyByteString in
   case ansE of
     Right a                -> a
@@ -531,9 +569,10 @@ answerEx h conn req = do
       let paramsNames = ["user_id"]
       [usIdParam] <- mapM (checkParam req) paramsNames
       [usIdNum]   <- mapM tryRead [usIdParam]
+      lift $ logInfo (hLog h) $ "All parameters parsed"
       isExistInDbE h conn "users" "user_id" "user_id=?" [usIdParam] 
       lift $ updateInDb h conn "comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
-      check <- isUserAuthor h conn usIdNum 
+      check <- isUserAuthorBool h conn usIdNum 
       case check of
         True -> do
           authorId <- selectFromDbE h conn "authors" ["author_id"] "user_id=?" [usIdParam]  
@@ -958,6 +997,13 @@ answerEx h conn req = do
         status200 
         [("Content-Type", "image/jpeg")] 
         $ lazyByteString $ HT.getResponseBody res
+    ["test",usId] -> do
+      lift $ logInfo (hLog h) $ "Test command"
+      usIdNum <- tryRead usId
+      isExistInDbE h conn "users" "user_id" "user_id=?" [usId]
+      okHelper h $ OkResponse {ok = True} 
+      
+
 
 getPicFromUrlE h picUrl = do
   lift $ logInfo (hLog h) $ "Getting picture from internet. Url:" ++ unpack picUrl
@@ -1141,9 +1187,12 @@ deletePostsPicsTags h conn postsIds = do
   lift $ deleteFromDb h conn "poststags" where' values
   return ()
 
-isUserAuthor h conn usIdParam = lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
+isUserAuthorBool h conn usIdParam = do
+  lift $ logDebug (hLog h) $ "Checking in DB is user author"  
+  lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
 
 isUserAuthorE h conn usIdParam = do
+  lift $ logDebug (hLog h) $ "Checking in DB is user author"  
   check <- lift $ isExistInDb h conn "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
   case check of 
     True -> return ()
@@ -1259,9 +1308,16 @@ updateInDb h conn table set where' values = do
 deleteFromDb h conn table where' values = do
   (dbExecute h) conn (toDelQ table where') values   
 
+{-
 isExistInDb :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> Connection -> String -> String -> String -> [Text] -> m Bool
 isExistInDb h conn table checkName where' values = do
   [Only check]  <- dbQuery h conn (toExQ table checkName where') values
+  return check
+-}
+
+isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
+isExistInDb' conn table checkName where' values = do
+  [Only check]  <- query conn (toExQ table checkName where') values
   return check
 
 isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Connection -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
