@@ -66,8 +66,8 @@ testT :: IO ()
 testT = hspec $ do
   describe "CheckExist" $ do
     it "work" $ do
-      let con = undefined
-      state <- execStateT (runExceptT $ answerEx handle1 con reqTest) (testDB1,[])
+      conn <- connect defaultConnectInfo {connectPassword = "1", connectDatabase = "1"}
+      state <- execStateT (runExceptT $ answerEx handle1 conn reqTest) (testDB1,[])
       (reverse . snd $ state) `shouldBe` 
         [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG]
 
@@ -111,18 +111,6 @@ getTime = do
   return $ show time     
    
 
-createAuthorsTable :: IO ()
-createAuthorsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE authors ( author_id BIGSERIAL PRIMARY KEY NOT NULL, author_info VARCHAR(1000) NOT NULL, user_id BIGINT NOT NULL REFERENCES users(user_id), UNIQUE (user_id) )"
-  print "kk"
-
-createPicsTable :: IO ()
-createPicsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE pics ( pic_id BIGSERIAL PRIMARY KEY NOT NULL, pic_url VARCHAR(1000) NOT NULL)"
-  print "kk"
-
 createDefaultPicture :: IO Integer
 createDefaultPicture = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
@@ -146,83 +134,12 @@ createDefaultCategory = do
   [Only catId] <- query_ conn "INSERT INTO categories (category_name) VALUES ( 'NONE' ) RETURNING category_id" 
   return catId
 
-createCreateAdminKeyTable :: IO ()
-createCreateAdminKeyTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE key ( create_admin_key VARCHAR(100) NOT NULL)"
-  print "kk"
 
-createUsersTable :: IO ()
-createUsersTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE users ( user_id BIGSERIAL PRIMARY KEY NOT NULL, password VARCHAR(50) NOT NULL, first_name VARCHAR(50) NOT NULL, last_name  VARCHAR(50) NOT NULL, user_pic_id BIGINT NOT NULL REFERENCES pics(pic_id), user_create_date DATE NOT NULL, admin boolean NOT NULL)"
-  print "kk"
-
-createTagsTable :: IO ()
-createTagsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE tags ( tag_id BIGSERIAL PRIMARY KEY NOT NULL, tag_name VARCHAR(50) NOT NULL)"
-  print "kk"
-
-createCategoriesTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE categories ( category_id BIGSERIAL PRIMARY KEY NOT NULL, category_name VARCHAR(50) NOT NULL, super_category_id BIGINT)"
-  print "kk"
-
-createPostsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE posts ( post_id BIGSERIAL PRIMARY KEY NOT NULL, author_id BIGINT NOT NULL REFERENCES authors(author_id), post_name VARCHAR(100) NOT NULL, post_create_date DATE NOT NULL, post_category_id BIGINT NOT NULL REFERENCES categories(category_id), post_text VARCHAR(10000) NOT NULL, post_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
-  print "kk"
-
-createCommentsTable :: IO ()
-createCommentsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE comments ( comment_id BIGSERIAL PRIMARY KEY NOT NULL, comment_text VARCHAR(1000) NOT NULL, post_id BIGINT NOT NULL REFERENCES posts(post_id), user_id BIGINT NOT NULL REFERENCES users(user_id))"
-  print "kk"
-
-createPostsPicsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE postspics ( post_id BIGINT NOT NULL REFERENCES posts(post_id), pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
-  print "kk"
-
-createPostsTagsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE poststags ( post_id BIGINT NOT NULL REFERENCES posts(post_id), tag_id BIGINT NOT NULL REFERENCES tags(tag_id))"
-  print "kk"
-
-createDraftsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE drafts ( draft_id BIGSERIAL PRIMARY KEY NOT NULL, post_id BIGINT REFERENCES posts(post_id), author_id BIGINT NOT NULL REFERENCES authors(author_id), draft_name VARCHAR(100) NOT NULL, draft_category_id BIGINT NOT NULL REFERENCES categories(category_id), draft_text VARCHAR(10000) NOT NULL, draft_main_pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
-  print "kk"
-
-createDraftsPicsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE draftspics ( draft_id BIGINT NOT NULL REFERENCES drafts(draft_id), pic_id BIGINT NOT NULL REFERENCES pics(pic_id))"
-  print "kk"
-
-createDraftsTagsTable = do
-  conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn "CREATE TABLE draftstags ( draft_id BIGINT NOT NULL REFERENCES drafts(draft_id), tag_id BIGINT NOT NULL REFERENCES tags(tag_id))"
-  print "kk"
 
 addCreateAdminKey = do
   conn1 <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   execute_ conn1 "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
 
-createDbStructure = do
-  createPicsTable
-  createCreateAdminKeyTable
-  createUsersTable
-  createAuthorsTable
-  createTagsTable
-  createCategoriesTable
-  createPostsTable
-  createCommentsTable
-  createPostsPicsTable
-  createPostsTagsTable
-  createDraftsTable
-  createDraftsPicsTable
-  createDraftsTagsTable
 
 addDefaultParameters = do
   addCreateAdminKey
@@ -508,7 +425,6 @@ logOnErr h m = m `catchE` (\e -> do
 
 main :: IO ()
 main = do
-  createDbStructure
   addDefaultParameters
   time <- getTime                          
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " bot.log"
