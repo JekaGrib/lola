@@ -16,7 +16,7 @@ data UserResponse = UserResponse {
     , user_pic_id  :: Integer
     , user_pic_url :: Text
     , user_create_date :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON UserResponse where
     toJSON (UserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
@@ -25,7 +25,7 @@ instance ToJSON UserResponse where
         pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url <> "user_create_date" .= user_create_date)
 
 
-data OkResponse = OkResponse {ok :: Bool}
+data OkResponse = OkResponse {ok :: Bool} deriving (Eq,Show)
 
 instance ToJSON OkResponse where
     toJSON (OkResponse ok) =
@@ -34,7 +34,7 @@ instance ToJSON OkResponse where
         pairs ("ok" .= ok )
 
 
-data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text}
+data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text} deriving (Eq,Show)
 
 instance ToJSON OkInfoResponse where
     toJSON (OkInfoResponse ok info) =
@@ -47,7 +47,7 @@ data AuthorResponse = AuthorResponse {
       author_id    :: Integer
     , auth_user_id :: Integer
     , author_info  :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON AuthorResponse where
     toJSON (AuthorResponse author_id auth_user_id author_info ) =
@@ -66,7 +66,7 @@ data CatResponse
       cat_id    :: Integer
     , cat_name  :: Text
     , super_cat :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON CatResponse where
     toJSON (CatResponse cat_id cat_name super_cat) =
@@ -88,7 +88,7 @@ data DraftRequest = DraftRequest {
     , draft_main_pic_url :: Text
     , draft_pics_urls :: [PicUrl]
     , draft_tags_ids :: [TagId]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance FromJSON DraftRequest where
     parseJSON (Object v) = DraftRequest
@@ -110,7 +110,7 @@ instance ToJSON DraftRequest where
 
 data PicUrl = PicUrl {
       pic_url :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance FromJSON PicUrl where
     parseJSON (Object v) = PicUrl
@@ -125,7 +125,7 @@ instance ToJSON PicUrl where
 
 data TagId = TagId {
       tag_id3 :: Integer
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON TagId where
     toJSON (TagId tag_id3 ) =
@@ -138,7 +138,8 @@ instance FromJSON TagId where
         <$> v .: "tag_id"
 
 
-data Post = PostInteger Integer | PostText Text
+data Post = PostInteger Integer | PostText Text 
+  deriving Eq
 
 instance Show Post where
   show (PostInteger a) = show a
@@ -160,7 +161,7 @@ data DraftResponse = DraftResponse {
     , draft_main_pic_url2 :: Text
     , draft_pics2 :: [PicIdUrl]
     , draft_tags2 ::  [TagResponse]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON DraftResponse where
     toJSON (DraftResponse draft_id post_id author draft_name draft_cat draft_text draft_main_pic_id draft_main_pic_url draft_pics draft_tags) =
@@ -172,7 +173,7 @@ instance ToJSON DraftResponse where
 data PicIdUrl = PicIdUrl {
       pic_id   :: Integer
     , pic_url2 :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON PicIdUrl where
     toJSON (PicIdUrl pic_id2 pic_url ) =
@@ -184,7 +185,7 @@ instance ToJSON PicIdUrl where
 data DraftsResponse = DraftsResponse {
       page9     :: Integer
     , drafts9 :: [DraftResponse]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON DraftsResponse where
     toJSON (DraftsResponse page drafts ) =
@@ -204,7 +205,7 @@ data PostResponse = PostResponse {
     , post_main_pic_url :: Text
     , post_pics :: [PicIdUrl]
     , post_tags :: [TagResponse]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON PostResponse where
     toJSON (PostResponse post_id author4 post_name post_create_date post_cat post_text post_main_pic_id post_main_pic_url post_pics post_tags) =
@@ -216,7 +217,7 @@ instance ToJSON PostResponse where
 data PostsResponse = PostsResponse {
       page10     :: Integer
     , posts10 :: [PostResponse]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON PostsResponse where
     toJSON (PostsResponse page posts ) =
@@ -228,7 +229,7 @@ instance ToJSON PostsResponse where
 data TagResponse = TagResponse {
       tag_id   :: Integer
     , tag_name :: Text
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON TagResponse where
     toJSON (TagResponse tag_id tag_name ) =
@@ -242,7 +243,7 @@ data CommentResponse = CommentResponse {
     , comment_text :: Text
     , post_id6   :: Integer
     , user_id6   :: Integer
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON CommentResponse where
     toJSON (CommentResponse comment_id comment_text post_id user_id) =
@@ -255,7 +256,7 @@ data CommentIdTextUserResponse = CommentIdTextUserResponse {
       comment_id8   :: Integer
     , comment_text8 :: Text
     , user_id8   :: Integer
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON CommentIdTextUserResponse where
     toJSON (CommentIdTextUserResponse comment_id comment_text user_id) =
@@ -268,7 +269,7 @@ data CommentsResponse = CommentsResponse {
       page     :: Integer
     , post_id9 :: Integer
     , comments :: [CommentIdTextUserResponse]
-    } deriving Show
+    } deriving (Eq,Show)
 
 instance ToJSON CommentsResponse where
     toJSON (CommentsResponse page post_id comments) =
