@@ -94,6 +94,8 @@ isExistInDbTest :: String -> String -> String -> [Text] -> StateT (TestDB,[MockA
 isExistInDbTest s s' s'' xs = StateT $ \(db,acts) -> do
   return ( foo s s' s'' xs db , (db,EXISTCHEK:acts))
 
+getDayTest = return "20-02-2020"
+
 foo "pics" s' s'' xs db = moo s' s'' xs (picsT db)
 moo "pic_id" s'' xs pics = loo s'' xs (fmap pic_idPicsV pics)
 loo "pic_id=?" [x] picsIds = elem (read . unpack $ x) picsIds
@@ -101,7 +103,8 @@ loo "pic_id=?" [x] picsIds = elem (read . unpack $ x) picsIds
 handleLog1 = LogHandle (LogConfig DEBUG) logTest
 handle1 = Handle 
   { hLog = handleLog1,
-    isExistInDb = isExistInDbTest
+    isExistInDb = isExistInDbTest,
+    getDay = getDayTest
     }
 
 reqTest1 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}

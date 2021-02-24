@@ -80,7 +80,7 @@ logOnErr h m = m `catchE` (\e -> do
 application :: LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application handleLog req send = do
   conn <- connectPostgreSQL (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
-  let h = Handle handleLog query execute executeMany (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody
+  let h = Handle handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
   let resInfo = fromE ansE 
