@@ -111,11 +111,10 @@ main :: IO ()
 main = hspec $ do
   describe "CheckExist" $ do
     it "work" $ do
-      let conn = undefined
-      state <- execStateT (runExceptT $ answerEx handle1 conn reqTest1) (testDB1,[])
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest1) (testDB1,[])
       (reverse . snd $ state) `shouldBe` 
         [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG]
-      ansE <- evalStateT (runExceptT $ answerEx handle1 conn reqTest1) (testDB1,[])
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest1) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe` 
         "{\"ok\":true}"
