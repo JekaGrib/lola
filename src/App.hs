@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
---{-# LANGUAGE ScopedTypeVariables #-}
+--{-# LANGUAGE FlexibleInstances #-}
+--{-# LANGUAGE UndecidableInstances #-}
+
+
 
 
 module App where
@@ -20,7 +23,7 @@ import           Data.Maybe                     ( fromJust )
 import           Data.Time.Clock
 import           Data.Time.LocalTime
 import           Data.Time.Calendar.OrdinalDate
-import           Data.Time.Calendar             ( showGregorian, Day )
+import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
 import           Data.List                      ( intercalate, zip4 )
@@ -35,6 +38,8 @@ import qualified Data.Vector                    as V
 import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
 import qualified Data.Map                       as M
+import           Database.PostgreSQL.Simple.FromRow
+
 
 
 
@@ -45,7 +50,7 @@ data Handle m = Handle
     updateInDb        :: String -> String -> String -> [Text] -> m (),
     deleteFromDb      :: String -> String -> [Text] -> m (),
     isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
-    insertReturnInDb  :: forall r. (FromRow r) => String -> String -> [String] -> [Text] -> m [r],
+    insertReturnInDb  :: String -> String -> [String] -> [Text] -> m [(Only Integer)],
     insertManyInDb    :: String -> [String] -> [(Integer,Integer)] -> m (),
     httpAction        :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay            :: m String,
@@ -53,6 +58,8 @@ data Handle m = Handle
     }
 
 --forall (m :: * -> *) q r.(Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
+
+data (FromRow r) => R r = R {fromR :: r } | R1 {fromR1 :: Only Integer}
 
 
 defUsId = 1
@@ -913,17 +920,17 @@ ifExistInDbThrowE h table checkName where' values = do
       return ()
 
 
-insertReturnInDb' :: (FromRow r) => Connection -> String -> String -> [String] -> [Text] -> IO [r]
+insertReturnInDb' :: Connection -> String -> String -> [String] -> [Text] -> IO [Only Integer]
 insertReturnInDb' conn table returnName insNames insValues = do
-  xs <- query conn ( toInsRetQ table returnName insNames ) insValues
-  return xs
+  xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
+  return xs 
 
-insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m, FF.FromField a) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m a
+insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnInDbE h table returnName insNames insValues = catchDbErr $ do
   xs <- lift $ insertReturnInDb h table returnName insNames insValues
   case xs of
     []           -> throwE $ SimpleError "DatabaseError.Empty output"
-    [Only value] -> do
+    [(Only value)] -> do 
       lift $ logInfo (hLog h) $ "Data received from DB"
       return value
     _            -> throwE $ SimpleError "DatabaseError"

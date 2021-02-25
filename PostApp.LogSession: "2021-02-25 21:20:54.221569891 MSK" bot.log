@@ -1,0 +1,395 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Kate&last_name=Grick&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59176, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Kate"),("last_name",Just "Grick"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create user command
+INFO: All parameters parsed
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id511
+INFO: User_id: 511 created
+DEBUG: Output response: "{\"user_id\":511,\"first_name\":\"Kate\",\"last_name\":\"Grick\",\"user_pic_id\":511,\"user_pic_url\":\"http://localhost:3000/picture/511\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Rick&last_name=Stam&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59182, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Rick"),("last_name",Just "Stam"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create user command
+INFO: All parameters parsed
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id512
+INFO: User_id: 512 created
+DEBUG: Output response: "{\"user_id\":512,\"first_name\":\"Rick\",\"last_name\":\"Stam\",\"user_pic_id\":512,\"user_pic_url\":\"http://localhost:3000/picture/512\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Luck&last_name=Smith&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59186, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Luck"),("last_name",Just "Smith"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create user command
+INFO: All parameters parsed
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id513
+INFO: User_id: 513 created
+DEBUG: Output response: "{\"user_id\":513,\"first_name\":\"Luck\",\"last_name\":\"Smith\",\"user_pic_id\":513,\"user_pic_url\":\"http://localhost:3000/picture/513\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Chris&last_name=Wirt&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59190, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Chris"),("last_name",Just "Wirt"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create admin command
+DEBUG: Select data from DB. Table: key
+INFO: Data received from DB
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id514
+INFO: User_id: 514 created as admin
+DEBUG: Output response: "{\"user_id\":514,\"first_name\":\"Chris\",\"last_name\":\"Wirt\",\"user_pic_id\":514,\"user_pic_url\":\"http://localhost:3000/picture/514\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Poll&last_name=Leon&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59194, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Poll"),("last_name",Just "Leon"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create admin command
+DEBUG: Select data from DB. Table: key
+INFO: Data received from DB
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id515
+INFO: User_id: 515 created as admin
+DEBUG: Output response: "{\"user_id\":515,\"first_name\":\"Poll\",\"last_name\":\"Leon\",\"user_pic_id\":515,\"user_pic_url\":\"http://localhost:3000/picture/515\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Vick&last_name=Autris&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59198, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Vick"),("last_name",Just "Autris"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create admin command
+DEBUG: Select data from DB. Table: key
+INFO: Data received from DB
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id516
+INFO: User_id: 516 created as admin
+DEBUG: Output response: "{\"user_id\":516,\"first_name\":\"Vick\",\"last_name\":\"Autris\",\"user_pic_id\":516,\"user_pic_url\":\"http://localhost:3000/picture/516\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Tom&last_name=Ester&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59202, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Tom"),("last_name",Just "Ester"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create admin command
+DEBUG: Select data from DB. Table: key
+INFO: Data received from DB
+INFO: Data received from DB
+INFO: Data received from DB
+DEBUG: DB return user_id517
+INFO: User_id: 517 created as admin
+DEBUG: Output response: "{\"user_id\":517,\"first_name\":\"Tom\",\"last_name\":\"Ester\",\"user_pic_id\":517,\"user_pic_url\":\"http://localhost:3000/picture/517\",\"user_create_date\":\"2021-02-25\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAuthor", rawQueryString = "?user_id=2&author_info=SuperAuthor&admin_id=6&password=654321", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59206, pathInfo = ["createAuthor"], queryString = [("user_id",Just "2"),("author_info",Just "SuperAuthor"),("admin_id",Just "6"),("password",Just "654321")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create author command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAuthor", rawQueryString = "?user_id=3&author_info=Demon&admin_id=6&password=654321", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59210, pathInfo = ["createAuthor"], queryString = [("user_id",Just "3"),("author_info",Just "Demon"),("admin_id",Just "6"),("password",Just "654321")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create author command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createAuthor", rawQueryString = "?user_id=4&author_info=Tall&admin_id=6&password=654321", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59214, pathInfo = ["createAuthor"], queryString = [("user_id",Just "4"),("author_info",Just "Tall"),("admin_id",Just "6"),("password",Just "654321")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create author command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Hobby", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59218, pathInfo = ["createCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Hobby")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Work", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59222, pathInfo = ["createCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Work")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Love", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59226, pathInfo = ["createCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Love")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Sport&super_category_id=2", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59230, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Sport"),("super_category_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Art&super_category_id=2", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59234, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Art"),("super_category_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Bake&super_category_id=2", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59238, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Bake"),("super_category_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Teacher&super_category_id=3", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59242, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Teacher"),("super_category_id",Just "3")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Football&super_category_id=5", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59246, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Football"),("super_category_id",Just "5")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=Tennis&super_category_id=5", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59250, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "Tennis"),("super_category_id",Just "5")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=KinderGardenTeacher&super_category_id=8", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59254, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "KinderGardenTeacher"),("super_category_id",Just "8")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=BigTennis&super_category_id=10", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59258, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "BigTennis"),("super_category_id",Just "10")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createSubCategory", rawQueryString = "?password=654321&admin_id=6&category_name=PingPong&super_category_id=10", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59262, pathInfo = ["createSubCategory"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("category_name",Just "PingPong"),("super_category_id",Just "10")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create sub category command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Sport", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59266, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Sport")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Love", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59270, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Love")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Cats", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59274, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Cats")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Dogs", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59278, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Dogs")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Auto", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59282, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Auto")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Kitchen", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59286, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Kitchen")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/createTag", rawQueryString = "?password=654321&admin_id=6&tag_name=Home", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59290, pathInfo = ["createTag"], queryString = [("password",Just "654321"),("admin_id",Just "6"),("tag_name",Just "Home")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create tag command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SecretError "INVALID pwd, user is NOT admin"
+DEBUG: Output response: "Status 404 Not Found"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*"),("Content-Type","application/json"),("Content-Length","867")], isSecure = False, remoteHost = 127.0.0.1:59294, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 867, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*"),("Content-Type","application/json"),("Content-Length","1277"),("Expect","100-continue")], isSecure = False, remoteHost = 127.0.0.1:59298, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 1277, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*"),("Content-Type","application/json"),("Content-Length","556")], isSecure = False, remoteHost = 127.0.0.1:59302, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 556, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*"),("Content-Type","application/json"),("Content-Length","772")], isSecure = False, remoteHost = 127.0.0.1:59306, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 772, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=2&password=654321&draft_id=1", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59310, pathInfo = ["publishDraft"], queryString = [("user_id",Just "2"),("password",Just "654321"),("draft_id",Just "1")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=3&password=654321&draft_id=2", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59314, pathInfo = ["publishDraft"], queryString = [("user_id",Just "3"),("password",Just "654321"),("draft_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=4&password=654321&draft_id=3", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59318, pathInfo = ["publishDraft"], queryString = [("user_id",Just "4"),("password",Just "654321"),("draft_id",Just "3")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=2&password=654321&draft_id=4", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59322, pathInfo = ["publishDraft"], queryString = [("user_id",Just "2"),("password",Just "654321"),("draft_id",Just "4")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=2&password=654321&draft_id=1", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59326, pathInfo = ["publishDraft"], queryString = [("user_id",Just "2"),("password",Just "654321"),("draft_id",Just "1")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=3&password=654321&draft_id=2", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59330, pathInfo = ["publishDraft"], queryString = [("user_id",Just "3"),("password",Just "654321"),("draft_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/publishDraft", rawQueryString = "?user_id=4&password=654321&draft_id=3", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, remoteHost = 127.0.0.1:59334, pathInfo = ["publishDraft"], queryString = [("user_id",Just "4"),("password",Just "654321"),("draft_id",Just "3")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Publish draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createComment", rawQueryString = "?password=654321&user_id=5&comment_text=ff&post_id=2", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","dee0ab70-4b6e-4ee9-85ca-6e680901f8f0"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","454")], isSecure = False, remoteHost = 127.0.0.1:59344, pathInfo = ["createComment"], queryString = [("password",Just "654321"),("user_id",Just "5"),("comment_text",Just "ff"),("post_id",Just "2")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 454, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create comment command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+WARNING: SimpleError "INVALID password"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"INVALID password\"}"
