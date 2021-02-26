@@ -87,18 +87,19 @@ data SelectType =
   
 instance FromRow SelectType where
   fromRow = 
-    (OnlyInt <$> field) 
-    <|> (OnlyTxt <$> field)
-    <|> (OnlyDay <$> field)
-    <|> (Auth <$> field <*> field)
-    <|> (Cat  <$> field <*> field)
-    <|> (Tag  <$> field <*> field)
-    <|> (Author  <$> field <*> field <*> field)
-    <|> (Comment <$> field <*> field <*> field)
-    <|> (User    <$> field <*> field <*> field <*> field)
-    <|> (PostInfo <$> field <*> field <*> field <*> field <*> field)
+    (Post     <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (Draft    <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (Post     <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
+    <|> (PostInfo <$> field <*> field <*> field <*> field <*> field)
+    <|> (User    <$> field <*> field <*> field <*> field)
+    <|> (Comment <$> field <*> field <*> field)
+    <|> (Author  <$> field <*> field <*> field)
+    <|> (Tag  <$> field <*> field)
+    <|> (Cat  <$> field <*> field)
+    <|> (Auth <$> field <*> field)
+    <|> (OnlyDay <$> field)
+    <|> (OnlyTxt <$> field)
+    <|> (OnlyInt <$> field) 
+
 
 
 
@@ -426,7 +427,7 @@ answerEx h req = do
       OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
       let orderBy = "draft_id DESC"
-      let extractParams = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
+      let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
       params <- selectListLimitFromDbE h table orderBy pageNum draftNumberLimit extractParams where' values 

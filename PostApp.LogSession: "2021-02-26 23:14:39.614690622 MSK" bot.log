@@ -1,0 +1,6 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getTag/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","266ec3db-6196-4a14-b97d-0cd3c1ff76fa"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------062331189534251861740115"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:50652, pathInfo = ["getTag","3"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get tag command
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Select data from DB. Table: tags

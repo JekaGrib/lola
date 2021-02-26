@@ -26,7 +26,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4 )
+import           Data.List                      ( intercalate, zip4, find )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -39,7 +39,8 @@ import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
 import           Database.PostgreSQL.Simple.ToRow
 
-data MockAction = EXISTCHEK | LOGMSG | INSERTDATA
+
+data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA
   deriving (Eq,Show)
 
 data TestDB = TestDB 
@@ -110,8 +111,10 @@ isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[Mock
 isExistInDbTest s s' s'' xs = StateT $ \(db,acts) -> do
   return ( foo s s' s'' xs db , (db,EXISTCHEK:acts))
 
-foo "pics" s' s'' xs db = moo s' s'' xs (picsT db)
+foo "pics"  s' s'' xs db = moo s' s'' xs (picsT db)
+foo "users" s' s'' xs db = qoo s' s'' xs (usersT db)
 moo "pic_id" s'' xs pics = loo s'' xs (fmap pic_idPicsV pics)
+qoo "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUsersV ) users 
 loo "pic_id=?" [x] picsIds = elem (read . unpack $ x) picsIds
 
 insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
@@ -138,10 +141,22 @@ woo "user_id" ["password","first_name","last_name","user_pic_id","user_create_da
       _  -> let num = (user_idUsersV . last $ uT) 
             in ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [num] )
     
+selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
+selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
+  return $ pii table params where' values db acts
+
+pii "users" params where' values db acts = mii params where' values db acts
+
+mii ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] db acts = 
+  let lineList = filter ( (==) (read . unpack $ x) . user_idUsersV ) (usersT db) in
+    (fmap usersLToUser lineList,(db,SELECTDATA:acts))
+
+usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
 handleLog1 = LogHandle (LogConfig DEBUG) logTest
 handle1 = Handle 
   { hLog = handleLog1,
+    selectFromDb = selectFromDbTest,
     isExistInDb = isExistInDbTest,
     insertReturnInDb = insertReturnInDbTest,
     getDay = getDayTest,
@@ -150,6 +165,7 @@ handle1 = Handle
 
 reqTest0 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 reqTest1 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Kate&last_name=Grick&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Kate"),("last_name",Just "Grick"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest2 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getUser/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["getUser","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 
 main :: IO ()
 main = hspec $ do
@@ -171,4 +187,13 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe` 
         "{\"user_id\":5,\"first_name\":\"Kate\",\"last_name\":\"Grick\",\"user_pic_id\":5,\"user_pic_url\":\"http://localhost:3000/picture/5\",\"user_create_date\":\"2020-02-20\"}"
+  describe "getUser" $ do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest2) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]      
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest2) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe` 
+        "{\"user_id\":3,\"first_name\":\"Ira\",\"last_name\":\"Medvedeva\",\"user_pic_id\":2,\"user_pic_url\":\"http://localhost:3000/picture/2\",\"user_create_date\":\"2018-03-01\"}"
 
