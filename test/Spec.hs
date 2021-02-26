@@ -37,6 +37,7 @@ import           Data.HashMap.Strict            ( toList, fromList )
 import qualified Data.Vector                    as V
 import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
+import           Database.PostgreSQL.Simple.ToRow
 
 data MockAction = EXISTCHEK | LOGMSG | INSERTDATA
   deriving (Eq,Show)
@@ -105,7 +106,7 @@ testDB1 = emptyDB {picsT = picsT1,usersT = usersT1}
 
 getDayTest = return "2020-02-20"
 
-isExistInDbTest :: String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
+isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
 isExistInDbTest s s' s'' xs = StateT $ \(db,acts) -> do
   return ( foo s s' s'' xs db , (db,EXISTCHEK:acts))
 
@@ -113,29 +114,29 @@ foo "pics" s' s'' xs db = moo s' s'' xs (picsT db)
 moo "pic_id" s'' xs pics = loo s'' xs (fmap pic_idPicsV pics)
 loo "pic_id=?" [x] picsIds = elem (read . unpack $ x) picsIds
 
-insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [(Only Integer)]
+insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
 insertReturnInDbTest s s' xs ys = StateT $ \(db,acts) -> do
   return ( snd . soo s s' xs ys $ db , (fst . soo s s' xs ys $ db,INSERTDATA:acts))
 
-soo :: String -> String -> [String] -> [Text] -> TestDB -> (TestDB, [(Only Integer)])
+soo ::  String -> String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer])
 soo "pics" s' xs ys db = poo s' xs ys db
 soo "users" s' xs ys db = woo s' xs ys db
 --soo ".." s' xs ys db = (emptyDB, [(5 :: Integer,7 :: Double)])
 
-poo :: String -> [String] -> [Text] -> TestDB -> (TestDB, [(Only Integer)]) 
+poo :: String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer]) 
 poo "pic_id" ["pic_url"] [url] db =
   let pT = picsT db in
     case pT of
-      [] -> (db {picsT = [ PicsL 1 url ]}, [(Only 1)])
-      _  -> let num = (pic_idPicsV . last $ pT) in (db {picsT = pT ++ [ PicsL num url ]}, [(Only num)])
+      [] -> (db {picsT = [ PicsL 1 url ]}, [1])
+      _  -> let num = (pic_idPicsV . last $ pT) in (db {picsT = pT ++ [ PicsL num url ]}, [num])
  
-woo :: FromRow r => String -> [String] -> [Text] -> TestDB -> (TestDB, [R r])
+woo :: String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer])
 woo "user_id" ["password","first_name","last_name","user_pic_id","user_create_date","admin"] [pwd,fN,lN,pI,cD,aD] db = 
     let uT = usersT db in
     case uT of
-      [] -> ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [(Only 1)])
+      [] -> ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [1])
       _  -> let num = (user_idUsersV . last $ uT) 
-            in ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [(Only num)] )
+            in ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [num] )
     
 
 handleLog1 = LogHandle (LogConfig DEBUG) logTest

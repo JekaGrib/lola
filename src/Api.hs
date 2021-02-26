@@ -138,21 +138,21 @@ instance FromJSON TagId where
         <$> v .: "tag_id"
 
 
-data Post = PostInteger Integer | PostText Text 
+data PostId = PostInteger Integer | PostText Text 
   deriving Eq
 
-instance Show Post where
+instance Show PostId where
   show (PostInteger a) = show a
   show (PostText a) = unpack a
 
-instance ToJSON Post where
+instance ToJSON PostId where
   toJSON (PostInteger a) = toJSON a
   toJSON (PostText a) = toJSON a
   
 
 data DraftResponse = DraftResponse {
       draft_id2      :: Integer
-    , post_id2      :: Post
+    , post_id2      :: PostId
     , author2   :: AuthorResponse
     , draft_name2    :: Text
     , draft_cat2 :: CatResponse
