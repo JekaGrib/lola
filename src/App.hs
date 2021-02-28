@@ -45,7 +45,8 @@ import           Control.Applicative
 
 
 data Handle m = Handle 
-  { hLog              :: LogHandle m,
+  { hConf             :: Config,
+    hLog              :: LogHandle m,
     selectFromDb      :: String -> [String] -> String -> [Text] -> m [SelectType],
     selectLimitFromDb :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> m [SelectType],
     updateInDb        :: String -> String -> String -> [Text] -> m (),
@@ -58,7 +59,12 @@ data Handle m = Handle
     getBody           :: Request -> m BSL.ByteString
     }
 
-
+data Config = Config 
+  { cDefPicId   :: Integer,
+    cDefUsId    :: Integer,
+    cDefAuthId  :: Integer,
+    cDefCatId  :: Integer
+    }
 
 data SelectType = 
   OnlyInt {fromOnlyInt :: Integer} 
@@ -93,10 +99,10 @@ instance FromRow SelectType where
 
 
 
-defUsId = 1
-defPicId = 1
-defAuthId = 1
-defCatId = 1
+--(cDefUsId $ hConf h) = 1
+--defPicId = 1
+--(cDefAuthId $ hConf h) = 1
+--(cDefCatId $ hConf h) = 1
 
 commentNumberLimit = 20
 draftNumberLimit = 5
@@ -115,10 +121,10 @@ logOnErr h m = m `catchE` (\e -> do
   lift $ logWarning (hLog h) $ show e
   throwE e)
 
-application :: LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
-application handleLog req send = do
+application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
+application config handleLog req send = do
   conn <- connectPostgreSQL (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
-  let h = Handle handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody
+  let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
   let resInfo = fromE ansE 
@@ -170,12 +176,12 @@ answerEx h req = do
       [usIdNum]   <- mapM tryRead [usIdParam]
       lift $ logInfo (hLog h) $ "All parameters parsed"
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      updateInDbE h"comments" "user_id=?" "user_id=?" [pack . show $ defUsId,usIdParam]
+      updateInDbE h "comments" "user_id=?" "user_id=?" [pack . show $ (cDefUsId $ hConf h),usIdParam]
       check <- isUserAuthorBool h usIdNum 
       case check of
         True -> do
           OnlyInt authorId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]  
-          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ authorId]
+          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),pack . show $ authorId]
           draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
           let draftsIds = fmap fromOnlyInt draftsIdsSel
           deleteAllAboutDrafts h draftsIds
@@ -240,7 +246,7 @@ answerEx h req = do
       [auIdParam] <- mapM (checkParam req) paramsNames
       [auIdNum]   <- mapM tryRead [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
-      updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,auIdParam]
+      updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
       draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
       let draftsIds = fmap fromOnlyInt draftsIdsSel 
       deleteAllAboutDrafts h  draftsIds
@@ -289,7 +295,7 @@ answerEx h req = do
       [catIdNum]              <- mapM tryRead [catIdParam] 
       isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam] 
       allSubCats <- findAllSubCats h  catIdNum
-      let values = fmap (pack . show) (defCatId:allSubCats)
+      let values = fmap (pack . show) ((cDefCatId $ hConf h):allSubCats)
       let where'  = intercalate " OR " . fmap (const "post_category_id=?")  $ allSubCats
       let where'' = intercalate " OR " . fmap (const "draft_category_id=?") $ allSubCats
       updateInDbE h "posts"  "post_category_id=?"  where'  values

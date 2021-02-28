@@ -40,7 +40,7 @@ import qualified Database.PostgreSQL.Simple.FromField as FF
 import           Database.PostgreSQL.Simple.ToRow
 
 
-data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA
+data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA
   deriving (Eq,Show)
 
 data TestDB = TestDB 
@@ -56,7 +56,7 @@ data TestDB = TestDB
     postsTagsT :: PostsTagsT,
     draftsT :: DraftsT,
     draftsPicsT :: DraftsPicsT,
-    draftTagsT :: DraftsTagsT
+    draftsTagsT :: DraftsTagsT
   }
 
 
@@ -76,11 +76,11 @@ type DraftsTagsT = [DraftsTagsL]
 
 data PicsL = PicsL { pic_idPL ::  Integer, pic_urlPL :: Text }
 data UsersL = UsersL { user_idUL :: Integer, passwordUL :: Text, first_nameUL :: Text, last_nameUL :: Text, user_pic_idUL :: Integer, user_create_dateUL :: Day, adminUL :: Bool }
-data AuthorsL = AuthorsL { author_idAL :: Integer, author_infoAL :: Text, user_idCL :: Integer }
+data AuthorsL = AuthorsL { author_idAL :: Integer, author_infoAL :: Text, user_idAL :: Integer }
 data TagsL = TagsL { tag_idTL :: Integer, tag_nameTL :: Text }
 data CatsL = CatsL { cat_idCL :: Integer, cat_nameCL :: Text, super_cat_idCL :: Maybe Integer }
 data PostsL = PostsL { post_idPL :: Integer, author_idPL :: Integer, post_namePL :: Text, post_create_datePL :: Day, post_cat_idPL :: Integer, post_textPL :: Text, post_pic_idPL :: Integer }
-data CommentsL = CommentsL { comment_idCL :: Integer, comment_textCL :: Text, post_idCL :: Integer, user_idComL :: Integer }
+data CommentsL = CommentsL { comment_idCL :: Integer, comment_textCL :: Text, post_idCL :: Integer, user_idCL :: Integer }
 data PostsPicsL = PostsPicsL { post_idPPL :: Integer, pic_idPPL :: Integer }
 data PostsTagsL = PostsTagsL { post_idPTL :: Integer, tag_idPTL :: Integer }
 data DraftsL = DraftsL { draft_idDL :: Integer, post_idDL :: Maybe Integer, author_idDL :: Integer, drafft_nameDL :: Text, draft_cat_idDL :: Integer, draft_textDL :: Text, draft_pic_idDL :: Integer }
@@ -186,16 +186,16 @@ postsL5 = PostsL 5 3 "Victory"   (fG 2019 11 01) 7  txt5 6
 
 postsT1 = [postsL1,postsL2,postsL3,postsL4,postsL5]
 
-commentsL1  = CommentsL 1  "Cool" 3 3
-commentsL2  = CommentsL 2  "Cool" 4 3
-commentsL3  = CommentsL 3  "Cool" 2 3
-commentsL4  = CommentsL 4  "Cool" 2 2
-commentsL5  = CommentsL 5  "Cool" 2 4
-commentsL6  = CommentsL 6  "Cool" 5 5
-commentsL7  = CommentsL 7  "Cool" 1 5
-commentsL8  = CommentsL 8  "Cool" 1 2
-commentsL9  = CommentsL 9  "Cool" 4 4
-commentsL10 = CommentsL 10 "Cool" 2 2
+commentsL1  = CommentsL 1  "Cool"             3 3
+commentsL2  = CommentsL 2  "I like it"        4 3
+commentsL3  = CommentsL 3  "Sunny"            2 3
+commentsL4  = CommentsL 4  "Funny"            2 2
+commentsL5  = CommentsL 5  "Very interesting" 2 4
+commentsL6  = CommentsL 6  "Pretty"           5 6
+commentsL7  = CommentsL 7  "Hmm"              1 5
+commentsL8  = CommentsL 8  "Crazy"            1 2
+commentsL9  = CommentsL 9  "I think about it" 4 4
+commentsL10 = CommentsL 10 "You lucky"        2 2
 
 commentsT1 = [commentsL1,commentsL2,commentsL3,commentsL4,commentsL5,commentsL5,commentsL6,commentsL7,commentsL8,commentsL9,commentsL10]
 
@@ -275,14 +275,41 @@ testDB1 = TestDB picsT1 keyT1 usersT1 authorsT1 tagsT1 catsT1 postsT1 commentsT1
 
 getDayTest = return "2020-02-20"
 
+updateInDbTest :: String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
+updateInDbTest table set where' values = StateT $ \(db,acts) -> do
+  return $ update table set where' values db (UPDATEDATA:acts)
+
+update "comments" set where' values db acts = updateInComments set where' values db acts
+update "posts"    set where' values db acts = updateInPosts    set where' values db acts
+
+updateInComments "user_id=?" "user_id=?" [x,y] db acts =
+  let numX = (read $ unpack x :: Integer) in
+  let numY = (read $ unpack y :: Integer) in
+  let updateFoo line acc = case user_idCL line of {numY -> ( (line {user_idCL = numX}) : acc) ; _ -> (line:acc)} in
+  let newCommentsT = foldr updateFoo [] (commentsT db) in
+  let newDb = db {commentsT = newCommentsT} in
+    ((), (newDb,acts))
+
+updateInPosts "author_id=?" "author_id=?" [x,y] db acts =
+  let numX = (read $ unpack x :: Integer) in
+  let numY = (read $ unpack y :: Integer) in
+  let updateFoo line acc = case author_idPL line of {numY -> ((line {author_idPL = numX}) : acc) ; _ -> (line:acc)} in
+  let newPostsT = foldr updateFoo [] (postsT db) in
+  let newDb = db {postsT = newPostsT} in
+    ((), (newDb,acts))
+
 isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
 isExistInDbTest table checkName where' values = StateT $ \(db,acts) -> do
   return ( isExist table checkName where' values db , (db,EXISTCHEK:acts))
 
-isExist "pics"  checkName where' values db = isExistInPics  checkName where' values (picsT db)
-isExist "users" checkName where' values db = isExistInUsers checkName where' values (usersT db)
-isExistInPics "pic_id" "pic_id=?" [x] pics = elem (read . unpack $ x) (fmap pic_idPL pics)
-isExistInUsers "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUL ) users 
+isExist "pics"    checkName where' values db = isExistInPics    checkName where' values (picsT db)
+isExist "users"   checkName where' values db = isExistInUsers   checkName where' values (usersT db)
+isExist "authors" checkName where' values db = isExistInAuthors checkName where' values (authorsT db)
+
+isExistInPics    "pic_id"    "pic_id=?"  [x] pics    = not . null $ find ( (==) (read . unpack $ x) . pic_idPL ) pics
+isExistInUsers   "user_id"   "user_id=?" [x] users   = not . null $ find ( (==) (read . unpack $ x) . user_idUL ) users 
+--isExistInAuthors "author_id" "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
+isExistInAuthors "user_id"   "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
 
 
 insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
@@ -314,18 +341,97 @@ selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[Mo
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
   return (select table params where' values db, (db,SELECTDATA:acts))
 
-select "users" params where' values db = selectFromUsers params where' values db
+select "users"   params where' values db = selectFromUsers   params where' values (usersT   db)
+select "authors" params where' values db = selectFromAuthors params where' values (authorsT db)
+select "drafts"  params where' values db = selectFromDrafts  params where' values (draftsT  db)
 
-selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] db = 
-  let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) (usersT db) in
+
+selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] users = 
+  let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
     fmap usersLToUser validLines
+selectFromUsers ["password","admin"] "user_id=?" [x] users = 
+  let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
+    fmap usersLToAuth validLines
 
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
+
+
+usersLToAuth (UsersL id pwd fN lN picId date admBool) = Auth pwd admBool
+
+selectFromAuthors ["author_id"] "user_id=?" [x] authors =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . user_idAL ) authors in
+    fmap (OnlyInt . author_idAL) validLines
+
+selectFromDrafts ["draft_id"] "author_id=?" [x] drafts =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . author_idDL ) drafts in
+    fmap (OnlyInt . draft_idDL) validLines
+
+deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
+deleteFromDbTest table where' values = StateT $ \(db,acts) -> do
+  return $ delete' table where' values db (DELETEDATA:acts)
+
+delete' :: String -> String -> [Text] -> TestDB -> [MockAction] -> ( (), (TestDB,[MockAction]))
+delete' "users"      where' values db acts = deleteFromUsers   where' values db acts
+delete' "authors"    where' values db acts = deleteFromAuthors where' values db acts
+delete' "drafts"     where' values db acts = deleteFromDrafts where' values db acts
+delete' "draftspics" where' values db acts = deleteFromDraftsPics where' values db acts
+delete' "draftstags" where' values db acts = deleteFromDraftsTags where' values db acts
+
+deleteFromUsers "user_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newUsersT = filter  ((==) numX . user_idUL) (usersT db) in
+  let newDb = db {usersT = newUsersT} in
+    ((), (newDb,acts))
+
+deleteFromAuthors "author_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newAuthorsT = filter  ((/=) numX . author_idAL) (authorsT db) in
+  let newDb = db {authorsT = newAuthorsT} in
+    ((), (newDb,acts))
+
+deleteFromDrafts where' values db acts = 
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let newDraftsT = makeNewDraftsT (unOr where') numValues (draftsT db) in
+  let newDb = db {draftsT = newDraftsT} in
+    ((), (newDb,acts))    
+
+makeNewDraftsT [] [] drafts = drafts
+makeNewDraftsT ["draft_id=?"] [numX] drafts = filter ((/=) numX . draft_idDL) drafts
+makeNewDraftsT ("draft_id=?":ys) (numX:xs) drafts = makeNewDraftsT ys xs (makeNewDraftsT ["draft_id"] [numX] drafts) 
+
+deleteFromDraftsPics where' values db acts = 
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let newDraftsPicsT = makeNewDraftsPicsT (unOr where') numValues (draftsPicsT db) in
+  let newDb = db {draftsPicsT = newDraftsPicsT} in
+    ((), (newDb,acts))    
+
+makeNewDraftsPicsT [] [] draftspics = draftspics
+makeNewDraftsPicsT ["draft_id=?"] [numX] draftspics = filter ((/=) numX . draft_idDPL) draftspics
+makeNewDraftsPicsT ("draft_id=?":ys) (numX:xs) draftspics = makeNewDraftsPicsT ys xs (makeNewDraftsPicsT ["draft_id"] [numX] draftspics) 
+
+deleteFromDraftsTags where' values db acts = 
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let newDraftsTagsT = makeNewDraftsTagsT (unOr where') numValues (draftsTagsT db) in
+  let newDb = db {draftsTagsT = newDraftsTagsT} in
+    ((), (newDb,acts))    
+
+makeNewDraftsTagsT [] [] draftstags = draftstags
+makeNewDraftsTagsT ["draft_id=?"] [numX] draftstags = filter ((/=) numX . draft_idDTL) draftstags
+makeNewDraftsTagsT ("draft_id=?":ys) (numX:xs) draftstags = makeNewDraftsTagsT ys xs (makeNewDraftsTagsT ["draft_id"] [numX] draftstags) 
+
 handleLog1 = LogHandle (LogConfig DEBUG) logTest
 handle1 = Handle 
-  { hLog = handleLog1,
+  { hConf = Config 1 1 1 1,
+    hLog = handleLog1,
     selectFromDb = selectFromDbTest,
+    updateInDb = updateInDbTest,
+    deleteFromDb = deleteFromDbTest,
     isExistInDb = isExistInDbTest,
     insertReturnInDb = insertReturnInDbTest,
     getDay = getDayTest,
@@ -335,6 +441,8 @@ handle1 = Handle
 reqTest0 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 reqTest1 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Kate&last_name=Grick&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Kate"),("last_name",Just "Grick"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 reqTest2 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getUser/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["getUser","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest3 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=2&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "2"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest4 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=6&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "6"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 
 main :: IO ()
 main = hspec $ do
@@ -365,4 +473,25 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe` 
         "{\"user_id\":3,\"first_name\":\"Ira\",\"last_name\":\"Medvedeva\",\"user_pic_id\":2,\"user_pic_url\":\"http://localhost:3000/picture/2\",\"user_create_date\":\"2018-03-01\"}"
+  describe "deleteUser" $ do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest3) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,UPDATEDATA,LOGMSG,EXISTCHEK,DELETEDATA,LOGMSG]      
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest3) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+  describe "deleteUser Author" $ do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest4) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,UPDATEDATA,LOGMSG,EXISTCHEK,LOGMSG,SELECTDATA,LOGMSG,UPDATEDATA,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA,DELETEDATA,LOGMSG]      
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest4) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+            
+
+
 
