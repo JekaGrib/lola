@@ -87,7 +87,7 @@ data SelectType =
   
 instance FromRow SelectType where
   fromRow = 
-    (Post     <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
+    (Post         <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (Draft    <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (PostInfo <$> field <*> field <*> field <*> field <*> field)
     <|> (User    <$> field <*> field <*> field <*> field)

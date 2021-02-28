@@ -108,48 +108,49 @@ testDB1 = emptyDB {picsT = picsT1,usersT = usersT1}
 getDayTest = return "2020-02-20"
 
 isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
-isExistInDbTest s s' s'' xs = StateT $ \(db,acts) -> do
-  return ( foo s s' s'' xs db , (db,EXISTCHEK:acts))
+isExistInDbTest table checkName where' values = StateT $ \(db,acts) -> do
+  return ( isExist table checkName where' values db , (db,EXISTCHEK:acts))
 
-foo "pics"  s' s'' xs db = moo s' s'' xs (picsT db)
-foo "users" s' s'' xs db = qoo s' s'' xs (usersT db)
-moo "pic_id" s'' xs pics = loo s'' xs (fmap pic_idPicsV pics)
-qoo "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUsersV ) users 
-loo "pic_id=?" [x] picsIds = elem (read . unpack $ x) picsIds
+isExist "pics"  checkName where' values db = isExistInPics  checkName where' values (picsT db)
+isExist "users" checkName where' values db = isExistInUsers checkName where' values (usersT db)
+isExistInPics "pic_id" "pic_id=?" [x] pics = elem (read . unpack $ x) (fmap pic_idPicsV pics)
+isExistInUsers "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUsersV ) users 
+
 
 insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
-insertReturnInDbTest s s' xs ys = StateT $ \(db,acts) -> do
-  return ( snd . soo s s' xs ys $ db , (fst . soo s s' xs ys $ db,INSERTDATA:acts))
+insertReturnInDbTest table returnName insNames insValues = StateT $ \(db,acts) -> do
+  return $ insReturn table returnName insNames insValues db (INSERTDATA:acts)
 
-soo ::  String -> String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer])
-soo "pics" s' xs ys db = poo s' xs ys db
-soo "users" s' xs ys db = woo s' xs ys db
---soo ".." s' xs ys db = (emptyDB, [(5 :: Integer,7 :: Double)])
+insReturn ::  String -> String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturn "pics"  returnName insNames insValues db acts = insReturnInPics  returnName insNames insValues db acts
+insReturn "users" returnName insNames insValues db acts = insReturnInUsers returnName insNames insValues db acts
 
-poo :: String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer]) 
-poo "pic_id" ["pic_url"] [url] db =
+
+insReturnInPics :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInPics "pic_id" ["pic_url"] [url] db acts =
   let pT = picsT db in
     case pT of
-      [] -> (db {picsT = [ PicsL 1 url ]}, [1])
-      _  -> let num = (pic_idPicsV . last $ pT) in (db {picsT = pT ++ [ PicsL num url ]}, [num])
+      [] -> ([1], (db {picsT = [ PicsL 1 url ]}, acts))
+      _  -> let num = (pic_idPicsV . last $ pT) in
+        ([num], (db {picsT = pT ++ [ PicsL num url ]}, acts))
  
-woo :: String -> [String] -> [Text] -> TestDB -> (TestDB, [Integer])
-woo "user_id" ["password","first_name","last_name","user_pic_id","user_create_date","admin"] [pwd,fN,lN,pI,cD,aD] db = 
+insReturnInUsers :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInUsers "user_id" ["password","first_name","last_name","user_pic_id","user_create_date","admin"] [pwd,fN,lN,pI,cD,aD] db acts = 
     let uT = usersT db in
     case uT of
-      [] -> ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [1])
-      _  -> let num = (user_idUsersV . last $ uT) 
-            in ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, [num] )
+      [] -> ([1], ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
+      _  -> let num = (user_idUsersV . last $ uT) in
+        ([num], ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
     
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
-  return $ pii table params where' values db acts
+  return (select table params where' values db, (db,SELECTDATA:acts))
 
-pii "users" params where' values db acts = mii params where' values db acts
+select "users" params where' values db = selectFromUsers params where' values db
 
-mii ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] db acts = 
-  let lineList = filter ( (==) (read . unpack $ x) . user_idUsersV ) (usersT db) in
-    (fmap usersLToUser lineList,(db,SELECTDATA:acts))
+selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] db = 
+  let validLines = filter ( (==) (read . unpack $ x) . user_idUsersV ) (usersT db) in
+    fmap usersLToUser validLines
 
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
