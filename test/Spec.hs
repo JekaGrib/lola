@@ -306,10 +306,11 @@ isExist "pics"    checkName where' values db = isExistInPics    checkName where'
 isExist "users"   checkName where' values db = isExistInUsers   checkName where' values (usersT db)
 isExist "authors" checkName where' values db = isExistInAuthors checkName where' values (authorsT db)
 
-isExistInPics    "pic_id"    "pic_id=?"  [x] pics    = not . null $ find ( (==) (read . unpack $ x) . pic_idPL ) pics
-isExistInUsers   "user_id"   "user_id=?" [x] users   = not . null $ find ( (==) (read . unpack $ x) . user_idUL ) users 
 --isExistInAuthors "author_id" "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
-isExistInAuthors "user_id"   "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
+isExistInPics    "pic_id"    "pic_id=?"    [x] pics    = not . null $ find ( (==) (read . unpack $ x) . pic_idPL ) pics
+isExistInUsers   "user_id"   "user_id=?"   [x] users   = not . null $ find ( (==) (read . unpack $ x) . user_idUL ) users 
+isExistInAuthors "user_id"   "user_id=?"   [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
+isExistInAuthors "author_id" "author_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . author_idAL ) authors
 
 
 insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
@@ -317,8 +318,9 @@ insertReturnInDbTest table returnName insNames insValues = StateT $ \(db,acts) -
   return $ insReturn table returnName insNames insValues db (INSERTDATA:acts)
 
 insReturn ::  String -> String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
-insReturn "pics"  returnName insNames insValues db acts = insReturnInPics  returnName insNames insValues db acts
-insReturn "users" returnName insNames insValues db acts = insReturnInUsers returnName insNames insValues db acts
+insReturn "pics"    returnName insNames insValues db acts = insReturnInPics    returnName insNames insValues db acts
+insReturn "users"   returnName insNames insValues db acts = insReturnInUsers   returnName insNames insValues db acts
+insReturn "authors" returnName insNames insValues db acts = insReturnInAuthors returnName insNames insValues db acts
 
 
 insReturnInPics :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
@@ -336,7 +338,15 @@ insReturnInUsers "user_id" ["password","first_name","last_name","user_pic_id","u
       [] -> ([1], ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
       _  -> let num = (user_idUL . last $ uT) + 1 in
         ([num], ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
-    
+
+insReturnInAuthors :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInAuthors "user_id" ["user_id","author_info"] [usId,auI] db acts = 
+    let aT = authorsT db in
+    case aT of
+      [] -> ([1], ( db {authorsT = [ AuthorsL 1 auI (read . unpack $ usId) ]}, acts ))
+      _  -> let num = (author_idAL . last $ aT) + 1 in
+        ([num], ( db {authorsT = aT ++ [ AuthorsL num auI (read . unpack $ usId) ]}, acts ))
+
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
   return (select table params where' values db, (db,SELECTDATA:acts))
@@ -344,7 +354,7 @@ selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
 select "users"   params where' values db = selectFromUsers   params where' values (usersT   db)
 select "authors" params where' values db = selectFromAuthors params where' values (authorsT db)
 select "drafts"  params where' values db = selectFromDrafts  params where' values (draftsT  db)
-
+select "key"     params where' values db = selectFromKey     params where' values (keyT  db)
 
 selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] users = 
   let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
@@ -355,14 +365,21 @@ selectFromUsers ["password","admin"] "user_id=?" [x] users =
 
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
-
-
 usersLToAuth (UsersL id pwd fN lN picId date admBool) = Auth pwd admBool
+
+selectFromKey ["create_admin_key"] "true" [] key = fmap OnlyTxt key
 
 selectFromAuthors ["author_id"] "user_id=?" [x] authors =
   let numX = read $ unpack x in
   let validLines = filter ( (==) numX . user_idAL ) authors in
     fmap (OnlyInt . author_idAL) validLines
+
+selectFromAuthors ["author_id","user_id","author_info"] "author_id=?" [x] authors =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . author_idAL ) authors in
+    fmap authorsLToAuthor  validLines
+
+authorsLToAuthor (AuthorsL id info usId) = Author id info usId
 
 selectFromDrafts ["draft_id"] "author_id=?" [x] drafts =
   let numX = read $ unpack x in
@@ -443,6 +460,10 @@ reqTest1 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathI
 reqTest2 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getUser/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["getUser","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 reqTest3 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=2&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "2"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
 reqTest4 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=6&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "6"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest5 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Chris&last_name=Wirt&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Chris"),("last_name",Just "Wirt"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest6 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createAuthor", rawQueryString = "?user_id=3&author_info=SuperAuthor&admin_id=4&password=1234dom", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createAuthor"], queryString = [("user_id",Just "3"),("author_info",Just "SuperAuthor"),("admin_id",Just "4"),("password",Just "1234dom")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest7 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getAuthor", rawQueryString = "?author_id=3&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","5c165125-7e3f-4891-9d7a-9c33f99d33ba"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------904345058567772230926790"),("Content-Length","170")], isSecure = False, pathInfo = ["getAuthor"], queryString = [("author_id",Just "3"),("admin_id",Just "4"),("password",Just "1234dom")], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+
 
 main :: IO ()
 main = hspec $ do
@@ -491,7 +512,33 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"ok\":true}"
-            
+  describe "createAdmin" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest5) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,LOGMSG,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest5) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"user_id\":11,\"first_name\":\"Chris\",\"last_name\":\"Wirt\",\"user_pic_id\":11,\"user_pic_url\":\"http://localhost:3000/picture/11\",\"user_create_date\":\"2020-02-20\"}"
+  describe "createAuthor" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest6) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,INSERTDATA,LOGMSG,LOGMSG,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest6) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"author_id\":6,\"user_id\":3,\"author_info\":\"SuperAuthor\"}"    
+  describe "getAuthor" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest7) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest7) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"author_id\":3,\"user_id\":6,\"author_info\":\"London is the capital\"}"
 
 
 

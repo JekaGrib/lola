@@ -1,0 +1,13 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getAuthor", rawQueryString = "?author_id=152&admin_id=5&password=y7ldAT", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","5c165125-7e3f-4891-9d7a-9c33f99d33ba"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------904345058567772230926790"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:46102, pathInfo = ["getAuthor"], queryString = [("author_id",Just "152"),("admin_id",Just "5"),("password",Just "y7ldAT")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get author command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (author_id) in the DB
+INFO: Entity (author_id) exist
+DEBUG: Select data from DB. Table: authors
+INFO: Data received from DB
+DEBUG: Output response: "{\"author_id\":152,\"user_id\":250,\"author_info\":\"Aliquam augue quam, sollicitudin vitae, consectetuer eget, rutrum at, lorem. Integer tincidunt ante vel ipsum. Praesent blandit lacinia erat. Vestibulum sed magna at nunc commodo placerat.\"}"

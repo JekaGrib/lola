@@ -73,7 +73,7 @@ data SelectType =
   | Auth     {pwdAu :: Text, admBoolAu :: Bool}
   | Cat      {cat_nameC :: Text, super_cat_idC :: Integer}
   | Tag      {tag_idT :: Integer, tag_nameT :: Text}
-  | Author   {author_idA :: Integer, user_idA :: Integer, author_infoA :: Text}
+  | Author   {author_idA :: Integer, author_infoA :: Text, user_idA :: Integer}
   | Comment  {comment_idC :: Integer, comment_textC :: Text, user_idC :: Integer}
   | User     {f_nameU :: Text, l_nameU :: Text, pic_idU :: Integer, user_create_dateU :: Day}
   | PostInfo {author_infoPI :: Text, post_namePI :: Text, post_cat_idPI :: Integer, post_textPI :: Text, post_pic_idPI :: Integer}
@@ -226,7 +226,7 @@ answerEx h req = do
       [auIdParam] <- mapM (checkParam req) paramsNames
       [auIdNum]   <- mapM tryRead [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
-      Author auId usId auInfo <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "author_id=?" [auIdParam] 
+      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "author_id=?" [auIdParam] 
       okHelper h $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Update author command"
@@ -353,7 +353,7 @@ answerEx h req = do
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
       isUserAuthorE h  usIdParam 
-      Author auId usId auInfo <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
+      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
       picId <- getPicId  h mPicUrlParam
       picsIds <- mapM (getPicId  h) picsUrls
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -451,7 +451,7 @@ answerEx h req = do
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
       isUserAuthorE h  usIdParam  
-      Author auId usId auInfo <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
+      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","user_id","author_info"] "user_id=?" [pack . show $ usIdParam] 
       OnlyInt postId <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
       picId <- getPicId  h mPicUrlParam
       picsIds <- mapM (getPicId  h) picsUrls
