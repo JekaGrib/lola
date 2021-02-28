@@ -49,7 +49,7 @@ data TestDB = TestDB
     usersT :: UsersT,
     authorsT :: AuthorsT,
     tagsT :: TagsT,
-    categoriesT :: CategoriesT,
+    categoriesT :: CatsT,
     postsT :: PostsT,
     commentsT :: CommentsT,
     postsPicsT :: PostsPicsT,
@@ -60,21 +60,34 @@ data TestDB = TestDB
   }
 
 
-type PicsT = [PicsL]
-data PicsL = PicsL { pic_idPicsV ::  Integer, pic_urlV :: Text }
-type KeyT  = [Text]
-type UsersT = [UsersL]
-data UsersL = UsersL { user_idUsersV :: Integer, passwordV :: Text, first_nameV :: Text, last_nameV :: Text, user_pic_idV :: Integer, user_create_dateV :: Day, admin :: Bool }
-type AuthorsT = [(Integer,Text,Integer)]
-type TagsT = [(Integer,Text)]
-type CategoriesT = [(Integer,Text,Maybe Integer)]
-type PostsT = [(Integer,Integer,Text,Day,Integer,Text,Integer)]
-type CommentsT = [(Integer,Text,Integer,Integer)]
-type PostsPicsT = [(Integer,Integer)]
-type PostsTagsT = [(Integer,Integer)]
-type DraftsT = [(Integer,Integer,Integer,Text,Integer,Text,Integer)]
-type DraftsPicsT = [(Integer,Integer)]
-type DraftsTagsT = [(Integer,Integer)]
+type PicsT       = [PicsL]
+type KeyT        = [Text]
+type UsersT      = [UsersL]
+type AuthorsT    = [AuthorsL]
+type TagsT       = [TagsL]
+type CatsT       = [CatsL]
+type PostsT      = [PostsL]
+type CommentsT   = [CommentsL]
+type PostsPicsT  = [PostsPicsL]
+type PostsTagsT  = [PostsTagsL]
+type DraftsT     = [DraftsL]
+type DraftsPicsT = [DraftsPicsL]
+type DraftsTagsT = [DraftsTagsL]
+
+data PicsL = PicsL { pic_idPL ::  Integer, pic_urlPL :: Text }
+data UsersL = UsersL { user_idUL :: Integer, passwordUL :: Text, first_nameUL :: Text, last_nameUL :: Text, user_pic_idUL :: Integer, user_create_dateUL :: Day, adminUL :: Bool }
+data AuthorsL = AuthorsL { author_idAL :: Integer, author_infoAL :: Text, user_idCL :: Integer }
+data TagsL = TagsL { tag_idTL :: Integer, tag_nameTL :: Text }
+data CatsL = CatsL { cat_idCL :: Integer, cat_nameCL :: Text, super_cat_idCL :: Maybe Integer }
+data PostsL = PostsL { post_idPL :: Integer, author_idPL :: Integer, post_namePL :: Text, post_create_datePL :: Day, post_cat_idPL :: Integer, post_textPL :: Text, post_pic_idPL :: Integer }
+data CommentsL = CommentsL { comment_idCL :: Integer, comment_textCL :: Integer, post_idCL :: Integer, user_idComL :: Integer }
+data PostsPicsL = PostsPicsL { post_idPPL :: Integer, pic_idPPL :: Integer }
+data PostsTagsL = PostsTagsL { post_idPTL :: Integer, tag_idPTL :: Integer }
+data DraftsL = DraftsL { draft_idDL :: Integer, post_idDL :: Maybe Integer, author_idDL :: Integer, drafft_nameDL :: Text, draft_cat_idDL :: Integer, draft_textDL :: Text, draft_pic_idDL :: Integer }
+data DraftsPicsL = DraftsPicsL { draft_idDPL :: Integer, pic_idDPL :: Integer }
+data DraftsTagsL = DraftsTagsL { draft_idDTL :: Integer, tag_idDTL :: Integer }
+
+
 
 logTest :: Priority -> String -> StateT (TestDB,[MockAction]) IO ()
 logTest prio text = StateT $ \(db,acts) -> 
@@ -82,21 +95,62 @@ logTest prio text = StateT $ \(db,acts) ->
 
 emptyDB = TestDB [] [] [] [] [] [] [] [] [] [] [] [] []
 
-picsL1 = PicsL 1 "https://www.publicdomainpictures.net/pictures/20000/t2/parapente.jpg"
-picsL2 = PicsL 2 "https://www.stockvault.net/data/2017/05/20/236363/thumb16.jpg"
-picsL3 = PicsL 3 "https://cdn.pixabay.com/photo/2016/07/22/18/39/daisy-1535532__340.jpg"
-picsL4 = PicsL 4 "https://img.freepik.com/free-photo/poster-with-vertical-frames-on-empty-white-wall-in-living-room-interior-with-blue-velvet-armchair-3d-rendering_41470-2907.jpg?size=626&ext=jpg&ga=GA1.2.42293934.1613723092"
-picsL5 = PicsL 5 "https://skitterphoto.com/photos/skitterphoto-9649-thumbnail.jpg"
+picsL1  = PicsL 1  "https://www.publicdomainpictures.net/pictures/20000/t2/parapente.jpg"
+picsL2  = PicsL 2  "https://www.stockvault.net/data/2017/05/20/236363/thumb16.jpg"
+picsL3  = PicsL 3  "https://cdn.pixabay.com/photo/2016/07/22/18/39/daisy-1535532__340.jpg"
+picsL4  = PicsL 4  "https://img.freepik.com/free-photo/poster-with-vertical-frames-on-empty-white-wall-in-living-room-interior-with-blue-velvet-armchair-3d-rendering_41470-2907.jpg?size=626&ext=jpg&ga=GA1.2.42293934.1613723092"
+picsL5  = PicsL 5  "https://skitterphoto.com/photos/skitterphoto-9649-thumbnail.jpg"
+picsL6  = PicsL 6  "https://cdn.pixabay.com/photo/2021/01/23/18/40/child-5943325__340.jpg"
+picsL7  = PicsL 7  "https://skitterphoto.com/photos/skitterphoto-9649-thumbnail.jpg"
+picsL8  = PicsL 8  "https://skitterphoto.com/photos/skitterphoto-9391-thumbnail.jpg"
+picsL9  = PicsL 9  "https://img.freepik.com/free-photo/confident-young-businessman-in-suit-standing-with-arms-folded_171337-18599.jpg?size=626&ext=jpg&ga=GA1.2.42293934.1613723092"
+picsL10 = PicsL 10 "https://skitterphoto.com/photos/skitterphoto-9777-thumbnail.jpg"
 
-picsT1 = [picsL1,picsL2,picsL3,picsL4,picsL5]
 
-usersL1 = UsersL 1 "12345678" "DELETED" "DELETED" 1 (fromGregorian 2018 01 01) True
-usersL2 = UsersL 2 "87654321" "Lidia" "Klimova"   2 (fromGregorian 2018 02 01) False
-usersL3 = UsersL 3 "kukui"    "Ira" "Medvedeva"   2 (fromGregorian 2018 03 01) False
-usersL4 = UsersL 4 "1234dom"  "Lisa" "Karimova"   3 (fromGregorian 2018 04 01) True
-usersL5 = UsersL 5 "335jsu"   "Anton" "Petrov"    4 (fromGregorian 2018 05 01) False
+picsT1 = [picsL1,picsL2,picsL3,picsL4,picsL5,picsL6,picsL7,picsL8,picsL9,picsL10]
 
-usersT1 = [usersL1,usersL2,usersL3,usersL4,usersL5]
+usersL1  = UsersL 1  "12345678" "DELETED" "DELETED"   1 (fromGregorian 2018 01 01) True
+usersL2  = UsersL 2  "87654321" "Lidia"   "Klimova"   2 (fromGregorian 2018 02 01) False
+usersL3  = UsersL 3  "kukui"    "Ira"     "Medvedeva" 2 (fromGregorian 2018 03 01) False
+usersL4  = UsersL 4  "1234dom"  "Lisa"    "Karimova"  3 (fromGregorian 2018 04 01) True
+usersL5  = UsersL 5  "335jsu"   "Anton"   "Petrov"    5 (fromGregorian 2018 05 01) False
+usersL6  = UsersL 6  "jghdljgd" "Vika"    "Petrov"    2 (fromGregorian 2018 07 01) False
+usersL7  = UsersL 7  "gfjdj123" "Luck"    "Petrov"    7 (fromGregorian 2018 07 09) True
+usersL8  = UsersL 8  "344los"   "Ben"     "Petrov"    7 (fromGregorian 2018 08 23) False
+usersL9  = UsersL 9  "057ccc"   "Den"     "Petrov"    9 (fromGregorian 2018 08 25) True
+usersL10 = UsersL 10 "KIH55i"   "Victor"  "Petrov"    8 (fromGregorian 2018 11 01) False
+
+usersT1 = [usersL1,usersL2,usersL3,usersL4,usersL5,usersL6,usersL7,usersL8,usersL9,usersL10]
+
+authorsL1 = AuthorsL 1 "DELETED"                1
+authorsL2 = AuthorsL 2 "i don`t like it"        4
+authorsL3 = AuthorsL 3 "London is the capital"  6
+authorsL4 = AuthorsL 4 "i have a cat"           8
+authorsL5 = AuthorsL 5 "I have been in Germany" 9
+
+authorsT1 = [authorsL1, authorsL2, authorsL3, authorsL4, authorsL5]
+
+tagsL1  = TagsL 1  "Cats"
+tagsL2  = TagsL 2  "Dogs"
+tagsL3  = TagsL 3  "Weather"
+tagsL4  = TagsL 4  "Love"
+tagsL5  = TagsL 5  "Winter"
+tagsL6  = TagsL 6  "Sommer"
+tagsL7  = TagsL 7  "Autumn"
+tagsL8  = TagsL 8  "Spring"
+tagsL9  = TagsL 9  "Mondey"
+tagsL10 = TagsL 10 "Home"
+tagsL11 = TagsL 11 "Work"
+tagsL12 = TagsL 12 "Medicine"
+tagsL13 = TagsL 13 "Life"
+tagsL14 = TagsL 14 "Disco"
+tagsL15 = TagsL 15 "Music"
+
+tagsT1 = [tagsL1, tagsL2, tagsL3, tagsL4, tagsL5, tagsL6, tagsL7, tagsL8, tagsL9, tagsL10, tagsL11, tagsL12, tagsL13, tagsL14, tagsL15]
+
+
+
+
 
 readGregorian x@(a:b:c:d:'-':e:f:'-':g:h:[]) = fromGregorian (yearG x) (monG x) (dayG x)
 dayG (a:b:c:d:'-':e:f:'-':g:h:[]) = read (g:h:[])
@@ -113,8 +167,8 @@ isExistInDbTest table checkName where' values = StateT $ \(db,acts) -> do
 
 isExist "pics"  checkName where' values db = isExistInPics  checkName where' values (picsT db)
 isExist "users" checkName where' values db = isExistInUsers checkName where' values (usersT db)
-isExistInPics "pic_id" "pic_id=?" [x] pics = elem (read . unpack $ x) (fmap pic_idPicsV pics)
-isExistInUsers "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUsersV ) users 
+isExistInPics "pic_id" "pic_id=?" [x] pics = elem (read . unpack $ x) (fmap pic_idPL pics)
+isExistInUsers "user_id" "user_id=?" [x] users = not . null $ find ( (==) (read . unpack $ x) . user_idUL ) users 
 
 
 insertReturnInDbTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO [Integer]
@@ -131,7 +185,7 @@ insReturnInPics "pic_id" ["pic_url"] [url] db acts =
   let pT = picsT db in
     case pT of
       [] -> ([1], (db {picsT = [ PicsL 1 url ]}, acts))
-      _  -> let num = (pic_idPicsV . last $ pT) in
+      _  -> let num = (pic_idPL . last $ pT) + 1 in
         ([num], (db {picsT = pT ++ [ PicsL num url ]}, acts))
  
 insReturnInUsers :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
@@ -139,7 +193,7 @@ insReturnInUsers "user_id" ["password","first_name","last_name","user_pic_id","u
     let uT = usersT db in
     case uT of
       [] -> ([1], ( db {usersT = [ UsersL 1 pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
-      _  -> let num = (user_idUsersV . last $ uT) in
+      _  -> let num = (user_idUL . last $ uT) + 1 in
         ([num], ( db {usersT = uT ++ [ UsersL num pwd fN lN (read . unpack $ pI) (readGregorian . unpack $ cD) (read . unpack $ aD) ]}, acts ))
     
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
@@ -149,7 +203,7 @@ selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
 select "users" params where' values db = selectFromUsers params where' values db
 
 selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] db = 
-  let validLines = filter ( (==) (read . unpack $ x) . user_idUsersV ) (usersT db) in
+  let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) (usersT db) in
     fmap usersLToUser validLines
 
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
@@ -187,7 +241,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest1) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe` 
-        "{\"user_id\":5,\"first_name\":\"Kate\",\"last_name\":\"Grick\",\"user_pic_id\":5,\"user_pic_url\":\"http://localhost:3000/picture/5\",\"user_create_date\":\"2020-02-20\"}"
+        "{\"user_id\":11,\"first_name\":\"Kate\",\"last_name\":\"Grick\",\"user_pic_id\":11,\"user_pic_url\":\"http://localhost:3000/picture/11\",\"user_create_date\":\"2020-02-20\"}"
   describe "getUser" $ do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest2) (testDB1,[])

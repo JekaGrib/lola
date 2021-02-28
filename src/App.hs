@@ -58,9 +58,7 @@ data Handle m = Handle
     getBody           :: Request -> m BSL.ByteString
     }
 
---forall (m :: * -> *) q r.(Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
 
-data (FromRow r) => R r = R {fromR :: r } | R1 {fromR1 :: Only Integer}
 
 data SelectType = 
   OnlyInt {fromOnlyInt :: Integer} 
@@ -76,13 +74,6 @@ data SelectType =
   | Draft    {draft_idD :: Integer, author_infoD :: Text, post_idD :: Integer, draft_nameD :: Text, draft_cat_idD :: Integer, draft_textD :: Text, draft_pic_idD :: Integer}
   | Post     {post_idP :: Integer, author_idP :: Integer, author_infoP :: Text, user_idP :: Integer, post_nameP :: Text, post_create_dateU :: Day, post_cat_idP :: Integer, post_textP :: Text, post_pic_idP :: Integer}
     deriving (Eq,Show)
-
-  -- | SelTupl4 { fromSelTupl4 :: (Text,Text,Integer,Day)}
-  -- | SelTupl5 { fromSelTupl5 :: (Text,Text,Integer,Text,Integer)}
-  -- | SelTupl6 { fromSelTupl6 :: (Integer,Text,Text,Integer,Text,Integer)}
-  -- | SelTupl7 { fromSelTupl7 :: (Integer,Integer,Text,Integer,Text,Integer,Text)}
-  -- | SelTupl8 { fromSelTupl8 :: (Integer,Integer,Text,Text,Day,Integer,Text,Integer)}
-  -- | SelTupl9 { fromSelTupl9 :: (Integer,Integer,Integer,Text,Text,Day,Integer,Text,Integer)}
     
   
 instance FromRow SelectType where
@@ -100,13 +91,6 @@ instance FromRow SelectType where
     <|> (OnlyTxt <$> field)
     <|> (OnlyInt <$> field) 
 
-
-
-
---data Resultt = OInt Integer | OTxt Text
-
---instance FromRow Resultt where
-  --fromRow =  (OTxt <$> field) <|> (OInt <$> field) 
 
 
 defUsId = 1
@@ -191,7 +175,7 @@ answerEx h req = do
       case check of
         True -> do
           OnlyInt authorId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]  
-          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ (authorId :: Integer)]
+          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ defAuthId,pack . show $ authorId]
           draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
           let draftsIds = fmap fromOnlyInt draftsIdsSel
           deleteAllAboutDrafts h draftsIds
@@ -1232,74 +1216,8 @@ inCatResp ((x,y):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , super
 
 
 
-firstThree (a,b,c) = a
-firstFour  (a,b,c,d) = a
-firstFive  (a,b,c,d,e) = a
-firstSix   (a,b,c,d,e,f) = a
-firstSeven (a,b,c,d,e,f,g) = a
-firstEight (a,b,c,d,e,f,g,h) = a
-firstNine  (a,b,c,d,e,f,g,h,i) = a
-firstTen   (a,b,c,d,e,f,g,h,i,j) = a
-
+firstThree  (a,b,c) = a
 secondThree (a,b,c) = b
-secondFour  (a,b,c,d) = b
-secondFive  (a,b,c,d,e) = b
-secondSix   (a,b,c,d,e,f) = b
-secondSeven (a,b,c,d,e,f,g) = b
-secondEight (a,b,c,d,e,f,g,h) = b
-secondNine  (a,b,c,d,e,f,g,h,i) = b
-secondTen   (a,b,c,d,e,f,g,h,i,j) = b
+thirdThree  (a,b,c) = c
 
-thirdThree (a,b,c) = c
-thirdFour  (a,b,c,d) = c
-thirdFive  (a,b,c,d,e) = c
-thirdSix   (a,b,c,d,e,f) = c
-thirdSeven (a,b,c,d,e,f,g) = c
-thirdEight (a,b,c,d,e,f,g,h) = c
-thirdNine  (a,b,c,d,e,f,g,h,i) = c
-thirdTen   (a,b,c,d,e,f,g,h,i,j) = c
-
-fourthFour  (a,b,c,d) = d
-fourthFive  (a,b,c,d,e) = d
-fourthSix   (a,b,c,d,e,f) = d
-fourthSeven (a,b,c,d,e,f,g) = d
-fourthEight (a,b,c,d,e,f,g,h) = d
-fourthNine  (a,b,c,d,e,f,g,h,i) = d
-fourthTen   (a,b,c,d,e,f,g,h,i,j) = d
-
-fifthFive  (a,b,c,d,e) = e
-fifthSix   (a,b,c,d,e,f) = e
-fifthSeven (a,b,c,d,e,f,g) = e
-fifthEight (a,b,c,d,e,f,g,h) = e
-fifthNine  (a,b,c,d,e,f,g,h,i) = e
-fifthTen   (a,b,c,d,e,f,g,h,i,j) = e
-
-sixthSix   (a,b,c,d,e,f) = f
-sixthSeven (a,b,c,d,e,f,g) = f
-sixthEight (a,b,c,d,e,f,g,h) = f
-sixthNine  (a,b,c,d,e,f,g,h,i) = f
-sixthTen   (a,b,c,d,e,f,g,h,i,j) = f
-
-seventhSeven (a,b,c,d,e,f,g) = g
-seventhEight (a,b,c,d,e,f,g,h) = g
-seventhNine  (a,b,c,d,e,f,g,h,i) = g
-seventhTen   (a,b,c,d,e,f,g,h,i,j) = g
-
-eighthEight (a,b,c,d,e,f,g,h) = h
-eighthNine  (a,b,c,d,e,f,g,h,i) = h
-eighthTen   (a,b,c,d,e,f,g,h,i,j) = h
-
-ninthNine  (a,b,c,d,e,f,g,h,i) = i
-ninthTen   (a,b,c,d,e,f,g,h,i,j) = i
-
-
-{-fee :: Integer -> Integer -> ExceptT String IO Integer
-fee a b 
-  |a <= b = return a
-  | True  = throwE $ "a > b"
-
-lee :: Integer -> Integer -> ExceptT String IO Integer
-lee d c
-  | d + c > 100 = return d
-  | True        = throwE $ "d+c < 100"-}
 
