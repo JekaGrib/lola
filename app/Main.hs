@@ -90,7 +90,7 @@ main :: IO ()
 main = do
   addDefaultParameters
   time <- getTime                          
-  let currLogPath = "./PostApp.LogSession: " ++ show time ++ " bot.log"
+  let currLogPath = "./PostApp.LogSession: " ++ show time ++ " .log"
   let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
   let config = Config 1 1 1 1 
   run 3000 (application config handleLog)

@@ -759,8 +759,7 @@ checkRelationCats h  catIdNum superCatIdNum
 
 findAllSubCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Integer -> ExceptT ReqError m [Integer]
 findAllSubCats h  catId = do
-  catsIdsSel <- selectListFromDbE h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId] 
-  let catsIds = fmap fromOnlyInt catsIdsSel
+  catsIds <- findOneLevelSubCats h catId 
   case catsIds of
     [] -> return [catId]
     _  -> do       
