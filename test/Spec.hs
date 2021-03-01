@@ -40,7 +40,7 @@ import qualified Database.PostgreSQL.Simple.FromField as FF
 import           Database.PostgreSQL.Simple.ToRow
 
 
-data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA
+data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA | INSERTMANYDATA
   deriving (Eq,Show)
 
 data TestDB = TestDB 
@@ -118,10 +118,10 @@ usersL2  = UsersL 2  "87654321" "Lidia"   "Klimova"   2 (fG 2018 02 01) False
 usersL3  = UsersL 3  "kukui"    "Ira"     "Medvedeva" 2 (fG 2018 03 01) False
 usersL4  = UsersL 4  "1234dom"  "Lisa"    "Karimova"  3 (fG 2018 04 01) True
 usersL5  = UsersL 5  "335jsu"   "Anton"   "Petrov"    5 (fG 2018 05 01) False
-usersL6  = UsersL 6  "jghdljgd" "Vika"    "Petrov"    2 (fG 2018 07 01) False
+usersL6  = UsersL 6  "057ccc"   "Vika"    "Petrov"    2 (fG 2018 07 01) False
 usersL7  = UsersL 7  "gfjdj123" "Luck"    "Petrov"    7 (fG 2018 07 09) True
 usersL8  = UsersL 8  "344los"   "Ben"     "Petrov"    7 (fG 2018 08 23) False
-usersL9  = UsersL 9  "057ccc"   "Den"     "Petrov"    9 (fG 2018 08 25) True
+usersL9  = UsersL 9  "rtrfgh"   "Den"     "Petrov"    9 (fG 2018 08 25) True
 usersL10 = UsersL 10 "KIH55i"   "Victor"  "Petrov"    8 (fG 2018 11 01) False
 
 usersT1 = [usersL1,usersL2,usersL3,usersL4,usersL5,usersL6,usersL7,usersL8,usersL9,usersL10]
@@ -284,6 +284,8 @@ update "posts"      set where' values db acts = updateInPosts    set where' valu
 update "authors"    set where' values db acts = updateInAuthors  set where' values db acts
 update "categories" set where' values db acts = updateInCats     set where' values db acts
 update "drafts"     set where' values db acts = updateInDrafts   set where' values db acts
+update "tags"       set where' values db acts = updateInTags     set where' values db acts
+
 
 updateInComments "user_id=?" "user_id=?" [x,y] db acts =
   let numX = (read $ unpack x :: Integer) in
@@ -342,6 +344,13 @@ updateInCats "category_name=?,super_category_id=?" "category_id=?" [x,y,z] db ac
   let newDb = db {catsT = newCatsT} in
     ((), (newDb,acts))
 
+updateInTags "tag_name=?" "tag_id=?" [x,y] db acts =
+  let numY = (read $ unpack y :: Integer) in
+  let updateFoo line acc = if tag_idTL line == numY then ( (line {tag_nameTL = x}) : acc) else (line:acc) in
+  let newTagsT = foldr updateFoo [] (tagsT db) in
+  let newDb = db {tagsT = newTagsT} in
+    ((), (newDb,acts))
+
 isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
 isExistInDbTest table checkName where' values = StateT $ \(db,acts) -> do
   return ( isExist table checkName where' values db , (db,EXISTCHEK:acts))
@@ -372,6 +381,7 @@ insReturn "users"      returnName insNames insValues db acts = insReturnInUsers 
 insReturn "authors"    returnName insNames insValues db acts = insReturnInAuthors    returnName insNames insValues db acts
 insReturn "categories" returnName insNames insValues db acts = insReturnInCategories returnName insNames insValues db acts
 insReturn "tags"       returnName insNames insValues db acts = insReturnInTags       returnName insNames insValues db acts
+insReturn "drafts"     returnName insNames insValues db acts = insReturnInDrafts     returnName insNames insValues db acts
 
 
 
@@ -422,6 +432,32 @@ insReturnInTags "tag_id" ["tag_name"] [tN] db acts =
       _  -> let num = (tag_idTL . last $ tT) + 1 in
         ([num], ( db {tagsT = tT ++ [ TagsL num tN ]}, acts ))
 
+insReturnInDrafts :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInDrafts "draft_id" ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] [auI,drN,catI,txt,picI] db acts = 
+    let dT = draftsT db in
+    case dT of
+      [] -> ([1], ( db {draftsT = [ DraftsL 1 Nothing (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+      _  -> let num = (draft_idDL . last $ dT) + 1 in
+        ([num], ( db {draftsT = dT ++ [ DraftsL num Nothing (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+ 
+insertManyInDbTest :: String -> [String] -> [(Integer,Integer)] -> StateT (TestDB,[MockAction]) IO ()
+insertManyInDbTest table insNames insValues = StateT $ \(db,acts) -> do
+  return $ (() , (insMany table insNames insValues db, (INSERTMANYDATA:acts)))
+
+insMany "draftspics" names values db = insManyInDraftsPics names values db
+insMany "draftstags" names values db = insManyInDraftsTags names values db
+
+insManyInDraftsPics ["draft_id","pic_id"] [(x,y)] db =
+  let newDraftsPicsT = (draftsPicsT db) ++ [DraftsPicsL x y] in
+    db {draftsPicsT = newDraftsPicsT} 
+insManyInDraftsPics ["draft_id","pic_id"] ((x,y):values) db = insManyInDraftsPics ["draft_id","pic_id"] values (insManyInDraftsPics ["draft_id","pic_id"] [(x,y)] db)  
+
+insManyInDraftsTags ["draft_id","tag_id"] [(x,y)] db =
+  let newDraftsTagsT = (draftsTagsT db) ++ [DraftsTagsL x y] in
+    db {draftsTagsT = newDraftsTagsT}
+insManyInDraftsTags ["draft_id","tag_id"] ((x,y):values) db = insManyInDraftsTags ["draft_id","tag_id"] values (insManyInDraftsTags ["draft_id","tag_id"] [(x,y)] db) 
+    
+
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
   return (select table params where' values db, (db,SELECTDATA:acts))
@@ -439,6 +475,10 @@ selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "use
 selectFromUsers ["password","admin"] "user_id=?" [x] users = 
   let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
     fmap usersLToAuth validLines
+selectFromUsers ["password"] "user_id=?" [x] users = 
+  let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
+    fmap (OnlyTxt . passwordUL) validLines
+
 
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
@@ -453,6 +493,10 @@ selectFromAuthors ["author_id"] "user_id=?" [x] authors =
 selectFromAuthors ["author_id","author_info","user_id"] "author_id=?" [x] authors =
   let numX = read $ unpack x in
   let validLines = filter ( (==) numX . author_idAL ) authors in
+    fmap authorsLToAuthor  validLines
+selectFromAuthors ["author_id","author_info","user_id"] "user_id=?" [x] authors =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . user_idAL ) authors in
     fmap authorsLToAuthor  validLines
 
 authorsLToAuthor (AuthorsL id info usId) = Author id info usId
@@ -481,6 +525,18 @@ selectFromTags ["tag_name"] "tag_id=?" [x] tags =
   let validLines = filter ( (==) numX . tag_idTL ) tags in
     fmap (OnlyTxt . tag_nameTL) validLines
 
+selectFromTags ["tag_id","tag_name"] where' values tags =
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let validLines = findValidLinesInTags (unOr where') numValues tags in
+    fmap tagsLToTag validLines
+
+tagsLToTag (TagsL id name) = Tag id name
+
+findValidLinesInTags ["tag_id=?"] [x] tags = filter ( (==) x . tag_idTL ) tags
+findValidLinesInTags ("tag_id=?":ys) (x:xs) tags = findValidLinesInTags ys xs (findValidLinesInTags ["tag_id=?"] [x] tags)
+
+
 deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
 deleteFromDbTest table where' values = StateT $ \(db,acts) -> do
   return $ delete' table where' values db (DELETEDATA:acts)
@@ -492,6 +548,9 @@ delete' "drafts"     where' values db acts = deleteFromDrafts where' values db a
 delete' "draftspics" where' values db acts = deleteFromDraftsPics where' values db acts
 delete' "draftstags" where' values db acts = deleteFromDraftsTags where' values db acts
 delete' "categories" where' values db acts = deleteFromCats where' values db acts
+delete' "tags"       where' values db acts = deleteFromTags where' values db acts
+delete' "poststags"  where' values db acts = deleteFromPostsTags where' values db acts
+
 
 
 deleteFromUsers "user_id=?" [x] db acts = 
@@ -548,6 +607,26 @@ deleteFromDraftsTags where' values db acts =
 makeNewDraftsTagsT [] [] draftstags = draftstags
 makeNewDraftsTagsT ["draft_id=?"] [numX] draftstags = filter ((/=) numX . draft_idDTL) draftstags
 makeNewDraftsTagsT ("draft_id=?":ys) (numX:xs) draftstags = makeNewDraftsTagsT ys xs (makeNewDraftsTagsT ["draft_id"] [numX] draftstags) 
+makeNewDraftsTagsT ["tag_id=?"] [numX] draftstags = filter ((/=) numX . tag_idDTL) draftstags
+
+deleteFromTags "tag_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newTagsT = filter  ((==) numX . tag_idTL) (tagsT db) in
+  let newDb = db {tagsT = newTagsT} in
+    ((), (newDb,acts))
+
+deleteFromPostsTags where' values db acts = 
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let newPostsTagsT = makeNewPostsTagsT (unOr where') numValues (postsTagsT db) in
+  let newDb = db {postsTagsT = newPostsTagsT} in
+    ((), (newDb,acts))    
+
+--makeNewDraftsTagsT [] [] draftstags = draftstags
+--makeNewDraftsTagsT ["draft_id=?"] [numX] draftstags = filter ((/=) numX . draft_idDTL) draftstags
+--makeNewDraftsTagsT ("draft_id=?":ys) (numX:xs) draftstags = makeNewDraftsTagsT ys xs (makeNewDraftsTagsT ["draft_id"] [numX] draftstags) 
+makeNewPostsTagsT ["tag_id=?"] [numX] poststags = filter ((/=) numX . tag_idPTL) poststags
+
 
 handleLog1 = LogHandle (LogConfig DEBUG) logTest
 handle1 = Handle 
@@ -558,6 +637,7 @@ handle1 = Handle
     deleteFromDb = deleteFromDbTest,
     isExistInDb = isExistInDbTest,
     insertReturnInDb = insertReturnInDbTest,
+    insertManyInDb = insertManyInDbTest,
     getDay = getDayTest,
     httpAction = HT.httpLBS,
     getBody = getBodyTest1
@@ -581,11 +661,11 @@ reqTest14 = reqTest1 {rawPathInfo = "/updateCategory"   , rawQueryString = "?cat
 reqTest15 = reqTest1 {rawPathInfo = "/deleteCategory"   , rawQueryString = "?category_id=11&admin_id=4&password=1234dom", pathInfo = ["deleteCategory"], queryString = [("category_id",Just "11"),("admin_id",Just "4"),("password",Just "1234dom")]}
 reqTest16 = reqTest1 {rawPathInfo = "/createTag"        , rawQueryString = "?tag_name=Bears&admin_id=4&password=1234dom", pathInfo = ["createTag"], queryString = [("tag_name",Just "Bears"),("admin_id",Just "4"),("password",Just "1234dom")]}
 reqTest17 = reqTest1 {rawPathInfo = "/getTag/12"        , rawQueryString = "", pathInfo = ["getTag","12"], queryString = []}
+reqTest18 = reqTest1 {rawPathInfo = "/updateTag"        , rawQueryString = "?tag_id=7&tag_name=King&admin_id=4&password=1234dom", pathInfo = ["updateTag"], queryString = [("tag_id",Just "7"),("tag_name",Just "King"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest19 = reqTest1 {rawPathInfo = "/deleteTag"        , rawQueryString = "?tag_id=13&admin_id=4&password=1234dom", pathInfo = ["deleteTag"], queryString = [("tag_id",Just "13"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest20 = reqTest1 {rawPathInfo = "/createNewDraft"   , rawQueryString = "", pathInfo = ["createNewDraft"], queryString = []}
 
-
-reqTest50 = reqTest1 {rawPathInfo = "/createNewDraft", rawQueryString = "", pathInfo = ["createNewDraft"], queryString = []}
-
-getBodyTest1 reqTest50 = return $ "{\"user_id\": 5,\"password\":\"y7ldAT\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
+getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
 
 main :: IO ()
 main = hspec $ do
@@ -751,15 +831,33 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"tag_id\":12,\"tag_name\":\"Medicine\"}"
-  describe "createNewDraft" $  do
+  describe "updateTag" $  do
     it "work" $ do
-      state <- execStateT (runExceptT $ answerEx handle1 reqTest50) (testDB1,[])
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest18) (testDB1,[])
       (reverse . snd $ state) `shouldBe` 
-        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG]
-      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest50) (testDB1,[])
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,UPDATEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest18) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"category_id\":17,\"category_name\":\"Juzz\",\"super_category\":\"NULL\"}"  
+        "{\"tag_id\":7,\"tag_name\":\"King\"}"
+  describe "deleteTag" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest19) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA,DELETEDATA,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest19) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+  describe "createNewDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest20) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest20) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"draft_id\":6,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"  
 
 
 

@@ -27,7 +27,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4 )
+import           Data.List                      ( intercalate, zip4, nub )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -345,7 +345,7 @@ answerEx h req = do
       let catIdParam   = draft_cat_id body
       let txtParam     = draft_text1  body
       let mPicUrlParam = draft_main_pic_url body
-      let tagsIds      = draft_tags_ids $ body
+      let tagsIds      = nub . draft_tags_ids $ body
       let picsUrls     = draft_pics_urls $ body
       isExistInDbE h "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
@@ -442,7 +442,7 @@ answerEx h req = do
       let catIdParam   = draft_cat_id body
       let txtParam     = draft_text1  body
       let mPicUrlParam = draft_main_pic_url body
-      let tagsIds      = draft_tags_ids $ body
+      let tagsIds      = nub . draft_tags_ids $ body
       let picsUrls     = draft_pics_urls $ body
       isExistInDbE h "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
