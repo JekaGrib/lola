@@ -1,0 +1,70 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/2", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","cb6eedb9-238a-4108-bd12-2c114ce5107b"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------068933711786315940270069"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:48500, pathInfo = ["getCategory","2"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":2,\"category_name\":\"felis\",\"sub_categories\":[],\"super_category\":\"NULL\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","19f90acd-0789-4671-920a-52f50a0c662d"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------335973629649965791356240"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:48500, pathInfo = ["getCategory","3"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":3,\"category_name\":\"quisque\",\"sub_categories\":[33,50,60],\"super_category\":\"NULL\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/5", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","de9862b8-fce3-486c-974c-c8ad83da2959"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------593603058318878745565634"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:48500, pathInfo = ["getCategory","5"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":5,\"category_name\":\"at\",\"sub_categories\":[40],\"super_category\":\"NULL\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/150", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","7ca98ab3-9e69-4077-bcea-b639cfe8401b"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------626767385756802826819882"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:48500, pathInfo = ["getCategory","150"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":150,\"category_name\":\"amet\",\"sub_categories\":[],\"super_category\":{\"category_id\":135,\"category_name\":\"augue\",\"sub_categories\":[142,150,180],\"super_category\":{\"category_id\":88,\"category_name\":\"dolor\",\"sub_categories\":[107,124,135],\"super_category\":{\"category_id\":37,\"category_name\":\"lacus\",\"sub_categories\":[88,99],\"super_category\":{\"category_id\":15,\"category_name\":\"donec\",\"sub_categories\":[37,46,58],\"super_category\":\"NULL\"}}}}}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/24", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","92782256-7c9a-4f3c-b251-6c02b1be4849"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------386824831340480139693178"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:48526, pathInfo = ["getCategory","24"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":24,\"category_name\":\"ipsum\",\"sub_categories\":[],\"super_category\":{\"category_id\":14,\"category_name\":\"sollicitudin\",\"sub_categories\":[24,49],\"super_category\":\"NULL\"}}"

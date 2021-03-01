@@ -49,7 +49,7 @@ data TestDB = TestDB
     usersT :: UsersT,
     authorsT :: AuthorsT,
     tagsT :: TagsT,
-    categoriesT :: CatsT,
+    catsT :: CatsT,
     postsT :: PostsT,
     commentsT :: CommentsT,
     postsPicsT :: PostsPicsT,
@@ -281,6 +281,7 @@ updateInDbTest table set where' values = StateT $ \(db,acts) -> do
 
 update "comments" set where' values db acts = updateInComments set where' values db acts
 update "posts"    set where' values db acts = updateInPosts    set where' values db acts
+update "authors"  set where' values db acts = updateInAuthors  set where' values db acts
 
 updateInComments "user_id=?" "user_id=?" [x,y] db acts =
   let numX = (read $ unpack x :: Integer) in
@@ -296,6 +297,14 @@ updateInPosts "author_id=?" "author_id=?" [x,y] db acts =
   let updateFoo line acc = case author_idPL line of {numY -> ((line {author_idPL = numX}) : acc) ; _ -> (line:acc)} in
   let newPostsT = foldr updateFoo [] (postsT db) in
   let newDb = db {postsT = newPostsT} in
+    ((), (newDb,acts))
+
+updateInAuthors "author_info=?,user_id=?" "author_id=?" [x,y,z] db acts =
+  let numY = (read $ unpack y :: Integer) in
+  let numZ = (read $ unpack z :: Integer) in
+  let updateFoo line acc = case author_idAL line of {numZ -> ((line {author_infoAL = x,user_idAL = numY}) : acc) ; _ -> (line:acc)} in
+  let newAuthorsT = foldr updateFoo [] (authorsT db) in
+  let newDb = db {authorsT = newAuthorsT} in
     ((), (newDb,acts))
 
 isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO Bool
@@ -318,9 +327,10 @@ insertReturnInDbTest table returnName insNames insValues = StateT $ \(db,acts) -
   return $ insReturn table returnName insNames insValues db (INSERTDATA:acts)
 
 insReturn ::  String -> String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
-insReturn "pics"    returnName insNames insValues db acts = insReturnInPics    returnName insNames insValues db acts
-insReturn "users"   returnName insNames insValues db acts = insReturnInUsers   returnName insNames insValues db acts
-insReturn "authors" returnName insNames insValues db acts = insReturnInAuthors returnName insNames insValues db acts
+insReturn "pics"       returnName insNames insValues db acts = insReturnInPics       returnName insNames insValues db acts
+insReturn "users"      returnName insNames insValues db acts = insReturnInUsers      returnName insNames insValues db acts
+insReturn "authors"    returnName insNames insValues db acts = insReturnInAuthors    returnName insNames insValues db acts
+insReturn "categories" returnName insNames insValues db acts = insReturnInCategories returnName insNames insValues db acts
 
 
 insReturnInPics :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
@@ -346,6 +356,14 @@ insReturnInAuthors "user_id" ["user_id","author_info"] [usId,auI] db acts =
       [] -> ([1], ( db {authorsT = [ AuthorsL 1 auI (read . unpack $ usId) ]}, acts ))
       _  -> let num = (author_idAL . last $ aT) + 1 in
         ([num], ( db {authorsT = aT ++ [ AuthorsL num auI (read . unpack $ usId) ]}, acts ))
+
+insReturnInCategories :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInCategories "category_id" ["category_name"] [cN] db acts = 
+    let cT = catsT db in
+    case cT of
+      [] -> ([1], ( db {catsT = [ CatsL 1 cN Nothing]}, acts ))
+      _  -> let num = (cat_idCL . last $ cT) + 1 in
+        ([num], ( db {catsT = cT ++ [ CatsL num cN Nothing ]}, acts ))
 
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
@@ -452,18 +470,25 @@ handle1 = Handle
     isExistInDb = isExistInDbTest,
     insertReturnInDb = insertReturnInDbTest,
     getDay = getDayTest,
-    httpAction = HT.httpLBS
+    httpAction = HT.httpLBS,
+    getBody = getBodyTest1
     }
 
-reqTest0 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest1 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Kate&last_name=Grick&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Kate"),("last_name",Just "Grick"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest2 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getUser/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["getUser","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest3 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=2&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "2"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest4 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/deleteUser", rawQueryString = "?user_id=6&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","06b089fb-9736-4179-867f-2baed972a4fd"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------194160876453379804673763"),("Content-Length","170")], isSecure = False, pathInfo = ["deleteUser"], queryString = [("user_id",Just "6"),("admin_id",Just "4"),("password",Just "1234dom")],  requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest5 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createAdmin", rawQueryString = "?password=654321&first_name=Chris&last_name=Wirt&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Chris"),("last_name",Just "Wirt"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest6 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createAuthor", rawQueryString = "?user_id=3&author_info=SuperAuthor&admin_id=4&password=1234dom", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createAuthor"], queryString = [("user_id",Just "3"),("author_info",Just "SuperAuthor"),("admin_id",Just "4"),("password",Just "1234dom")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
-reqTest7 = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/getAuthor", rawQueryString = "?author_id=3&admin_id=4&password=1234dom", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","5c165125-7e3f-4891-9d7a-9c33f99d33ba"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------904345058567772230926790"),("Content-Length","170")], isSecure = False, pathInfo = ["getAuthor"], queryString = [("author_id",Just "3"),("admin_id",Just "4"),("password",Just "1234dom")], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest0  = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/test/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","6189d61d-fa65-4fb6-a578-c4061535e7ef"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------595887703656508108682668"),("Content-Length","170")], isSecure = False, pathInfo = ["test","3"], queryString = [], requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest1  = defaultRequest {requestMethod = "GET", httpVersion = http11, rawPathInfo = "/createUser", rawQueryString = "?password=654321&first_name=Kate&last_name=Grick&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940", requestHeaders = [("Host","localhost:3000"),("User-Agent","curl/7.68.0"),("Accept","*/*")], isSecure = False, pathInfo = ["createUser"], queryString = [("password",Just "654321"),("first_name",Just "Kate"),("last_name",Just "Grick"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940")], requestBodyLength = KnownLength 0, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+reqTest2  = reqTest1 {rawPathInfo = "/getUser/3"     , rawQueryString = "", pathInfo = ["getUser","3"], queryString = []}
+reqTest3  = reqTest1 {rawPathInfo = "/deleteUser"    , rawQueryString = "?user_id=2&admin_id=4&password=1234dom", pathInfo = ["deleteUser"], queryString = [("user_id",Just "2"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest4  = reqTest1 {rawPathInfo = "/deleteUser"    , rawQueryString = "?user_id=6&admin_id=4&password=1234dom", pathInfo = ["deleteUser"], queryString = [("user_id",Just "6"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest5  = reqTest1 {rawPathInfo = "/createAdmin"   , rawQueryString = "?password=654321&first_name=Chris&last_name=Wirt&user_pic_url=https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress%26cs=tinysrgb%26dpr=2%26h=650%26w=940&create_admin_key=lola", pathInfo = ["createAdmin"], queryString = [("password",Just "654321"),("first_name",Just "Chris"),("last_name",Just "Wirt"),("user_pic_url",Just "https://images.pexels.com/photos/4617160/pexels-photo-4617160.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"),("create_admin_key",Just "lola")]}
+reqTest6  = reqTest1 {rawPathInfo = "/createAuthor"  , rawQueryString = "?user_id=3&author_info=SuperAuthor&admin_id=4&password=1234dom", pathInfo = ["createAuthor"], queryString = [("user_id",Just "3"),("author_info",Just "SuperAuthor"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest7  = reqTest1 {rawPathInfo = "/getAuthor"     , rawQueryString = "?author_id=3&admin_id=4&password=1234dom", pathInfo = ["getAuthor"], queryString = [("author_id",Just "3"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest8  = reqTest1 {rawPathInfo = "/updateAuthor"  , rawQueryString = "?author_id=3&author_info=Very funny&user_id=7&admin_id=4&password=1234dom", pathInfo = ["updateAuthor"], queryString = [("author_id",Just "3"),("author_info",Just "Very funny"),("user_id",Just "7"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest9  = reqTest1 {rawPathInfo = "/deleteAuthor"  , rawQueryString = "?author_id=4&admin_id=4&password=1234dom", pathInfo = ["deleteAuthor"], queryString = [("author_id",Just "3"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest10 = reqTest1 {rawPathInfo = "/createCategory", rawQueryString = "?category_name=Animals", pathInfo = ["createCategory"], queryString = [("category_name",Just "Animals")]}
+reqTest11 = reqTest1 {rawPathInfo = "/createCategory", rawQueryString = "?category_name=Juzz&admin_id=4&password=1234dom", pathInfo = ["createCategory"], queryString = [("category_name",Just "Juzz"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest50 = reqTest1 {rawPathInfo = "/createNewDraft", rawQueryString = "", pathInfo = ["createNewDraft"], queryString = []}
 
+getBodyTest1 reqTest50 = return $ "{\"user_id\": 5,\"password\":\"y7ldAT\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
 
 main :: IO ()
 main = hspec $ do
@@ -529,7 +554,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest6) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"author_id\":6,\"user_id\":3,\"author_info\":\"SuperAuthor\"}"    
+        "{\"author_id\":6,\"author_info\":\"SuperAuthor\",\"user_id\":3}"    
   describe "getAuthor" $  do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest7) (testDB1,[])
@@ -538,7 +563,52 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest7) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"author_id\":3,\"user_id\":6,\"author_info\":\"London is the capital\"}"
+        "{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6}"
+  describe "updateAuthor" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest8) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,EXISTCHEK,UPDATEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest8) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"author_id\":3,\"author_info\":\"Very funny\",\"user_id\":7}"
+  describe "deleteAuthor" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest9) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,UPDATEDATA,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest9) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+  describe "createCategory without admin params" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest10) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest10) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "Status 404 Not Found"
+  describe "createCategory" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest11) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest11) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"category_id\":17,\"category_name\":\"Juzz\",\"super_category\":\"NULL\"}"
+  describe "createNewDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest50) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest50) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"category_id\":17,\"category_name\":\"Juzz\",\"super_category\":\"NULL\"}"  
 
 
 

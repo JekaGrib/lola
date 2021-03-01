@@ -45,38 +45,40 @@ instance ToJSON OkInfoResponse where
 
 data AuthorResponse = AuthorResponse {
       author_id    :: Integer
-    , auth_user_id :: Integer
     , author_info  :: Text
+    , auth_user_id :: Integer
     } deriving (Eq,Show)
 
 instance ToJSON AuthorResponse where
-    toJSON (AuthorResponse author_id auth_user_id author_info ) =
-        object ["author_id" .= author_id, "user_id" .= auth_user_id, "author_info" .= author_info]
-    toEncoding (AuthorResponse author_id auth_user_id author_info ) =
-        pairs ( "author_id" .= author_id <> "user_id" .= auth_user_id <> "author_info" .= author_info)
+    toJSON (AuthorResponse author_id author_info auth_user_id ) =
+        object ["author_id" .= author_id, "author_info" .= author_info, "user_id" .= auth_user_id]
+    toEncoding (AuthorResponse author_id author_info auth_user_id ) =
+        pairs ( "author_id" .= author_id  <> "author_info" .= author_info <> "user_id" .= auth_user_id)
 
 
 data CatResponse 
   = SubCatResponse {
-      subCat_id      :: Integer
-    , subCat_name    :: Text
-    , super_category :: CatResponse
+      subCat_id                :: Integer
+    , subCat_name              :: Text
+    , one_level_sub_categories :: [Integer]
+    , super_category           :: CatResponse
     } 
   | CatResponse {
-      cat_id    :: Integer
-    , cat_name  :: Text
-    , super_cat :: Text
+      cat_id             :: Integer
+    , cat_name           :: Text
+    , one_level_sub_cats :: [Integer]
+    , super_cat          :: Text
     } deriving (Eq,Show)
 
 instance ToJSON CatResponse where
-    toJSON (CatResponse cat_id cat_name super_cat) =
-        object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
-    toJSON (SubCatResponse cat_id cat_name super_cat) =
-        object ["category_id" .= cat_id, "category_name" .= cat_name, "super_category" .= super_cat]
-    toEncoding (CatResponse cat_id cat_name super_cat) =
-        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
-    toEncoding (SubCatResponse cat_id cat_name super_cat) =
-        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "super_category" .= super_cat)
+    toJSON (CatResponse cat_id cat_name all_sub_cats super_cat) =
+        object ["category_id" .= cat_id, "category_name" .= cat_name, "sub_categories" .= all_sub_cats, "super_category" .= super_cat]
+    toJSON (SubCatResponse cat_id cat_name all_sub_cats super_cat) =
+        object ["category_id" .= cat_id, "category_name" .= cat_name, "sub_categories" .= all_sub_cats, "super_category" .= super_cat]
+    toEncoding (CatResponse cat_id cat_name all_sub_cats super_cat) =
+        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "sub_categories"  .= all_sub_cats <> "super_category" .= super_cat)
+    toEncoding (SubCatResponse cat_id cat_name all_sub_cats super_cat) =
+        pairs ( "category_id" .= cat_id <> "category_name" .= cat_name <> "sub_categories"  .= all_sub_cats <> "super_category" .= super_cat)
 
 
 data DraftRequest = DraftRequest {
@@ -86,8 +88,8 @@ data DraftRequest = DraftRequest {
     , draft_cat_id :: Integer
     , draft_text1  :: Text
     , draft_main_pic_url :: Text
-    , draft_pics_urls :: [PicUrl]
-    , draft_tags_ids :: [TagId]
+    , draft_pics_urls :: [Text]
+    , draft_tags_ids :: [Integer]
     } deriving (Eq,Show)
 
 instance FromJSON DraftRequest where
@@ -108,7 +110,7 @@ instance ToJSON DraftRequest where
         pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text1 <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics_urls" .= draft_pics_urls <> "draft_tags_ids" .= draft_tags_ids)
 
 
-data PicUrl = PicUrl {
+{-data PicUrl = PicUrl {
       pic_url :: Text
     } deriving (Eq,Show)
 
@@ -136,7 +138,7 @@ instance ToJSON TagId where
 instance FromJSON TagId where
     parseJSON (Object v) = TagId
         <$> v .: "tag_id"
-
+-}
 
 data PostId = PostInteger Integer | PostText Text 
   deriving Eq

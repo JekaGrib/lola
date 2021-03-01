@@ -1,0 +1,58 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","502e0c6e-bdeb-4612-a7b0-f032b8a090c4"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","540")], isSecure = False, remoteHost = 127.0.0.1:47338, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 540, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+WARNING: SimpleError "Can`t parse parameter values: Array [Object (fromList [(\"tag_id\",Number 4.0)]),Object (fromList [(\"tag_id\",Number 2.0)]),Object (fromList [(\"tag_id\",Number 3.0)])]"
+DEBUG: Output response: "{\"ok\":false,\"info\":\"Can`t parse parameter values: Array [Object (fromList [(\\\"tag_id\\\",Number 4.0)]),Object (fromList [(\\\"tag_id\\\",Number 2.0)]),Object (fromList [(\\\"tag_id\\\",Number 3.0)])]\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","05011f29-15b4-4fe4-82c7-d606eb0850d2"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","742")], isSecure = False, remoteHost = 127.0.0.1:47338, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 742, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking in DB is user author
+DEBUG: Select data from DB. Table: authors
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","88a63c6e-d58c-42ff-a482-544a864e0426"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","741")], isSecure = False, remoteHost = 127.0.0.1:47338, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 741, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking in DB is user author
+DEBUG: Select data from DB. Table: authors
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/updateDraft/4", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","cc3e1a0c-8595-4c0d-9e91-ec5323ab55b1"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","741")], isSecure = False, remoteHost = 127.0.0.1:47384, pathInfo = ["updateDraft","4"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 741, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Update draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (draft_id) in the DB
+INFO: Entity (draft_id) exist
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking in DB is user author
+DEBUG: Select data from DB. Table: authors

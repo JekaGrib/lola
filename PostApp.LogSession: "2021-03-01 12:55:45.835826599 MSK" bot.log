@@ -1,0 +1,84 @@
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/updateDraft/4", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","b4015ebf-396b-4d5b-81a2-bb83308711cf"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","741")], isSecure = False, remoteHost = 127.0.0.1:47630, pathInfo = ["updateDraft","4"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 741, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Update draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (draft_id) in the DB
+INFO: Entity (draft_id) exist
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking in DB is user author
+DEBUG: Select data from DB. Table: authors
+INFO: Data received from DB
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "POST", httpVersion = HTTP/1.1, rawPathInfo = "/createNewDraft", rawQueryString = "", requestHeaders = [("Content-Type","application/json"),("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","5e22f0b5-2a67-4e60-a18b-f77634d7163a"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Length","741")], isSecure = False, remoteHost = 127.0.0.1:47630, pathInfo = ["createNewDraft"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 741, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Create new draft command
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking existence entity (tag_id) in the DB
+INFO: Entity (tag_id) exist
+DEBUG: Checking in DB is user author
+DEBUG: Select data from DB. Table: authors
+INFO: Data received from DB
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getUser/3", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","c8ab4b53-ab0e-4708-be86-4cabadc71119"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------632010559967798627360048"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:47720, pathInfo = ["getUser","3"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get user command
+INFO: All parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Output response: "{\"user_id\":3,\"first_name\":\"Jose\",\"last_name\":\"More\",\"user_pic_id\":256,\"user_pic_url\":\"http://localhost:3000/picture/256\",\"user_create_date\":\"2019-06-06\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getUser/5", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","660398ec-8948-4b92-a042-4861d92d4214"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------682852279483228686080304"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:47720, pathInfo = ["getUser","5"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get user command
+INFO: All parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Output response: "{\"user_id\":5,\"first_name\":\"Randi\",\"last_name\":\"Wornham\",\"user_pic_id\":206,\"user_pic_url\":\"http://localhost:3000/picture/206\",\"user_create_date\":\"2016-07-08\"}"
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getAuthor", rawQueryString = "?author_id=152&admin_id=5&password=y7ldAT", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","47e77408-5e6c-4408-b7d3-e75fba484169"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------340058167633265325035971"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:47780, pathInfo = ["getAuthor"], queryString = [("author_id",Just "152"),("admin_id",Just "5"),("password",Just "y7ldAT")], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get author command
+INFO: All authorize parameters parsed
+DEBUG: Checking existence entity (user_id) in the DB
+INFO: Entity (user_id) exist
+DEBUG: Select data from DB. Table: users
+INFO: Data received from DB
+DEBUG: Checking existence entity (author_id) in the DB
+INFO: Entity (author_id) exist
+DEBUG: Select data from DB. Table: authors
+INFO: Data received from DB
+DEBUG: Connect to DB
+DEBUG: Incoming request: Request {requestMethod = "GET", httpVersion = HTTP/1.1, rawPathInfo = "/getCategory/150", rawQueryString = "", requestHeaders = [("User-Agent","PostmanRuntime/7.26.8"),("Accept","*/*"),("Postman-Token","3d6b8196-cb95-4ba9-a692-bb033a9ce9cf"),("Host","localhost:3000"),("Accept-Encoding","gzip, deflate, br"),("Connection","keep-alive"),("Content-Type","multipart/form-data; boundary=--------------------------065835184615536450590945"),("Content-Length","170")], isSecure = False, remoteHost = 127.0.0.1:47820, pathInfo = ["getCategory","150"], queryString = [], requestBody = <IO ByteString>, vault = <Vault>, requestBodyLength = KnownLength 170, requestHeaderHost = Just "localhost:3000", requestHeaderRange = Nothing}
+INFO: Get category command
+DEBUG: Checking existence entity (category_id) in the DB
+INFO: Entity (category_id) exist
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Select data from DB. Table: categories
+INFO: Data received from DB
+DEBUG: Output response: "{\"category_id\":150,\"category_name\":\"amet\",\"super_category\":{\"category_id\":135,\"category_name\":\"augue\",\"super_category\":{\"category_id\":88,\"category_name\":\"dolor\",\"super_category\":{\"category_id\":37,\"category_name\":\"lacus\",\"super_category\":{\"category_id\":15,\"category_name\":\"donec\",\"super_category\":\"NULL\"}}}}}"
