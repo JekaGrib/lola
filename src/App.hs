@@ -413,8 +413,7 @@ answerEx h req = do
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isUserAuthorE h  usIdNum  
-      OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]  
+      auId <- isUserAuthorE h  usIdNum  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
       let orderBy = "draft_id DESC"
       let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]

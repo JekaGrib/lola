@@ -26,7 +26,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, find )
+import           Data.List                      ( intercalate, zip4, find, sortOn )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -40,7 +40,7 @@ import qualified Database.PostgreSQL.Simple.FromField as FF
 import           Database.PostgreSQL.Simple.ToRow
 
 
-data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA | INSERTMANYDATA
+data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA | INSERTMANYDATA | SELECTLIMITDATA
   deriving (Eq,Show)
 
 data TestDB = TestDB 
@@ -83,7 +83,7 @@ data PostsL = PostsL { post_idPL :: Integer, author_idPL :: Integer, post_namePL
 data CommentsL = CommentsL { comment_idCL :: Integer, comment_textCL :: Text, post_idCL :: Integer, user_idCL :: Integer }
 data PostsPicsL = PostsPicsL { post_idPPL :: Integer, pic_idPPL :: Integer }
 data PostsTagsL = PostsTagsL { post_idPTL :: Integer, tag_idPTL :: Integer }
-data DraftsL = DraftsL { draft_idDL :: Integer, post_idDL :: Maybe Integer, author_idDL :: Integer, drafft_nameDL :: Text, draft_cat_idDL :: Integer, draft_textDL :: Text, draft_pic_idDL :: Integer }
+data DraftsL = DraftsL { draft_idDL :: Integer, post_idDL :: Maybe Integer, author_idDL :: Integer, draft_nameDL :: Text, draft_cat_idDL :: Integer, draft_textDL :: Text, draft_pic_idDL :: Integer }
 data DraftsPicsL = DraftsPicsL { draft_idDPL :: Integer, pic_idDPL :: Integer }
 data DraftsTagsL = DraftsTagsL { draft_idDTL :: Integer, tag_idDTL :: Integer }
 
@@ -302,6 +302,14 @@ updateInPosts "author_id=?" "author_id=?" [x,y] db acts =
   let newPostsT = foldr updateFoo [] (postsT db) in
   let newDb = db {postsT = newPostsT} in
     ((), (newDb,acts))
+updateInPosts "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [a,b,c,d,e]  db acts =
+  let numB = (read $ unpack b :: Integer) in
+  let numD = (read $ unpack d :: Integer) in
+  let numE = (read $ unpack e :: Integer) in
+  let updateFoo line acc = if post_idPL line == numE then ((line {post_namePL = a,post_cat_idPL = numB,post_textPL = c, post_pic_idPL = numD}) : acc) else (line:acc) in
+  let newPostsT = foldr updateFoo [] (postsT db) in
+  let newDb = db {postsT = newPostsT} in
+    ((), (newDb,acts))
 updateInPosts "post_category_id=?" where' (x:values) db acts =
   let numX = (read $ unpack x :: Integer) in
   let numValues = fmap (read . unpack) values in
@@ -320,6 +328,14 @@ updateInDrafts "draft_category_id=?" where' (x:values) db acts =
   let numValues = fmap (read . unpack) values in
   let unOr = filter ((/=) "OR") . words in
   let newDraftsT = updateDraftTable "draft_category_id=?" (unOr where') numX numValues (draftsT db) in
+  let newDb = db {draftsT = newDraftsT} in
+    ((), (newDb,acts))
+updateInDrafts "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [x,y,z,a,b] db acts =
+  let numY = (read $ unpack y :: Integer) in
+  let numA = (read $ unpack a :: Integer) in
+  let numB = (read $ unpack b :: Integer) in  
+  let updateFoo line acc = if draft_idDL line == numB then ((line {draft_nameDL = x,draft_cat_idDL = numY,draft_textDL = z,draft_pic_idDL = numA}) : acc) else (line:acc) in
+  let newDraftsT = foldr updateFoo [] (draftsT db) in
   let newDb = db {draftsT = newDraftsT} in
     ((), (newDb,acts))
 
@@ -361,6 +377,7 @@ isExist "authors"    checkName where' values db = isExistInAuthors checkName whe
 isExist "categories" checkName where' values db = isExistInCats    checkName where' values (catsT    db)
 isExist "tags"       checkName where' values db = isExistInTags    checkName where' values (tagsT    db)
 isExist "posts"      checkName where' values db = isExistInPosts   checkName where' values (postsT   db)
+isExist "drafts"     checkName where' values db = isExistInDrafts  checkName where' values (draftsT  db)
 
 --isExistInAuthors "author_id" "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
 isExistInPics    "pic_id"      "pic_id=?"      [x] pics    = not . null $ find ( (==) (read . unpack $ x) . pic_idPL ) pics
@@ -370,6 +387,7 @@ isExistInAuthors "author_id"   "author_id=?"   [x] authors = not . null $ find (
 isExistInCats    "category_id" "category_id=?" [x] cats    = not . null $ find ( (==) (read . unpack $ x) . cat_idCL ) cats
 isExistInTags    "tag_id"      "tag_id=?"      [x] tags    = not . null $ find ( (==) (read . unpack $ x) . tag_idTL ) tags
 isExistInPosts   "post_id"     "post_id=?"     [x] posts   = not . null $ find ( (==) (read . unpack $ x) . post_idPL ) posts
+isExistInDrafts  "draft_id"    "draft_id=?"    [x] drafts  = not . null $ find ( (==) (read . unpack $ x) . draft_idDL ) drafts
 
 
 
@@ -384,6 +402,7 @@ insReturn "authors"    returnName insNames insValues db acts = insReturnInAuthor
 insReturn "categories" returnName insNames insValues db acts = insReturnInCategories returnName insNames insValues db acts
 insReturn "tags"       returnName insNames insValues db acts = insReturnInTags       returnName insNames insValues db acts
 insReturn "drafts"     returnName insNames insValues db acts = insReturnInDrafts     returnName insNames insValues db acts
+insReturn "posts"      returnName insNames insValues db acts = insReturnInPosts      returnName insNames insValues db acts
 
 
 
@@ -447,13 +466,23 @@ insReturnInDrafts "draft_id" ["post_id","author_id","draft_name","draft_category
       [] -> ([1], ( db {draftsT = [ DraftsL 1 (Just (read . unpack $ pI)) (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
       _  -> let num = (draft_idDL . last $ dT) + 1 in
         ([num], ( db {draftsT = dT ++ [ DraftsL num (Just (read . unpack $ pI)) (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
- 
+
+insReturnInPosts :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInPosts "post_id" ["author_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] [auI,pN,pDat,catI,txt,picI] db acts = 
+  let pT = postsT db in
+  case pT of
+    [] -> ([1], ( db {postsT = [ PostsL 1 (read . unpack $ auI) pN (readGregorian . unpack $ pDat) (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+    _  -> let num = (post_idPL . last $ pT) + 1 in
+      ([num], ( db {postsT = pT ++ [ PostsL num (read . unpack $ auI) pN (readGregorian . unpack $ pDat) (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+
 insertManyInDbTest :: String -> [String] -> [(Integer,Integer)] -> StateT (TestDB,[MockAction]) IO ()
 insertManyInDbTest table insNames insValues = StateT $ \(db,acts) -> do
   return $ (() , (insMany table insNames insValues db, (INSERTMANYDATA:acts)))
 
 insMany "draftspics" names values db = insManyInDraftsPics names values db
 insMany "draftstags" names values db = insManyInDraftsTags names values db
+insMany "postspics"  names values db = insManyInPostsPics  names values db
+insMany "poststags"  names values db = insManyInPostsTags  names values db
 
 insManyInDraftsPics ["draft_id","pic_id"] [(x,y)] db =
   let newDraftsPicsT = (draftsPicsT db) ++ [DraftsPicsL x y] in
@@ -464,6 +493,16 @@ insManyInDraftsTags ["draft_id","tag_id"] [(x,y)] db =
   let newDraftsTagsT = (draftsTagsT db) ++ [DraftsTagsL x y] in
     db {draftsTagsT = newDraftsTagsT}
 insManyInDraftsTags ["draft_id","tag_id"] ((x,y):values) db = insManyInDraftsTags ["draft_id","tag_id"] values (insManyInDraftsTags ["draft_id","tag_id"] [(x,y)] db) 
+
+insManyInPostsPics ["post_id","pic_id"] [(x,y)] db =
+  let newPostsPicsT = (postsPicsT db) ++ [PostsPicsL x y] in
+    db {postsPicsT = newPostsPicsT} 
+insManyInPostsPics ["post_id","pic_id"] ((x,y):values) db = insManyInPostsPics ["post_id","pic_id"] values (insManyInDraftsPics ["draft_id","pic_id"] [(x,y)] db)  
+
+insManyInPostsTags ["post_id","tag_id"] [(x,y)] db =
+  let newPostsTagsT = (postsTagsT db) ++ [PostsTagsL x y] in
+    db {postsTagsT = newPostsTagsT}
+insManyInPostsTags ["post_id","tag_id"] ((x,y):values) db = insManyInPostsTags ["post_id","tag_id"] values (insManyInDraftsTags ["draft_id","tag_id"] [(x,y)] db) 
     
 
 selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
@@ -478,7 +517,10 @@ select "categories" params where' values db = selectFromCats       params where'
 select "tags"       params where' values db = selectFromTags       params where' values (tagsT db)
 select "postspics"  params where' values db = selectFromPostsPics  params where' values (postsPicsT db)
 select "draftspics" params where' values db = selectFromDraftsPics params where' values (draftsPicsT db)
+select "posts"      params where' values db = selectFromPosts      params where' values (postsT db)
 select "posts AS p JOIN authors AS a ON p.author_id=a.author_id" params where' values db = 
+  selectFromPostsAuthors params where' values (postsT db) (authorsT db)
+select "posts JOIN authors ON authors.author_id = posts.author_id " params where' values db = 
   selectFromPostsAuthors params where' values (postsT db) (authorsT db)
 select "drafts AS d JOIN authors AS a ON d.author_id=a.author_id" params where' values db = 
   selectFromDraftsAuthors params where' values (draftsT db) (authorsT db)
@@ -509,10 +551,20 @@ selectFromPostsPics ["pic_id"] "post_id=?" [x] postspics =
   let validLines = filter ( (==) numX . post_idPPL ) postspics in
     fmap (OnlyInt . pic_idPPL) validLines
 
+selectFromDrafts ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [x] drafts =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . draft_idDL ) drafts in
+    fmap (OnlyInt . coalesce . post_idDL) validLines
+selectFromDrafts ["draft_id"] "author_id=?" [x] drafts =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . author_idDL ) drafts in
+    fmap (OnlyInt . draft_idDL) validLines
+
 selectFromDraftsPics ["pic_id"] "draft_id=?" [x] draftspics =
   let numX = read $ unpack x in
   let validLines = filter ( (==) numX . draft_idDPL ) draftspics in
     fmap (OnlyInt . pic_idDPL) validLines
+
 
 selectFromAuthors ["author_id"] "user_id=?" [x] authors =
   let numX = read $ unpack x in
@@ -529,10 +581,7 @@ selectFromAuthors ["author_id","author_info","user_id"] "user_id=?" [x] authors 
 
 authorsLToAuthor (AuthorsL id info usId) = Author id info usId
 
-selectFromDrafts ["draft_id"] "author_id=?" [x] drafts =
-  let numX = read $ unpack x in
-  let validLines = filter ( (==) numX . author_idDL ) drafts in
-    fmap (OnlyInt . draft_idDL) validLines
+
 
 selectFromCats ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [x] cats =
   let numX = read $ unpack x in
@@ -577,7 +626,16 @@ selectFromPostsAuthors ["a.author_id","author_info","post_name","post_category_i
     let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
     let validLines = concatMap joinAuthorLine validPostsLines in
       fmap toPostInfo  validLines
+selectFromPostsAuthors ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+ "post_id=?" [x] posts authors =
+    let numX = read $ unpack x in
+    let validPostsLines = filter ( (==) numX . post_idPL ) posts in
+    let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+    let validLines = concatMap joinAuthorLine validPostsLines in
+      fmap toPost  validLines
 
+toPost ((PostsL pId auI pN pDat pCatI pTxt pPicI),(AuthorsL auId auInfo usId)) = 
+  Post pId auId auInfo usId pN pDat pCatI pTxt pPicI
 toPostInfo ((PostsL pId auI pN pDat pCatI pTxt pPicI),(AuthorsL auId auInfo usId)) = PostInfo auId auInfo pN pCatI pTxt pPicI
 
 selectFromDraftsAuthors ["user_id"] "draft_id=?" [x] drafts authors =
@@ -615,6 +673,27 @@ selectFromDraftsTagsTags ["tags.tag_id","tag_name"] "draft_id=?" [x] draftstags 
 
 toTag (line,tagL) = tagsLToTag tagL
 
+selectFromPosts ["post_create_date"] "post_id=?" [x] posts = 
+  let validLines = filter ( (==) (read . unpack $ x) . post_idPL ) posts in
+    fmap (OnlyDay . post_create_datePL) validLines
+
+selectLimitFromDbTest :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
+selectLimitFromDbTest table orderBy page limitNumber params where' values = StateT $ \(db,acts) -> do
+  return (selectLim table orderBy page limitNumber params where' values db, (db,SELECTLIMITDATA:acts))
+
+fI = fromInteger
+
+selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_id DESC" page limitNum ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] 
+  "drafts.author_id = ?" [x] db =
+    let drafts = draftsT db in
+    let authors = authorsT db in
+    let numX = read $ unpack x in
+    let validDraftsLines = filter ( (==) numX . author_idDL ) drafts in
+    let joinAuthorLine draftLine = fmap ((,) draftLine) $ filter ( ((==) (author_idDL draftLine)) . author_idAL) authors in
+    let validLines = concatMap joinAuthorLine validDraftsLines in
+      drop (fI ((page-1)*limitNum)) . take (fI (page*limitNum)) . reverse . sortOn draft_idD $ (fmap toDraft validLines)
+
+
 deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
 deleteFromDbTest table where' values = StateT $ \(db,acts) -> do
   return $ delete' table where' values db (DELETEDATA:acts)
@@ -628,6 +707,7 @@ delete' "draftstags" where' values db acts = deleteFromDraftsTags where' values 
 delete' "categories" where' values db acts = deleteFromCats where' values db acts
 delete' "tags"       where' values db acts = deleteFromTags where' values db acts
 delete' "poststags"  where' values db acts = deleteFromPostsTags where' values db acts
+delete' "postspics"  where' values db acts = deleteFromPostsPics where' values db acts
 
 
 
@@ -693,6 +773,17 @@ deleteFromTags "tag_id=?" [x] db acts =
   let newDb = db {tagsT = newTagsT} in
     ((), (newDb,acts))
 
+deleteFromPostsPics where' values db acts = 
+  let numValues = fmap (read . unpack) values in
+  let unOr = filter ((/=) "OR") . words in
+  let newPostsPicsT = makeNewPostsPicsT (unOr where') numValues (postsPicsT db) in
+  let newDb = db {postsPicsT = newPostsPicsT} in
+    ((), (newDb,acts))    
+
+makeNewPostsPicsT [] [] postspics = postspics
+makeNewPostsPicsT ["post_id=?"] [numX] postspics = filter ((/=) numX . post_idPPL) postspics
+makeNewPostsPicsT ("post_id=?":ys) (numX:xs) postspics = makeNewPostsPicsT ys xs (makeNewPostsPicsT ["post_id"] [numX] postspics) 
+
 deleteFromPostsTags where' values db acts = 
   let numValues = fmap (read . unpack) values in
   let unOr = filter ((/=) "OR") . words in
@@ -700,9 +791,9 @@ deleteFromPostsTags where' values db acts =
   let newDb = db {postsTagsT = newPostsTagsT} in
     ((), (newDb,acts))    
 
---makeNewDraftsTagsT [] [] draftstags = draftstags
---makeNewDraftsTagsT ["draft_id=?"] [numX] draftstags = filter ((/=) numX . draft_idDTL) draftstags
---makeNewDraftsTagsT ("draft_id=?":ys) (numX:xs) draftstags = makeNewDraftsTagsT ys xs (makeNewDraftsTagsT ["draft_id"] [numX] draftstags) 
+makeNewPostsTagsT [] [] poststags = poststags
+makeNewPostsTagsT ["post_id=?"] [numX] poststags = filter ((/=) numX . post_idPTL) poststags
+makeNewPostsTagsT ("draft_id=?":ys) (numX:xs) poststags = makeNewPostsTagsT ys xs (makeNewPostsTagsT ["post_id"] [numX] poststags) 
 makeNewPostsTagsT ["tag_id=?"] [numX] poststags = filter ((/=) numX . tag_idPTL) poststags
 
 
@@ -711,6 +802,7 @@ handle1 = Handle
   { hConf = Config 1 1 1 1,
     hLog = handleLog1,
     selectFromDb = selectFromDbTest,
+    selectLimitFromDb = selectLimitFromDbTest,
     updateInDb = updateInDbTest,
     deleteFromDb = deleteFromDbTest,
     isExistInDb = isExistInDbTest,
@@ -745,9 +837,17 @@ reqTest20 = reqTest1 {rawPathInfo = "/createNewDraft"   , rawQueryString = "", p
 reqTest21 = reqTest1 {rawPathInfo = "/createPostsDraft" , rawQueryString = "?post_id=3&user_id=8&password=344los", pathInfo = ["createPostsDraft"], queryString = [("post_id",Just "3"),("user_id",Just "8"),("password",Just "344los")]}
 reqTest22 = reqTest1 {rawPathInfo = "/createPostsDraft" , rawQueryString = "?post_id=3&user_id=4&password=1234dom", pathInfo = ["createPostsDraft"], queryString = [("post_id",Just "3"),("user_id",Just "4"),("password",Just "1234dom")]}
 reqTest23 = reqTest1 {rawPathInfo = "/getDraft"         , rawQueryString = "?draft_id=4&user_id=8&password=344los", pathInfo = ["getDraft"], queryString = [("draft_id",Just "4"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest24 = reqTest1 {rawPathInfo = "/getDrafts"        , rawQueryString = "?page=1&user_id=8&password=344los", pathInfo = ["getDrafts"], queryString = [("page",Just "1"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest25 = reqTest1 {rawPathInfo = "/getDrafts"        , rawQueryString = "?page=2&user_id=8&password=344los", pathInfo = ["getDrafts"], queryString = [("page",Just "2"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest26 = reqTest1 {rawPathInfo = "/updateDraft/5"    , rawQueryString = "", pathInfo = ["updateDraft","5"], queryString = []}
+reqTest27 = reqTest1 {rawPathInfo = "/deleteDraft"      , rawQueryString = "?draft_id=4&user_id=8&password=344los", pathInfo = ["deleteDraft"], queryString = [("draft_id",Just "4"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest28 = reqTest1 {rawPathInfo = "/publishDraft"     , rawQueryString = "?draft_id=5&user_id=8&password=344los", pathInfo = ["publishDraft"], queryString = [("draft_id",Just "5"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest29 = reqTest1 {rawPathInfo = "/publishDraft"     , rawQueryString = "?draft_id=4&user_id=8&password=344los", pathInfo = ["publishDraft"], queryString = [("draft_id",Just "4"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest30 = reqTest1 {rawPathInfo = "/getPost/2"        , rawQueryString = "", pathInfo = ["getPost","2"], queryString = []}
 
 
-getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
+--getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
+getBodyTest1 reqTest26 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
 
 main :: IO ()
 main = hspec $ do
@@ -967,8 +1067,69 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"draft_id\":4,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Table\",\"draft_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"draft_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"draft_main_pic_id\":2,\"draft_main_pic_url\":\"http://localhost:3000/picture/2\",\"draft_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"draft_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}"
-  
-  
+  describe "getDrafts page1" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest24) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTLIMITDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest24) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"page\":1,\"drafts\":[{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Cort\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"draft_main_pic_id\":3,\"draft_main_pic_url\":\"http://localhost:3000/picture/3\",\"draft_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"draft_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]},{\"draft_id\":4,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Table\",\"draft_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"draft_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"draft_main_pic_id\":2,\"draft_main_pic_url\":\"http://localhost:3000/picture/2\",\"draft_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"draft_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}]}"
+  describe "getDrafts page2" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest25) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTLIMITDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest25) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"page\":2,\"drafts\":[]}"
+  describe "updateDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest26) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,DELETEDATA,DELETEDATA,UPDATEDATA,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest26) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"
+  describe "deleteDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest27) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA,DELETEDATA,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest27) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"  
+  describe "publishDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest28) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest28) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"post_id\":6,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"post_name\":\"Cort\",\"post_create_date\":\"2020-02-20\",\"post_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"post_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"post_main_pic_id\":3,\"post_main_pic_url\":\"http://localhost:3000/picture/3\",\"post_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"post_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]}"
+  describe "publishDraft  (posts draft)" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest29) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,UPDATEDATA,DELETEDATA,DELETEDATA,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest29) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"post_name\":\"Table\",\"post_create_date\":\"2019-07-25\",\"post_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"post_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"post_main_pic_id\":2,\"post_main_pic_url\":\"http://localhost:3000/picture/2\",\"post_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"post_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}"
+  describe "getPost" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest30) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest30) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"post_id\":2,\"author\":{\"author_id\":2,\"author_info\":\"i don`t like it\",\"user_id\":4},\"post_name\":\"Glass\",\"post_create_date\":\"2019-06-01\",\"post_category\":{\"category_id\":16,\"category_name\":\"Egypt\",\"sub_categories\":[],\"super_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}}},\"post_text\":\"Advertising companies say advertising is necessary and important. It informs people about new products. Advertising hoardings in the street make our environment colourful. And adverts on TV are often funny. Sometimes they are mini-dramas and we wait for the next programme in the mini-drama. Advertising can educate, too. Adverts tell us about new, healthy products\",\"post_main_pic_id\":2,\"post_main_pic_url\":\"http://localhost:3000/picture/2\",\"post_pics\":[],\"post_tags\":[{\"tag_id\":1,\"tag_name\":\"Cats\"},{\"tag_id\":12,\"tag_name\":\"Medicine\"},{\"tag_id\":10,\"tag_name\":\"Home\"}]}"
   
 
 
