@@ -76,7 +76,7 @@ data SelectType =
   | Author   {author_idA :: Integer, author_infoA :: Text, user_idA :: Integer}
   | Comment  {comment_idC :: Integer, user_idC :: Integer, comment_textC :: Text}
   | User     {f_nameU :: Text, l_nameU :: Text, pic_idU :: Integer, user_create_dateU :: Day}
-  | PostInfo {author_infoPI :: Text, post_namePI :: Text, post_cat_idPI :: Integer, post_textPI :: Text, post_pic_idPI :: Integer}
+  | PostInfo {author_idPI :: Integer, author_infoPI :: Text, post_namePI :: Text, post_cat_idPI :: Integer, post_textPI :: Text, post_pic_idPI :: Integer}
   | Draft    {draft_idD :: Integer, author_infoD :: Text, post_idD :: Integer, draft_nameD :: Text, draft_cat_idD :: Integer, draft_textD :: Text, draft_pic_idD :: Integer}
   | Post     {post_idP :: Integer, author_idP :: Integer, author_infoP :: Text, user_idP :: Integer, post_nameP :: Text, post_create_dateU :: Day, post_cat_idP :: Integer, post_textP :: Text, post_pic_idP :: Integer}
     deriving (Eq,Show)
@@ -86,7 +86,7 @@ instance FromRow SelectType where
   fromRow = 
     (Post         <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (Draft    <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (PostInfo <$> field <*> field <*> field <*> field <*> field)
+    <|> (PostInfo <$> field <*> field <*> field <*> field <*> field <*> field)
     <|> (User    <$> field <*> field <*> field <*> field)
     <|> (Comment <$> field <*> field <*> field)
     <|> (Author  <$> field <*> field <*> field)
@@ -374,11 +374,11 @@ answerEx h req = do
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
       isUserAuthorE h  usIdNum 
-      isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      auId <- isPostAuthor h  postIdParam usIdParam
+      isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam]
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      let params = ["author_info","post_name","post_category_id","post_text","post_main_pic_id"]
-      PostInfo auInfo postName postCatId postTxt mPicId <- selectOneFromDbE h table params "post_id=?" [postIdParam]         
+      let params = ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
+      PostInfo auId auInfo postName postCatId postTxt mPicId <- selectOneFromDbE h table params "post_id=?" [postIdParam]
+      isPostAuthorE h  postIdParam usIdParam          
       picsIdsSel <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
       let picsIds = fmap fromOnlyInt picsIdsSel
       tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
@@ -395,8 +395,8 @@ answerEx h req = do
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
-      isUserAuthorE h  usIdNum  
-      auId <- isDraftAuthor h  draftIdParam usIdParam
+      auId <- isUserAuthorE h  usIdNum  
+      isDraftAuthor h  draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]        
@@ -485,8 +485,8 @@ answerEx h req = do
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam] 
-      isUserAuthorE h  usIdNum  
-      auId <- isDraftAuthor h  draftIdParam usIdParam
+      auId <- isUserAuthorE h  usIdNum  
+      isDraftAuthor h  draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]
@@ -632,7 +632,7 @@ isCommOrPostAuthor h commIdParam postIdParam usIdParam = do
       (\(SimpleError str) -> 
         withExceptT 
           (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
-            isPostAuthor h  postIdParam usIdParam
+            isPostAuthorE h  postIdParam usIdParam
             return ())
 
 accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
@@ -659,17 +659,17 @@ isNULL 0      = PostText    "NULL"
 isNULL postId = PostInteger postId
 
 isDraftAuthor h  draftIdParam usIdParam = do
-  OnlyInt auId <- selectOneFromDbE h "drafts" ["author_id"] "draft_id=?" [draftIdParam] 
-  OnlyInt usDraftId <- selectOneFromDbE h "authors" ["user_id"] "author_id=?" [pack . show $ auId]  
+  let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
+  OnlyInt usDraftId <- selectOneFromDbE h table ["user_id"] "draft_id=?" [draftIdParam]  
   case usDraftId == (read . unpack $ usIdParam) of
-    True -> return auId
+    True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of draft_id: " ++ unpack draftIdParam
 
-isPostAuthor h  postIdParam usIdParam = do
-  OnlyInt auId <- selectOneFromDbE h "posts" ["author_id"] "post_id=?" [postIdParam] 
-  OnlyInt usPostId <- selectOneFromDbE h "authors" ["user_id"] "author_id=?" [pack . show $ (auId :: Integer)]  
+isPostAuthorE h  postIdParam usIdParam = do
+  let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
+  OnlyInt usPostId <- selectOneFromDbE h table ["user_id"] "post_id=?" [postIdParam]  
   case (usPostId :: Integer) == (read . unpack $ usIdParam) of
-    True -> return auId
+    True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is not author of post_id: " ++ unpack postIdParam
 
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
@@ -827,10 +827,11 @@ isUserAuthorBool h usIdParam = do
 
 isUserAuthorE h  usIdParam = do
   lift $ logDebug (hLog h) $ "Checking in DB is user author"  
-  check <- lift $ isExistInDb h "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
-  case check of 
-    True -> return ()
-    False -> throwE $ SimpleError $ "user_id: " ++ show usIdParam ++ " isn`t author."
+  auIds <- lift $ selectFromDb h "authors" ["author_id"] "user_id=?" [pack . show $ usIdParam]
+  case auIds of
+    [] -> throwE $ SimpleError $ "user_id: " ++ show usIdParam ++ " isn`t author." 
+    [OnlyInt auId] -> return auId
+    _ -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show auIds
     
 
 checkRelationUsAu h usIdParam auIdParam = do

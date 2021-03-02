@@ -355,11 +355,12 @@ isExistInDbTest ::  String -> String -> String -> [Text] -> StateT (TestDB,[Mock
 isExistInDbTest table checkName where' values = StateT $ \(db,acts) -> do
   return ( isExist table checkName where' values db , (db,EXISTCHEK:acts))
 
-isExist "pics"       checkName where' values db = isExistInPics    checkName where' values (picsT db)
-isExist "users"      checkName where' values db = isExistInUsers   checkName where' values (usersT db)
+isExist "pics"       checkName where' values db = isExistInPics    checkName where' values (picsT    db)
+isExist "users"      checkName where' values db = isExistInUsers   checkName where' values (usersT   db)
 isExist "authors"    checkName where' values db = isExistInAuthors checkName where' values (authorsT db)
-isExist "categories" checkName where' values db = isExistInCats    checkName where' values (catsT db)
-isExist "tags"       checkName where' values db = isExistInTags    checkName where' values (tagsT db)
+isExist "categories" checkName where' values db = isExistInCats    checkName where' values (catsT    db)
+isExist "tags"       checkName where' values db = isExistInTags    checkName where' values (tagsT    db)
+isExist "posts"      checkName where' values db = isExistInPosts   checkName where' values (postsT   db)
 
 --isExistInAuthors "author_id" "user_id=?" [x] authors = not . null $ find ( (==) (read . unpack $ x) . user_idAL ) authors
 isExistInPics    "pic_id"      "pic_id=?"      [x] pics    = not . null $ find ( (==) (read . unpack $ x) . pic_idPL ) pics
@@ -368,6 +369,7 @@ isExistInAuthors "user_id"     "user_id=?"     [x] authors = not . null $ find (
 isExistInAuthors "author_id"   "author_id=?"   [x] authors = not . null $ find ( (==) (read . unpack $ x) . author_idAL ) authors
 isExistInCats    "category_id" "category_id=?" [x] cats    = not . null $ find ( (==) (read . unpack $ x) . cat_idCL ) cats
 isExistInTags    "tag_id"      "tag_id=?"      [x] tags    = not . null $ find ( (==) (read . unpack $ x) . tag_idTL ) tags
+isExistInPosts   "post_id"     "post_id=?"     [x] posts   = not . null $ find ( (==) (read . unpack $ x) . post_idPL ) posts
 
 
 
@@ -439,6 +441,12 @@ insReturnInDrafts "draft_id" ["author_id","draft_name","draft_category_id","draf
       [] -> ([1], ( db {draftsT = [ DraftsL 1 Nothing (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
       _  -> let num = (draft_idDL . last $ dT) + 1 in
         ([num], ( db {draftsT = dT ++ [ DraftsL num Nothing (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+insReturnInDrafts "draft_id" ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] [pI,auI,drN,catI,txt,picI] db acts = 
+    let dT = draftsT db in
+    case dT of
+      [] -> ([1], ( db {draftsT = [ DraftsL 1 (Just (read . unpack $ pI)) (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
+      _  -> let num = (draft_idDL . last $ dT) + 1 in
+        ([num], ( db {draftsT = dT ++ [ DraftsL num (Just (read . unpack $ pI)) (read . unpack $ auI) drN (read . unpack $ catI) txt (read . unpack $ picI) ]}, acts ))
  
 insertManyInDbTest :: String -> [String] -> [(Integer,Integer)] -> StateT (TestDB,[MockAction]) IO ()
 insertManyInDbTest table insNames insValues = StateT $ \(db,acts) -> do
@@ -462,12 +470,23 @@ selectFromDbTest :: String -> [String] -> String -> [Text] -> StateT (TestDB,[Mo
 selectFromDbTest table params where' values = StateT $ \(db,acts) -> do
   return (select table params where' values db, (db,SELECTDATA:acts))
 
-select "users"      params where' values db = selectFromUsers   params where' values (usersT   db)
-select "authors"    params where' values db = selectFromAuthors params where' values (authorsT db)
-select "drafts"     params where' values db = selectFromDrafts  params where' values (draftsT  db)
-select "key"        params where' values db = selectFromKey     params where' values (keyT  db)
-select "categories" params where' values db = selectFromCats    params where' values (catsT db)
-select "tags"       params where' values db = selectFromTags    params where' values (tagsT db)
+select "users"      params where' values db = selectFromUsers      params where' values (usersT   db)
+select "authors"    params where' values db = selectFromAuthors    params where' values (authorsT db)
+select "drafts"     params where' values db = selectFromDrafts     params where' values (draftsT  db)
+select "key"        params where' values db = selectFromKey        params where' values (keyT  db)
+select "categories" params where' values db = selectFromCats       params where' values (catsT db)
+select "tags"       params where' values db = selectFromTags       params where' values (tagsT db)
+select "postspics"  params where' values db = selectFromPostsPics  params where' values (postsPicsT db)
+select "draftspics" params where' values db = selectFromDraftsPics params where' values (draftsPicsT db)
+select "posts AS p JOIN authors AS a ON p.author_id=a.author_id" params where' values db = 
+  selectFromPostsAuthors params where' values (postsT db) (authorsT db)
+select "drafts AS d JOIN authors AS a ON d.author_id=a.author_id" params where' values db = 
+  selectFromDraftsAuthors params where' values (draftsT db) (authorsT db)
+select "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" params where' values db = 
+  selectFromPostsTagsTags params where' values (postsTagsT db) (tagsT db)
+select "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" params where' values db = 
+  selectFromDraftsTagsTags params where' values (draftsTagsT db) (tagsT db)
+
 
 selectFromUsers ["first_name","last_name","user_pic_id","user_create_date"] "user_id=?" [x] users = 
   let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
@@ -479,12 +498,21 @@ selectFromUsers ["password"] "user_id=?" [x] users =
   let validLines = filter ( (==) (read . unpack $ x) . user_idUL ) users in
     fmap (OnlyTxt . passwordUL) validLines
 
-
 usersLToUser (UsersL id pwd fN lN picId date admBool) = User fN lN picId date
 
 usersLToAuth (UsersL id pwd fN lN picId date admBool) = Auth pwd admBool
 
 selectFromKey ["create_admin_key"] "true" [] key = fmap OnlyTxt key
+
+selectFromPostsPics ["pic_id"] "post_id=?" [x] postspics =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . post_idPPL ) postspics in
+    fmap (OnlyInt . pic_idPPL) validLines
+
+selectFromDraftsPics ["pic_id"] "draft_id=?" [x] draftspics =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . draft_idDPL ) draftspics in
+    fmap (OnlyInt . pic_idDPL) validLines
 
 selectFromAuthors ["author_id"] "user_id=?" [x] authors =
   let numX = read $ unpack x in
@@ -536,6 +564,56 @@ tagsLToTag (TagsL id name) = Tag id name
 findValidLinesInTags ["tag_id=?"] [x] tags = filter ( (==) x . tag_idTL ) tags
 findValidLinesInTags ("tag_id=?":ys) (x:xs) tags = findValidLinesInTags ys xs (findValidLinesInTags ["tag_id=?"] [x] tags)
 
+selectFromPostsAuthors ["user_id"] "post_id=?" [x] posts authors =
+  let numX = read $ unpack x in
+  let validPostsLines = filter ( (==) numX . post_idPL ) posts in
+  let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+  let validLines = concatMap joinAuthorLine validPostsLines in
+    fmap (OnlyInt . user_idAL . snd)  validLines
+selectFromPostsAuthors ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
+ "post_id=?" [x] posts authors =
+    let numX = read $ unpack x in
+    let validPostsLines = filter ( (==) numX . post_idPL ) posts in
+    let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+    let validLines = concatMap joinAuthorLine validPostsLines in
+      fmap toPostInfo  validLines
+
+toPostInfo ((PostsL pId auI pN pDat pCatI pTxt pPicI),(AuthorsL auId auInfo usId)) = PostInfo auId auInfo pN pCatI pTxt pPicI
+
+selectFromDraftsAuthors ["user_id"] "draft_id=?" [x] drafts authors =
+  let numX = read $ unpack x in
+  let validDraftsLines = filter ( (==) numX . draft_idDL ) drafts in
+  let joinAuthorLine draftLine = fmap ((,) draftLine) $ filter ( ((==) (author_idDL draftLine)) . author_idAL) authors in
+  let validLines = concatMap joinAuthorLine validDraftsLines in
+    fmap (OnlyInt . user_idAL . snd)  validLines
+selectFromDraftsAuthors ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
+ "draft_id=?" [x] drafts authors =
+    let numX = read $ unpack x in
+    let validDraftsLines = filter ( (==) numX . draft_idDL ) drafts in
+    let joinAuthorLine draftLine = fmap ((,) draftLine) $ filter ( ((==) (author_idDL draftLine)) . author_idAL) authors in
+    let validLines = concatMap joinAuthorLine validDraftsLines in
+      fmap toDraft validLines
+
+toDraft ((DraftsL dI Nothing auI dN dCatI dTxt dPicI),(AuthorsL auId auInfo usId)) =
+  Draft dI auInfo 0 dN dCatI dTxt dPicI
+toDraft ((DraftsL dI (Just pI) auI dN dCatI dTxt dPicI),(AuthorsL auId auInfo usId)) =
+  Draft dI auInfo pI dN dCatI dTxt dPicI
+
+selectFromPostsTagsTags ["tags.tag_id","tag_name"] "post_id=?" [x] poststags tags =
+  let numX = read $ unpack x in
+  let validPostsTagsLines = filter ( (==) numX . post_idPTL ) poststags in
+  let joinTagLine postTagLine = fmap ((,) postTagLine) $ filter ( ((==) (tag_idPTL postTagLine)) . tag_idTL) tags in
+  let validLines = concatMap joinTagLine validPostsTagsLines in
+    fmap toTag validLines
+
+selectFromDraftsTagsTags ["tags.tag_id","tag_name"] "draft_id=?" [x] draftstags tags =
+  let numX = read $ unpack x in
+  let validDraftsTagsLines = filter ( (==) numX . draft_idDTL ) draftstags in
+  let joinTagLine draftTagLine = fmap ((,) draftTagLine) $ filter ( ((==) (tag_idDTL draftTagLine)) . tag_idTL) tags in
+  let validLines = concatMap joinTagLine validDraftsTagsLines in
+    fmap toTag validLines
+
+toTag (line,tagL) = tagsLToTag tagL
 
 deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
 deleteFromDbTest table where' values = StateT $ \(db,acts) -> do
@@ -664,6 +742,10 @@ reqTest17 = reqTest1 {rawPathInfo = "/getTag/12"        , rawQueryString = "", p
 reqTest18 = reqTest1 {rawPathInfo = "/updateTag"        , rawQueryString = "?tag_id=7&tag_name=King&admin_id=4&password=1234dom", pathInfo = ["updateTag"], queryString = [("tag_id",Just "7"),("tag_name",Just "King"),("admin_id",Just "4"),("password",Just "1234dom")]}
 reqTest19 = reqTest1 {rawPathInfo = "/deleteTag"        , rawQueryString = "?tag_id=13&admin_id=4&password=1234dom", pathInfo = ["deleteTag"], queryString = [("tag_id",Just "13"),("admin_id",Just "4"),("password",Just "1234dom")]}
 reqTest20 = reqTest1 {rawPathInfo = "/createNewDraft"   , rawQueryString = "", pathInfo = ["createNewDraft"], queryString = []}
+reqTest21 = reqTest1 {rawPathInfo = "/createPostsDraft" , rawQueryString = "?post_id=3&user_id=8&password=344los", pathInfo = ["createPostsDraft"], queryString = [("post_id",Just "3"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest22 = reqTest1 {rawPathInfo = "/createPostsDraft" , rawQueryString = "?post_id=3&user_id=4&password=1234dom", pathInfo = ["createPostsDraft"], queryString = [("post_id",Just "3"),("user_id",Just "4"),("password",Just "1234dom")]}
+reqTest23 = reqTest1 {rawPathInfo = "/getDraft"         , rawQueryString = "?draft_id=4&user_id=8&password=344los", pathInfo = ["getDraft"], queryString = [("draft_id",Just "4"),("user_id",Just "8"),("password",Just "344los")]}
+
 
 getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
 
@@ -853,11 +935,40 @@ main = hspec $ do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest20) (testDB1,[])
       (reverse . snd $ state) `shouldBe` 
-        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTDATA,LOGMSG,INSERTMANYDATA,INSERTMANYDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest20) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"draft_id\":6,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"  
-
+  describe "createPostsDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest21) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,INSERTDATA,LOGMSG]      
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest21) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"draft_id\":6,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Sorry\",\"draft_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"},\"draft_text\":\"some consumers argue that advertising is a bad thing. They say that advertising is bad for children. Adverts make children \226\128\152pester\226\128\153 their parents to buy things for them. Advertisers know we love our children and want to give them everything.\",\"draft_main_pic_id\":3,\"draft_main_pic_url\":\"http://localhost:3000/picture/3\",\"draft_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"}],\"draft_tags\":[{\"tag_id\":7,\"tag_name\":\"Autumn\"}]}"
+  describe "createPostsDraft. User not author" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest22) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest22) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":false,\"info\":\"user_id: 4 is not author of post_id: 3\"}"
+  describe "getDraft" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest23) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest23) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"draft_id\":4,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Table\",\"draft_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"draft_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"draft_main_pic_id\":2,\"draft_main_pic_url\":\"http://localhost:3000/picture/2\",\"draft_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"draft_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}"
+  
+  
+  
 
 
