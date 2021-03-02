@@ -294,6 +294,12 @@ updateInComments "user_id=?" "user_id=?" [x,y] db acts =
   let newCommentsT = foldr updateFoo [] (commentsT db) in
   let newDb = db {commentsT = newCommentsT} in
     ((), (newDb,acts))
+updateInComments "comment_text=?" "comment_id=?" [x,y] db acts =
+  let numY = (read $ unpack y :: Integer) in
+  let updateFoo line acc = if comment_idCL line == numY then ( (line {comment_textCL = x}) : acc) else (line:acc) in
+  let newCommentsT = foldr updateFoo [] (commentsT db) in
+  let newDb = db {commentsT = newCommentsT} in
+    ((), (newDb,acts))
 
 updateInPosts "author_id=?" "author_id=?" [x,y] db acts =
   let numX = (read $ unpack x :: Integer) in
@@ -403,6 +409,7 @@ insReturn "categories" returnName insNames insValues db acts = insReturnInCatego
 insReturn "tags"       returnName insNames insValues db acts = insReturnInTags       returnName insNames insValues db acts
 insReturn "drafts"     returnName insNames insValues db acts = insReturnInDrafts     returnName insNames insValues db acts
 insReturn "posts"      returnName insNames insValues db acts = insReturnInPosts      returnName insNames insValues db acts
+insReturn "comments"   returnName insNames insValues db acts = insReturnInComments   returnName insNames insValues db acts
 
 
 
@@ -413,6 +420,14 @@ insReturnInPics "pic_id" ["pic_url"] [url] db acts =
       [] -> ([1], (db {picsT = [ PicsL 1 url ]}, acts))
       _  -> let num = (pic_idPL . last $ pT) + 1 in
         ([num], (db {picsT = pT ++ [ PicsL num url ]}, acts))
+
+insReturnInComments :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
+insReturnInComments "comment_id" ["comment_text","post_id","user_id"] [txt,pI,uI] db acts =
+  let cT = commentsT db in
+    case cT of
+      [] -> ([1], (db {commentsT = [ CommentsL 1 txt (read . unpack $ pI) (read . unpack $ uI)]}, acts))
+      _  -> let num = (comment_idCL . last $ cT) + 1 in
+        ([num], (db {commentsT = cT ++ [ CommentsL num txt (read . unpack $ pI) (read . unpack $ uI)]}, acts))
  
 insReturnInUsers :: String -> [String] -> [Text] -> TestDB -> [MockAction] -> ([Integer],(TestDB,[MockAction]))
 insReturnInUsers "user_id" ["password","first_name","last_name","user_pic_id","user_create_date","admin"] [pwd,fN,lN,pI,cD,aD] db acts = 
@@ -518,6 +533,7 @@ select "tags"       params where' values db = selectFromTags       params where'
 select "postspics"  params where' values db = selectFromPostsPics  params where' values (postsPicsT db)
 select "draftspics" params where' values db = selectFromDraftsPics params where' values (draftsPicsT db)
 select "posts"      params where' values db = selectFromPosts      params where' values (postsT db)
+select "comments"   params where' values db = selectFromComments   params where' values (commentsT db)
 select "posts AS p JOIN authors AS a ON p.author_id=a.author_id" params where' values db = 
   selectFromPostsAuthors params where' values (postsT db) (authorsT db)
 select "posts JOIN authors ON authors.author_id = posts.author_id " params where' values db = 
@@ -551,6 +567,15 @@ selectFromPostsPics ["pic_id"] "post_id=?" [x] postspics =
   let validLines = filter ( (==) numX . post_idPPL ) postspics in
     fmap (OnlyInt . pic_idPPL) validLines
 
+selectFromComments ["post_id"] "comment_id=?" [x] comments =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . comment_idCL ) comments in
+    fmap (OnlyInt . post_idCL) validLines
+selectFromComments ["user_id"] "comment_id=?" [x] comments =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) numX . comment_idCL ) comments in
+    fmap (OnlyInt . user_idCL) validLines
+
 selectFromDrafts ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [x] drafts =
   let numX = read $ unpack x in
   let validLines = filter ( (==) numX . draft_idDL ) drafts in
@@ -558,6 +583,10 @@ selectFromDrafts ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [x] drafts 
 selectFromDrafts ["draft_id"] "author_id=?" [x] drafts =
   let numX = read $ unpack x in
   let validLines = filter ( (==) numX . author_idDL ) drafts in
+    fmap (OnlyInt . draft_idDL) validLines
+selectFromDrafts ["draft_id"] "post_id=?" [x] drafts =
+  let numX = read $ unpack x in
+  let validLines = filter ( (==) (Just numX) . post_idDL ) drafts in
     fmap (OnlyInt . draft_idDL) validLines
 
 selectFromDraftsPics ["pic_id"] "draft_id=?" [x] draftspics =
@@ -708,13 +737,31 @@ delete' "categories" where' values db acts = deleteFromCats where' values db act
 delete' "tags"       where' values db acts = deleteFromTags where' values db acts
 delete' "poststags"  where' values db acts = deleteFromPostsTags where' values db acts
 delete' "postspics"  where' values db acts = deleteFromPostsPics where' values db acts
-
+delete' "posts"      where' values db acts = deleteFromPosts     where' values db acts
+delete' "comments"   where' values db acts = deleteFromComments  where' values db acts
 
 
 deleteFromUsers "user_id=?" [x] db acts = 
   let numX = read $ unpack x in
   let newUsersT = filter  ((==) numX . user_idUL) (usersT db) in
   let newDb = db {usersT = newUsersT} in
+    ((), (newDb,acts))
+
+deleteFromPosts "post_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newPostsT = filter  ((==) numX . post_idPL) (postsT db) in
+  let newDb = db {postsT = newPostsT} in
+    ((), (newDb,acts))
+
+deleteFromComments "post_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newCommentsT = filter  ((==) numX . post_idCL) (commentsT db) in
+  let newDb = db {commentsT = newCommentsT} in
+    ((), (newDb,acts))
+deleteFromComments "comment_id=?" [x] db acts = 
+  let numX = read $ unpack x in
+  let newCommentsT = filter  ((==) numX . comment_idCL) (commentsT db) in
+  let newDb = db {commentsT = newCommentsT} in
     ((), (newDb,acts))
 
 deleteFromAuthors "author_id=?" [x] db acts = 
@@ -844,6 +891,11 @@ reqTest27 = reqTest1 {rawPathInfo = "/deleteDraft"      , rawQueryString = "?dra
 reqTest28 = reqTest1 {rawPathInfo = "/publishDraft"     , rawQueryString = "?draft_id=5&user_id=8&password=344los", pathInfo = ["publishDraft"], queryString = [("draft_id",Just "5"),("user_id",Just "8"),("password",Just "344los")]}
 reqTest29 = reqTest1 {rawPathInfo = "/publishDraft"     , rawQueryString = "?draft_id=4&user_id=8&password=344los", pathInfo = ["publishDraft"], queryString = [("draft_id",Just "4"),("user_id",Just "8"),("password",Just "344los")]}
 reqTest30 = reqTest1 {rawPathInfo = "/getPost/2"        , rawQueryString = "", pathInfo = ["getPost","2"], queryString = []}
+reqTest31 = reqTest1 {rawPathInfo = "/deletePost"       , rawQueryString = "?post_id=4&admin_id=4&password=1234dom", pathInfo = ["deletePost"], queryString = [("post_id",Just "4"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest32 = reqTest1 {rawPathInfo = "/createComment"    , rawQueryString = "?comment_text=sweet&post_id=3&user_id=8&password=344los", pathInfo = ["createComment"], queryString = [("comment_text",Just "sweet"),("post_id",Just "3"),("user_id",Just "8"),("password",Just "344los")]}
+reqTest33 = reqTest1 {rawPathInfo = "/updateComment"    , rawQueryString = "?comment_id=4&comment_text=creepy&user_id=2&password=87654321", pathInfo = ["updateComment"], queryString = [("comment_id",Just "4"),("comment_text",Just "creepy"),("user_id",Just "2"),("password",Just "87654321")]}
+reqTest34 = reqTest1 {rawPathInfo = "/deleteComment"    , rawQueryString = "?comment_id=4&admin_id=4&password=1234dom", pathInfo = ["deleteComment"], queryString = [("comment_id",Just "4"),("admin_id",Just "4"),("password",Just "1234dom")]}
+reqTest35 = reqTest1 {rawPathInfo = "/deleteComment"    , rawQueryString = "?comment_id=4&user_id=2&password=87654321", pathInfo = ["deleteComment"], queryString = [("comment_id",Just "4"),("user_id",Just "2"),("password",Just "87654321")]}
 
 
 --getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
@@ -1130,6 +1182,50 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"post_id\":2,\"author\":{\"author_id\":2,\"author_info\":\"i don`t like it\",\"user_id\":4},\"post_name\":\"Glass\",\"post_create_date\":\"2019-06-01\",\"post_category\":{\"category_id\":16,\"category_name\":\"Egypt\",\"sub_categories\":[],\"super_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}}},\"post_text\":\"Advertising companies say advertising is necessary and important. It informs people about new products. Advertising hoardings in the street make our environment colourful. And adverts on TV are often funny. Sometimes they are mini-dramas and we wait for the next programme in the mini-drama. Advertising can educate, too. Adverts tell us about new, healthy products\",\"post_main_pic_id\":2,\"post_main_pic_url\":\"http://localhost:3000/picture/2\",\"post_pics\":[],\"post_tags\":[{\"tag_id\":1,\"tag_name\":\"Cats\"},{\"tag_id\":12,\"tag_name\":\"Medicine\"},{\"tag_id\":10,\"tag_name\":\"Home\"}]}"
-  
+  describe "deletePost" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest31) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA,DELETEDATA,DELETEDATA,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest31) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+  describe "createComment" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest32) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,INSERTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest32) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"comment_id\":11,\"comment_text\":\"sweet\",\"post_id\":3,\"user_id\":8}"
+  describe "updateComment" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest33) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,UPDATEDATA,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest33) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"comment_id\":4,\"comment_text\":\"creepy\",\"post_id\":2,\"user_id\":2}"
+  describe "deleteComment (admin) " $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest34) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest34) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
+  describe "deleteComment (comment owner) " $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest35) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,EXISTCHEK,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,DELETEDATA]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest35) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"ok\":true}"
 
 

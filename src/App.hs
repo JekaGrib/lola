@@ -543,7 +543,7 @@ answerEx h req = do
       let paramsNames = ["post_id"]
       [postIdParam] <- mapM (checkParam req) paramsNames
       [postIdNum]   <- mapM tryRead [postIdParam] 
-      deleteAllAboutPosts h  [postIdNum]
+      deleteAllAboutPost h postIdNum
       okHelper h $ OkResponse { ok = True }
     ["createComment"]  -> do
       lift $ logInfo (hLog h) $ "Create comment command"
@@ -797,18 +797,15 @@ deleteDraftsPicsTags h draftsIds = do
   deleteFromDbE h "draftstags" where' values
   return ()
 
-deleteAllAboutPosts :: (Monad m, MonadCatch m) => Handle m -> [Integer] -> ExceptT ReqError m ()
-deleteAllAboutPosts h [] = return ()
-deleteAllAboutPosts h postsIds = do
-  let values = fmap (pack . show) postsIds
-  let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
-  deletePostsPicsTags h postsIds
-  deleteFromDbE h "comments" where' values
-  draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] where' values  
+deleteAllAboutPost :: (Monad m, MonadCatch m) => Handle m -> Integer -> ExceptT ReqError m ()
+deleteAllAboutPost h postId = do
+  let postIdTxt = pack . show $ postId
+  deletePostsPicsTags h [postId]
+  deleteFromDbE h "comments" "post_id=?" [postIdTxt]
+  draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
   let draftsIds = fmap fromOnlyInt draftsIdsSel
   deleteAllAboutDrafts h draftsIds
-  deleteFromDbE h "drafts" where' values
-  deleteFromDbE h "posts" where' values
+  deleteFromDbE h "posts" "post_id=?" [postIdTxt]
   return ()
 
 deletePostsPicsTags :: (Monad m, MonadCatch m) => Handle m -> [Integer] -> ExceptT ReqError m ()
