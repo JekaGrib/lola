@@ -1037,20 +1037,26 @@ chooseArgs req = do
   let sortArgs = Prelude.concat manySortArgs
   if isDateASC $ sortArgs
     then do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs)  
-      let where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date ASC, post_id ASC"]
-      let values    = (Prelude.concat . fmap fst . thirdThree . unzip3 $ filterArgs) ++  (Prelude.concat . fmap snd . thirdThree . unzip3 $ filterArgs)
+      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs)  
+      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
+      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date ASC, post_id ASC"]
+      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
       return (table,where',orderBy,values)
     else do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (firstThree . unzip3 $ filterArgs) ++ (firstThree . unzip3 $ sortArgs) 
-      let where'    = intercalate " AND " $ (secondThree . unzip3 $ filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (secondThree . unzip3 $ sortArgs) ++ ["post_create_date DESC, post_id DESC"]
-      let values    = (Prelude.concat . fmap fst . thirdThree . unzip3 $ filterArgs) ++  (Prelude.concat . fmap snd . thirdThree . unzip3 $ filterArgs)
+      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs) 
+      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
+      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date DESC, post_id DESC"]
+      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
       return (table,where',orderBy,values)
 
+data FilterArg = FilterArg {tableFil  :: String, whereFil    :: String, valuesFil :: ([Text],[Text])}
+data SortArg   = SortArg   {tableSort :: String, orderBySort :: String, sortDate  :: SortDate}
 
-isDateASC xs = foldr (\(a,b,c) cont -> if c == DateASC then True else cont) False xs
+data SortDate = DateASC | DateDESC 
+ deriving (Eq,Show,Read)
+
+defDateSort = DateDESC 
+isDateASC xs = foldr (\(SortArg _ _ c) cont -> if c == DateASC then True else cont) False xs
 
 
 checkComb req list = case fmap (isExistParam req) list of
@@ -1059,7 +1065,7 @@ checkComb req list = case fmap (isExistParam req) list of
      (True:_:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
      _               -> return ()
 
-checkFilterParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [(String,String,([Text],[Text]))]
+checkFilterParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [FilterArg]
 checkFilterParam req param =
   case isExistParam req param of
     False -> return []
@@ -1072,61 +1078,61 @@ chooseFilterArgs x param = case param of
     let table   = ""
     let where'  = "post_create_date = ?"
     let values  = ([],[x])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "created_at_lt" -> do
     let table   = ""
     let where'  = "post_create_date < ?"
     let values  = ([],[x])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "created_at_gt" -> do
     let table   = ""
     let where'  = "post_create_date < ?"
     let values  = ([],[x])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "category_id" -> do
     let table   = ""
     let where'  = "post_category_id = ?"
     let values  = ([],[x])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "tag" -> do
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([x],[])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "tags_in" -> do
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([],[])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "tags_all" -> do
     let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "tags_id @> ARRAY" ++ unpack x ++ "::bigint[]"
     let values  = ([],[])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "name_in" -> do 
     let table   = ""
     let where'  = "post_name ILIKE ?"
     let values  = ([],[Data.Text.concat ["%",x,"%"]])          
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "text_in" -> do
     let table   = ""
     let where'  = "post_text ILIKE ?"
     let values  = ([],[Data.Text.concat ["%",x,"%"]])          
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "everywhere_in" -> do
     let table   = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
     let where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
     let values  = ([Data.Text.concat ["%",x,"%"]],replicate 4 $ Data.Text.concat ["%",x,"%"])
-    return [(table,where',values)]
+    return [FilterArg table where' values]
   "author_name" -> do
     let table   = "JOIN users AS us ON authors.user_id=us.user_id"
     let where'  = "us.first_name = ?"
     let values  = ([],[x])
-    return [(table,where',values)]     
+    return [FilterArg table where' values]     
   _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
         
 
-checkSortParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [(String,String,SortDate)] 
+checkSortParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [SortArg] 
 checkSortParam req param = case isExistParam req param of
   False -> return []
   True  -> do
@@ -1138,49 +1144,46 @@ chooseSortArgs "DESC" param = case param of
     "sort_by_pics_number" -> do
       let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
       let orderBy = "count_pics DESC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_category" -> do
       let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
       let orderBy = "category_name DESC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_author" -> do
       let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
       let orderBy = "u.first_name DESC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_date" -> do
       let joinTable = ""
       let orderBy = "true"
-      return [(joinTable,orderBy,DateDESC)]
+      return [SortArg joinTable orderBy DateDESC]
     _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
 chooseSortArgs "ASC" param =
   case param of
     "sort_by_pics_number" -> do
       let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
       let orderBy = "count_pics ASC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_category" -> do
       let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
       let orderBy = "category_name ASC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_author" -> do
       let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
       let orderBy = "u.first_name ASC"
-      return [(joinTable,orderBy,defDateSort)]
+      return [SortArg joinTable orderBy defDateSort]
     "sort_by_date" -> do 
       let joinTable = ""
       let orderBy = "true"
-      return [(joinTable,orderBy,DateASC)]
+      return [SortArg joinTable orderBy defDateSort]
     _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param 
-chooseSortArgs txt param 
+chooseSortArgs txt param  
   | Data.Text.toUpper txt == "ASC"  = chooseSortArgs "ASC"  param
   | Data.Text.toUpper txt == "DESC" = chooseSortArgs "DESC" param
   | otherwise                       = throwE $ SimpleError $ "Invalid sort value" ++ unpack txt
 
 
-data SortDate = DateASC | DateDESC 
- deriving (Eq,Show,Read)
-
-defDateSort = DateDESC                                                                           
+                                                                          
 
 isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
   Just _  -> True
