@@ -26,7 +26,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, find, sortOn )
+import           Data.List                      ( intercalate, zip4, nub, find, sortOn, intersect )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -86,6 +86,11 @@ data PostsTagsL = PostsTagsL { post_idPTL :: Integer, tag_idPTL :: Integer }
 data DraftsL = DraftsL { draft_idDL :: Integer, post_idDL :: Maybe Integer, author_idDL :: Integer, draft_nameDL :: Text, draft_cat_idDL :: Integer, draft_textDL :: Text, draft_pic_idDL :: Integer }
 data DraftsPicsL = DraftsPicsL { draft_idDPL :: Integer, pic_idDPL :: Integer }
 data DraftsTagsL = DraftsTagsL { draft_idDTL :: Integer, tag_idDTL :: Integer }
+
+-- Types for JOIN tables
+data PostsLAuthorsL = PostsLAuthorsL { postsL_PAL :: PostsL, authorsL_PAL :: AuthorsL}
+data PostsLAuthorsLUsersL = PostsLAuthorsLUsersL { postsAuthorsL_PAUL :: PostsLAuthorsL, usersL_PAUL :: UsersL}
+--data PostsLCatsL = PostsLCatsL {}
 
 
 
@@ -645,27 +650,28 @@ findValidLinesInTags ("tag_id=?":ys) (x:xs) tags = findValidLinesInTags ys xs (f
 selectFromPostsAuthors ["user_id"] "post_id=?" [x] posts authors =
   let numX = read $ unpack x in
   let validPostsLines = filter ( (==) numX . post_idPL ) posts in
-  let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+  let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) authors in
   let validLines = concatMap joinAuthorLine validPostsLines in
-    fmap (OnlyInt . user_idAL . snd)  validLines
+    fmap (OnlyInt . user_idAL . authorsL_PAL)  validLines
 selectFromPostsAuthors ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
  "post_id=?" [x] posts authors =
     let numX = read $ unpack x in
     let validPostsLines = filter ( (==) numX . post_idPL ) posts in
-    let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+    let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) authors in
     let validLines = concatMap joinAuthorLine validPostsLines in
       fmap toPostInfo  validLines
 selectFromPostsAuthors ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
  "post_id=?" [x] posts authors =
     let numX = read $ unpack x in
     let validPostsLines = filter ( (==) numX . post_idPL ) posts in
-    let joinAuthorLine postLine = fmap ((,) postLine) $ filter ( ((==) (author_idPL postLine)) . author_idAL) authors in
+    let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) authors in
     let validLines = concatMap joinAuthorLine validPostsLines in
       fmap toPost  validLines
 
-toPost ((PostsL pId auI pN pDat pCatI pTxt pPicI),(AuthorsL auId auInfo usId)) = 
+toPost (PostsLAuthorsL (PostsL pId auI pN pDat pCatI pTxt pPicI) (AuthorsL auId auInfo usId)) = 
   Post pId auId auInfo usId pN pDat pCatI pTxt pPicI
-toPostInfo ((PostsL pId auI pN pDat pCatI pTxt pPicI),(AuthorsL auId auInfo usId)) = PostInfo auId auInfo pN pCatI pTxt pPicI
+toPostInfo (PostsLAuthorsL (PostsL pId auI pN pDat pCatI pTxt pPicI) (AuthorsL auId auInfo usId)) = 
+  PostInfo auId auInfo pN pCatI pTxt pPicI
 
 selectFromDraftsAuthors ["user_id"] "draft_id=?" [x] drafts authors =
   let numX = read $ unpack x in
@@ -706,14 +712,16 @@ selectFromPosts ["post_create_date"] "post_id=?" [x] posts =
   let validLines = filter ( (==) (read . unpack $ x) . post_idPL ) posts in
     fmap (OnlyDay . post_create_datePL) validLines
 
-selectLimitFromDbTest :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> StateT (TestDB,[MockAction]) IO [SelectType]
-selectLimitFromDbTest table orderBy page limitNumber params where' values = StateT $ \(db,acts) -> do
-  return (selectLim table orderBy page limitNumber params where' values db, (db,SELECTLIMITDATA:acts))
+selectLimitFromDbTest :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> StateT (TestDB,[MockAction]) IO [SelectType]
+selectLimitFromDbTest table orderBy page limitNumber params where' values filterargs sortargs = StateT $ \(db,acts) -> do
+  return (selectLim table orderBy page limitNumber params where' values filterargs sortargs db, (db,SELECTLIMITDATA:acts))
 
 fI = fromInteger
+doIt []     ys = ys
+doIt (x:xs) ys = doIt xs (x $ ys)
 
 selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_id DESC" page limitNum ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] 
-  "drafts.author_id = ?" [x] db =
+  "drafts.author_id = ?" [x] [] [] db =
     let drafts = draftsT db in
     let authors = authorsT db in
     let numX = read $ unpack x in
@@ -721,6 +729,47 @@ selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_i
     let joinAuthorLine draftLine = fmap ((,) draftLine) $ filter ( ((==) (author_idDL draftLine)) . author_idAL) authors in
     let validLines = concatMap joinAuthorLine validDraftsLines in
       drop (fI ((page-1)*limitNum)) . take (fI (page*limitNum)) . reverse . sortOn draft_idD $ (fmap toDraft validLines)
+selectLim "posts JOIN authors ON authors.author_id = posts.author_id" defOrderBy page limitNum ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] 
+  "true" [] filterargs sortargs db =
+    let validPostIds = nub . intersectAll . fmap (foo db) $ filterargs in
+    let sortFoos = fmap (boo db) sortargs in
+    let postIds = doIt sortFoos validPostIds in
+    fmap toPost $ concatMap (toPostsLAuthorsL db) postIds
+
+intersectAll [] = []
+intersectAll [x] = x
+intersectAll (x:xs) = x `intersect` (intersectAll xs)
+
+toPostsLAuthorsL :: TestDB -> Integer -> [PostsLAuthorsL]
+toPostsLAuthorsL db postId  =
+  let toPostLines postId = filter ( ((==) (postId)) . post_idPL) (postsT db) in
+  let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) (authorsT db) in
+    concatMap joinAuthorLine . toPostLines $ postId
+
+foo :: TestDB -> FilterArg -> [Integer]
+foo db (FilterArg "" "post_create_date = ?" ([],[x])) = fmap post_idPL . filter (((==) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+foo db (FilterArg "" "post_create_date < ?" ([],[x])) = fmap post_idPL . filter (((>) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+foo db (FilterArg "" "post_create_date > ?" ([],[x])) = fmap post_idPL . filter (((<) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+foo db (FilterArg "" "post_category_id = ?" ([],[x])) = 
+  let numX = read $ unpack x in
+    fmap post_idPL . filter (((==) numX) . post_cat_idPL) . postsT $ db
+foo db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+  "true" ([x],[])) = 
+    let numX = read $ unpack x in
+      fmap post_idPTL . filter ( ((==) numX) . tag_idPTL ) $ (postsTagsT db) 
+--foo db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+  --"true" ([],[])) = fmap (fromOnlyInt . post_idPTL) . filter ( (==) numX . tag_idPTL ) (postsTagsT db)
+--foo db (FilterArg "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"     
+  --"tags_id @> ARRAY" ++ show xs ++ "::bigint[]" ([],[])) = fmap (fromOnlyInt . post_idPTL) . filter ( (==) numX . tag_idPTL ) (postsTagsT db)
+--foo db (FilterArg "" "post_name ILIKE ?" ([],[xs])) = fmap post_idPL . filter ((>) readGregorian x) . post_create_datePL . postsT $ db
+
+boo :: TestDB -> SortArg -> ([Integer] -> [Integer])
+boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name DESC" dS) = 
+  let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
+    fmap (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name ASC" dS) = 
+  let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
+    reverse . fmap (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
 
 
 deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
@@ -896,6 +945,7 @@ reqTest32 = reqTest1 {rawPathInfo = "/createComment"    , rawQueryString = "?com
 reqTest33 = reqTest1 {rawPathInfo = "/updateComment"    , rawQueryString = "?comment_id=4&comment_text=creepy&user_id=2&password=87654321", pathInfo = ["updateComment"], queryString = [("comment_id",Just "4"),("comment_text",Just "creepy"),("user_id",Just "2"),("password",Just "87654321")]}
 reqTest34 = reqTest1 {rawPathInfo = "/deleteComment"    , rawQueryString = "?comment_id=4&admin_id=4&password=1234dom", pathInfo = ["deleteComment"], queryString = [("comment_id",Just "4"),("admin_id",Just "4"),("password",Just "1234dom")]}
 reqTest35 = reqTest1 {rawPathInfo = "/deleteComment"    , rawQueryString = "?comment_id=4&user_id=2&password=87654321", pathInfo = ["deleteComment"], queryString = [("comment_id",Just "4"),("user_id",Just "2"),("password",Just "87654321")]}
+reqTest36 = reqTest1 {rawPathInfo = "/getPosts/1"       , rawQueryString = "?category_id=16&sort_by_author=desc", pathInfo = ["getPosts","1"], queryString = [("category_id",Just "16"),("sort_by_author",Just "desc")]}
 
 
 --getBodyTest1 reqTest20 = return $ "{\"user_id\":6,\"password\":\"057ccc\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"
@@ -1227,5 +1277,14 @@ main = hspec $ do
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
         "{\"ok\":true}"
+  describe "getPosts" $  do
+    it "work" $ do
+      state <- execStateT (runExceptT $ answerEx handle1 reqTest36) (testDB1,[])
+      (reverse . snd $ state) `shouldBe` 
+        [LOGMSG,LOGMSG,LOGMSG,SELECTLIMITDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG,LOGMSG,SELECTDATA,LOGMSG]
+      ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest36) (testDB1,[])
+      let resInfo = fromE ansE
+      (toLazyByteString . resBuilder $ resInfo) `shouldBe`
+        "{\"page\":1,\"posts\":[{\"post_id\":2,\"author\":{\"author_id\":2,\"author_info\":\"i don`t like it\",\"user_id\":4},\"post_name\":\"Glass\",\"post_create_date\":\"2019-06-01\",\"post_category\":{\"category_id\":16,\"category_name\":\"Egypt\",\"sub_categories\":[],\"super_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}}},\"post_text\":\"Advertising companies say advertising is necessary and important. It informs people about new products. Advertising hoardings in the street make our environment colourful. And adverts on TV are often funny. Sometimes they are mini-dramas and we wait for the next programme in the mini-drama. Advertising can educate, too. Adverts tell us about new, healthy products\",\"post_main_pic_id\":2,\"post_main_pic_url\":\"http://localhost:3000/picture/2\",\"post_pics\":[],\"post_tags\":[{\"tag_id\":1,\"tag_name\":\"Cats\"},{\"tag_id\":12,\"tag_name\":\"Medicine\"},{\"tag_id\":10,\"tag_name\":\"Home\"}]}]}"
 
 

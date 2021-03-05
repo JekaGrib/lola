@@ -24,10 +24,11 @@ import           Data.Maybe                     ( fromJust )
 import           Data.Time.Clock
 import           Data.Time.LocalTime
 import           Data.Time.Calendar.OrdinalDate
-import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
+import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian, fromGregorianValid )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, nub )
+import           Data.List                      ( intercalate, zip4, nub, delete )
+import           Control.Monad                  ( when )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -48,7 +49,7 @@ data Handle m = Handle
   { hConf             :: Config,
     hLog              :: LogHandle m,
     selectFromDb      :: String -> [String] -> String -> [Text] -> m [SelectType],
-    selectLimitFromDb :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> m [SelectType],
+    selectLimitFromDb :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [SelectType],
     updateInDb        :: String -> String -> String -> [Text] -> m (),
     deleteFromDb      :: String -> String -> [Text] -> m (),
     isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
@@ -56,7 +57,8 @@ data Handle m = Handle
     insertManyInDb    :: String -> [String] -> [(Integer,Integer)] -> m (),
     httpAction        :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay            :: m String,
-    getBody           :: Request -> m BSL.ByteString
+    getBody           :: Request -> m BSL.ByteString,
+    printh            :: Request -> m ()
     }
 
 data Config = Config 
@@ -124,7 +126,7 @@ logOnErr h m = m `catchE` (\e -> do
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
   conn <- connectPostgreSQL (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
-  let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody
+  let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
   let resInfo = fromE ansE 
@@ -162,7 +164,7 @@ answerEx h req = do
       okHelper h $ UserResponse {user_id = usId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day}
     ["getUser", usId] -> do
       lift $ logInfo (hLog h) $ "Get user command"
-      usIdNum <- tryRead usId
+      usIdNum <- tryReadNum usId
       lift $ logInfo (hLog h) $ "All parameters parsed"
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE h "users" "user_id" "user_id=?" [usId] 
@@ -173,7 +175,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["user_id"]
       [usIdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum]   <- mapM tryRead [usIdParam]
+      [usIdNum]   <- mapM tryReadNum [usIdParam]
       lift $ logInfo (hLog h) $ "All parameters parsed"
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       updateInDbE h "comments" "user_id=?" "user_id=?" [pack . show $ (cDefUsId $ hConf h),usIdParam]
@@ -212,7 +214,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["user_id","author_info"]
       [usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames  
-      [usIdNum]               <- mapM tryRead [usIdParam]  
+      [usIdNum]               <- mapM tryReadNum [usIdParam]  
       isExistInDbE h  "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h "authors" "user_id" "user_id=?" [usIdParam] 
       auId <-  insertReturnInDbE h "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam]
@@ -224,7 +226,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["author_id"]
       [auIdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum]   <- mapM tryRead [auIdParam]
+      [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "author_id=?" [auIdParam] 
       okHelper h $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
@@ -233,7 +235,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["author_id","user_id","author_info"]
       [auIdParam,usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,usIdNum]                 <- mapM tryRead [auIdParam,usIdParam]
+      [auIdNum,usIdNum]                 <- mapM tryReadNum [auIdParam,usIdParam]
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       checkRelationUsAu h usIdParam auIdParam
@@ -244,7 +246,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["author_id"]
       [auIdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum]   <- mapM tryRead [auIdParam]
+      [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
       draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
@@ -264,14 +266,14 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["category_name","super_category_id"]
       [catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
-      [superCatIdNum]                <- mapM tryRead [superCatIdParam] 
+      [superCatIdNum]                <- mapM tryReadNum [superCatIdParam] 
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
       catId <-  insertReturnInDbE h "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       allSuperCats <- findAllSuperCats h  catId
       okHelper h $ inCatResp allSuperCats
     ["getCategory", catId] -> do
       lift $ logInfo (hLog h) $ "Get category command"
-      catIdNum <- tryRead catId
+      catIdNum <- tryReadNum catId
       isExistInDbE h "categories" "category_id" "category_id=?" [catId] 
       allSuperCats <- findAllSuperCats h  catIdNum
       okHelper h $ inCatResp allSuperCats
@@ -280,7 +282,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["category_id","category_name","super_category_id"]
       [catIdParam,catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,superCatIdNum]                  <- mapM tryRead [catIdParam,superCatIdParam]     
+      [catIdNum,superCatIdNum]                  <- mapM tryReadNum [catIdParam,superCatIdParam]     
       isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]      
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
       checkRelationCats h  catIdNum superCatIdNum
@@ -292,7 +294,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["category_id"]
       [catIdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum]              <- mapM tryRead [catIdParam] 
+      [catIdNum]              <- mapM tryReadNum [catIdParam] 
       isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam] 
       allSubCats <- findAllSubCats h  catIdNum
       let values = fmap (pack . show) ((cDefCatId $ hConf h):allSubCats)
@@ -312,7 +314,7 @@ answerEx h req = do
       okHelper h $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
       lift $ logInfo (hLog h) $ "Get tag command"
-      tagIdNum <- tryRead tagId
+      tagIdNum <- tryReadNum tagId
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagId] 
       OnlyTxt tagName <- selectOneFromDbE h "tags" ["tag_name"] "tag_id=?" [tagId] 
       okHelper h $ TagResponse tagIdNum tagName
@@ -321,7 +323,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["tag_id","tag_name"]
       [tagIdParam,tagNameParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum]                <- mapM tryRead [tagIdParam]
+      [tagIdNum]                <- mapM tryReadNum [tagIdParam]
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam] 
       updateInDbE h "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
       okHelper h $ TagResponse tagIdNum tagNameParam
@@ -330,7 +332,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["tag_id"]
       [tagIdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum]              <- mapM tryRead [tagIdParam] 
+      [tagIdNum]              <- mapM tryReadNum [tagIdParam] 
       deleteFromDbE h "draftstags" "tag_id=?" [tagIdParam]
       deleteFromDbE h "poststags" "tag_id=?" [tagIdParam]
       deleteFromDbE h "tags" "tag_id=?" [tagIdParam]
@@ -369,7 +371,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Create post`s draft command"
       let paramsNames = ["post_id","user_id","password"]
       [postIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,usIdNum]              <- mapM tryRead [postIdParam,usIdParam] 
+      [postIdNum,usIdNum]              <- mapM tryReadNum [postIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -391,7 +393,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Get draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -409,7 +411,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Get drafts command"
       let paramsNames = ["page","user_id","password"]
       [pageParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [pageNum,usIdNum]              <- mapM tryRead [pageParam,usIdParam] 
+      [pageNum,usIdNum]              <- mapM tryReadNum [pageParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -419,7 +421,7 @@ answerEx h req = do
       let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
-      params <- selectListLimitFromDbE h table orderBy pageNum draftNumberLimit extractParams where' values 
+      params <- selectListLimitFromDbE h table orderBy pageNum draftNumberLimit extractParams where' values [] []
       let alldraftIdsText = fmap (pack . show . draft_idD) params
       let allCatIdsNum = fmap draft_cat_idD params
       manyAllSuperCats <- mapM (findAllSuperCats h ) allCatIdsNum
@@ -432,7 +434,7 @@ answerEx h req = do
         , drafts9 = fmap (\(( Draft draftId auInfo postId draftName draftCat draftText draftMainPicId ),cats,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
     ["updateDraft",draftId]  -> do
       lift $ logInfo (hLog h) $ "Update draft command"
-      draftIdNum <- tryRead draftId
+      draftIdNum <- tryReadNum draftId
       json <- lift $ getBody h req
       body <- checkDraftReqJson json
       let usIdParam    = user_id1     body
@@ -466,7 +468,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Delete draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -479,7 +481,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Publish draft command"
       let paramsNames = ["draft_id","user_id","password"]
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum,usIdNum]              <- mapM tryRead [draftIdParam,usIdParam] 
+      [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -515,8 +517,8 @@ answerEx h req = do
           okHelper h $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPost",postId]  -> do
       lift $ logInfo (hLog h) $ "Get post command"
-      postIdNum <- tryRead postId
-      isExistInDbE h "users" "user_id" "user_id=?" [postId] 
+      postIdNum <- tryReadNum postId
+      isExistInDbE h "posts" "post_id" "post_id=?" [postId]
       Post pId auId auInfo usId pName pDate pCatId pText picId <- selectOneFromDbE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
       picsIdsSel <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postId] 
       let picsIds = fmap fromOnlyInt picsIdsSel
@@ -525,10 +527,14 @@ answerEx h req = do
       okHelper h $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPosts", page] -> do
       lift $ logInfo (hLog h) $ "Get posts command"
-      pageNum <- tryRead page
-      let extractParamsList = ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
-      (table,where',orderBy,values) <- chooseArgs req       
-      params <- selectListLimitFromDbE h table orderBy pageNum postNumberLimit extractParamsList where' values 
+      pageNum <- tryReadNum page
+      let extractParams = ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
+      (filterArgs,sortArgs) <- chooseArgs req 
+      let defTable = "posts JOIN authors ON authors.author_id = posts.author_id"
+      let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
+      let defWhere = "true"
+      let defValues = []
+      params <- selectListLimitFromDbE h defTable defOrderBy pageNum postNumberLimit extractParams defWhere defValues filterArgs sortArgs 
       let postIdsText = fmap (pack . show . post_idP) params
       let postCatsIds = fmap post_cat_idP params 
       manySuperCats <- mapM (findAllSuperCats h ) postCatsIds
@@ -542,14 +548,14 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["post_id"]
       [postIdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum]   <- mapM tryRead [postIdParam] 
+      [postIdNum]   <- mapM tryReadNum [postIdParam] 
       deleteAllAboutPost h postIdNum
       okHelper h $ OkResponse { ok = True }
     ["createComment"]  -> do
       lift $ logInfo (hLog h) $ "Create comment command"
       let paramsNames = ["post_id","comment_text","user_id","password"]
       [postIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,usIdNum]                       <- mapM tryRead [postIdParam,usIdParam] 
+      [postIdNum,usIdNum]                       <- mapM tryReadNum [postIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -560,15 +566,15 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Get comments command"
       let paramsNames = ["post_id","page"]
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,pageNum]     <- mapM tryRead [postIdParam,pageParam] 
+      [postIdNum,pageNum]     <- mapM tryReadNum [postIdParam,pageParam] 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam]
+      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
       okHelper h $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       lift $ logInfo (hLog h) $ "Update comment command"
       let paramsNames = ["comment_id","comment_text","user_id","password"]
       [commIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [commIdNum,usIdNum]                       <- mapM tryRead [commIdParam,usIdParam] 
+      [commIdNum,usIdNum]                       <- mapM tryReadNum [commIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
       userAuth pwdParam pwd
@@ -583,13 +589,13 @@ answerEx h req = do
           adminAuthE h  req
           let paramsNames = ["comment_id"]
           [commIdParam] <- mapM (checkParam req) paramsNames
-          [commIdNum]   <- mapM tryRead [commIdParam]
+          [commIdNum]   <- mapM tryReadNum [commIdParam]
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
           okHelper h $ OkResponse { ok = True }
         UserMode -> do
           let paramsNames = ["comment_id","user_id","password"]
           [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-          [commIdNum,usIdNum]              <- mapM tryRead [commIdParam,usIdParam]
+          [commIdNum,usIdNum]              <- mapM tryReadNum [commIdParam,usIdParam]
           isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
           OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
           userAuth pwdParam pwd
@@ -599,7 +605,7 @@ answerEx h req = do
           okHelper h $ OkResponse {ok = True}      
     ["picture",picId]  -> do
       lift $ logInfo (hLog h) $ "Picture command"
-      picIdNum <- tryRead picId 
+      picIdNum <- tryReadNum picId 
       isExistInDbE h "pics" "pic_id" "pic_id=?" [picId] 
       OnlyTxt picUrl <- selectOneFromDbE h "pics" ["pic_url"] "pic_id=?" [picId] 
       res <- getPicFromUrlE h picUrl
@@ -610,9 +616,13 @@ answerEx h req = do
         (lazyByteString $ HT.getResponseBody res)
     ["test",usId] -> do
       lift $ logInfo (hLog h) $ "Test command"
-      usIdNum <- tryRead usId
+      usIdNum <- tryReadNum usId
       isExistInDbE h "pics" "pic_id" "pic_id=?" [usId]
-      okHelper h $ OkResponse {ok = True} 
+      okHelper h $ OkResponse {ok = True}
+    ["req"] -> do
+      lift $ logInfo (hLog h) $ "Test command"
+      lift $ printh h $ req
+      okHelper h $ OkResponse {ok = True}  
       
 
 
@@ -846,21 +856,45 @@ checkKeyE keyParam key
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
 
 checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
-checkParam req param = (do
-  case lookup param $ queryToQueryText $ queryString req of
+checkParam req param = case lookup param $ queryToQueryText $ queryString req of
     Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
-    Just (Just x)  -> return x
+    Just (Just x)  -> case lookup param . delete (param,Just x) $ queryToQueryText $ queryString req of
+      Nothing -> return x
+      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack param
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
-    Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param)
+    Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
 checkEmptyList [] = throwE $ SimpleError "DatabaseError.Empty output"
 checkEmptyList _  = return ()
 
-tryRead :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryRead "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryRead xs = case reads . unpack $ xs of
+tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
+tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryReadNum xs = case reads . unpack $ xs of
   [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value:" ++ unpack xs
+  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"
+
+tryReadDay :: (Monad m) => Text -> ExceptT ReqError m Day
+tryReadDay "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryReadDay xs = case filter ((/=) ' ') . unpack $ xs of
+  [] -> throwE $ SimpleError $ "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+  x@(a:b:c:d:'-':e:f:'-':g:h:[]) -> do
+    year  <- tryReadNum (pack (a:b:c:d:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    month <- tryReadNum (pack (e:f:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    when (month `notElem` [1..12]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Month must be a number from 1 to 12. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
+    day   <- tryReadNum (pack (g:h:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Day of month must be a number from 1 to 31. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
+    case fromGregorianValid year (fromInteger month) (fromInteger day) of
+      Just x -> return x
+      Nothing -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Invalid day, month, year combination. Date must have format (yyyy-mm-dd). Example: 2020-12-12"     
+  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+
+
+tryReadNumArray :: (Monad m) => Text -> ExceptT ReqError m [Integer]
+tryReadNumArray "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryReadNumArray xs = case reads . unpack $ xs of
+  [([],"")] -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be NOT empty array of numbers. Example: [3,45,24,7] "
+  [(a,"")]  -> return a
+  _         -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be array of numbers. Example: [3,45,24,7] "
 
 toSelQ table params where' = 
   fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where'
@@ -901,15 +935,34 @@ selectListFromDbE h table params where' values = catchDbErr $ do
   return xs 
 
 
-selectLimitFromDb' :: Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> IO [SelectType]
-selectLimitFromDb' conn table orderBy page limitNumber params where' values = do
+selectLimitFromDb' :: Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [SelectType]
+selectLimitFromDb' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
+  let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
+  let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
+  let orderBy = intercalate ","     $ fmap orderBySort sortArgs ++ [defOrderBy]
+  let values  = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
   xs <- query conn (toSelLimQ table orderBy page limitNumber params where') values
   return xs
 
---selectListLimitFromDbE :: (Monad m, MonadCatch m, ToRow q, FromRow r) => Handle m -> Connection -> Query -> q -> m [r]
-selectListLimitFromDbE h table orderBy page limitNumber params where' values = catchDbErr $ do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
-  xs <- lift $ selectLimitFromDb h table orderBy page limitNumber params where' values
+  {-if isDateASC $ sortArgs
+    then do
+      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs)  
+      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
+      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date ASC, post_id ASC"]
+      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
+      return (table,where',orderBy,values)
+    else do
+      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs) 
+      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
+      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date DESC, post_id DESC"]
+      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
+      return (table,where',orderBy,values)
+  -}
+
+selectListLimitFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [SelectType]
+selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = catchDbErr $ do
+  lift $ logDebug (hLog h) $ "Select data from DB."
+  xs <- lift $ selectLimitFromDb h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs
 
@@ -998,7 +1051,7 @@ checkMyPicUrl url = do
 
 readUrlEnd :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Text -> Text -> ExceptT ReqError m Integer
 readUrlEnd h url urlEnd = do
-  picIdNum <- tryRead urlEnd 
+  picIdNum <- tryReadNum urlEnd 
   check    <- lift $ isExistInDb h "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
   case check of 
     True  -> return picIdNum 
@@ -1035,19 +1088,7 @@ chooseArgs req = do
   let filterArgs = Prelude.concat manyFilterArgs
   manySortArgs <- mapM (checkSortParam req) $ sortList
   let sortArgs = Prelude.concat manySortArgs
-  if isDateASC $ sortArgs
-    then do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs)  
-      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date ASC, post_id ASC"]
-      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
-      return (table,where',orderBy,values)
-    else do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs) 
-      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date DESC, post_id DESC"]
-      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
-      return (table,where',orderBy,values)
+  return (filterArgs,sortArgs)
 
 data FilterArg = FilterArg {tableFil  :: String, whereFil    :: String, valuesFil :: ([Text],[Text])}
 data SortArg   = SortArg   {tableSort :: String, orderBySort :: String, sortDate  :: SortDate}
@@ -1075,54 +1116,61 @@ checkFilterParam req param =
 
 chooseFilterArgs x param = case param of
   "created_at" -> do
+    tryReadDay x
     let table   = ""
     let where'  = "post_create_date = ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "created_at_lt" -> do
+    tryReadDay x
     let table   = ""
     let where'  = "post_create_date < ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "created_at_gt" -> do
+    tryReadDay x
     let table   = ""
-    let where'  = "post_create_date < ?"
+    let where'  = "post_create_date > ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "category_id" -> do
+    tryReadNum x
     let table   = ""
     let where'  = "post_category_id = ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "tag" -> do
+    tryReadNum x
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([x],[])
     return [FilterArg table where' values]
   "tags_in" -> do
-    let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+    xs <- tryReadNumArray x
+    let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . show $ xs) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([],[])
     return [FilterArg table where' values]
   "tags_all" -> do
+    xs <- tryReadNumArray x
     let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where'  = "tags_id @> ARRAY" ++ unpack x ++ "::bigint[]"
+    let where'  = "tags_id @> ARRAY" ++ show xs ++ "::bigint[]"
     let values  = ([],[])
     return [FilterArg table where' values]
   "name_in" -> do 
     let table   = ""
     let where'  = "post_name ILIKE ?"
-    let values  = ([],[Data.Text.concat ["%",x,"%"]])          
+    let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
     return [FilterArg table where' values]
   "text_in" -> do
     let table   = ""
     let where'  = "post_text ILIKE ?"
-    let values  = ([],[Data.Text.concat ["%",x,"%"]])          
+    let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
     return [FilterArg table where' values]
   "everywhere_in" -> do
     let table   = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
     let where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
-    let values  = ([Data.Text.concat ["%",x,"%"]],replicate 4 $ Data.Text.concat ["%",x,"%"])
+    let values  = ([Data.Text.concat ["%",escape x,"%"]],replicate 4 $ Data.Text.concat ["%",escape x,"%"])
     return [FilterArg table where' values]
   "author_name" -> do
     let table   = "JOIN users AS us ON authors.user_id=us.user_id"
@@ -1130,7 +1178,12 @@ chooseFilterArgs x param = case param of
     let values  = ([],[x])
     return [FilterArg table where' values]     
   _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
-        
+
+escape xs = pack $ concatMap escapeChar (unpack xs)
+escapeChar '\\' =  "\\\\" 
+escapeChar '%' =  "\\%" 
+escapeChar '_' =  "\\_" 
+escapeChar a =  [a] 
 
 checkSortParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [SortArg] 
 checkSortParam req param = case isExistParam req param of
@@ -1141,46 +1194,45 @@ checkSortParam req param = case isExistParam req param of
       _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
 
 chooseSortArgs "DESC" param = case param of
-    "sort_by_pics_number" -> do
-      let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-      let orderBy = "count_pics DESC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_category" -> do
-      let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-      let orderBy = "category_name DESC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_author" -> do
-      let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-      let orderBy = "u.first_name DESC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_date" -> do
-      let joinTable = ""
-      let orderBy = "true"
-      return [SortArg joinTable orderBy DateDESC]
-    _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
-chooseSortArgs "ASC" param =
-  case param of
-    "sort_by_pics_number" -> do
-      let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-      let orderBy = "count_pics ASC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_category" -> do
-      let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-      let orderBy = "category_name ASC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_author" -> do
-      let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-      let orderBy = "u.first_name ASC"
-      return [SortArg joinTable orderBy defDateSort]
-    "sort_by_date" -> do 
-      let joinTable = ""
-      let orderBy = "true"
-      return [SortArg joinTable orderBy defDateSort]
-    _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param 
+  "sort_by_pics_number" -> do
+    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+    let orderBy = "count_pics DESC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_category" -> do
+    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
+    let orderBy = "category_name DESC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_author" -> do
+    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
+    let orderBy = "u.first_name DESC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_date" -> do
+    let joinTable = ""
+    let orderBy = "true"
+    return [SortArg joinTable orderBy DateDESC]
+  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
+chooseSortArgs "ASC" param = case param of
+  "sort_by_pics_number" -> do
+    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+    let orderBy = "count_pics ASC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_category" -> do
+    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
+    let orderBy = "category_name ASC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_author" -> do
+    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
+    let orderBy = "u.first_name ASC"
+    return [SortArg joinTable orderBy defDateSort]
+  "sort_by_date" -> do 
+    let joinTable = ""
+    let orderBy = "true"
+    return [SortArg joinTable orderBy DateASC]
+  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
 chooseSortArgs txt param  
   | Data.Text.toUpper txt == "ASC"  = chooseSortArgs "ASC"  param
   | Data.Text.toUpper txt == "DESC" = chooseSortArgs "DESC" param
-  | otherwise                       = throwE $ SimpleError $ "Invalid sort value" ++ unpack txt
+  | otherwise                       = throwE $ SimpleError $ "Invalid sort value: " ++ unpack txt ++ ". It should be only 'ASC' or 'DESC'"
 
 
                                                                           
@@ -1217,7 +1269,7 @@ parseParamE req param = case fromJust . lookup param $ queryToQueryText $ queryS
 adminAuthE h req = do
   let authParams  = ["admin_id","password"]
   [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams
-  [admIdNum]            <- hideErr $ mapM tryRead [admIdParam]
+  [admIdNum]            <- hideErr $ mapM tryReadNum [admIdParam]
   lift $ logInfo (hLog h) $ "All authorize parameters parsed"
   hideErr $ isExistInDbE h "users" "user_id" "user_id=?" [admIdParam] 
   Auth pwd admBool <- hideErr $ selectOneFromDbE h "users" ["password","admin"] "user_id=?" [admIdParam] 
