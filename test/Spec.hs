@@ -15,7 +15,7 @@ import           Network.HTTP.Types             ( status200, status404, status30
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
 import           Data.Aeson
-import           Data.Text                      ( pack, unpack, Text, concat, toUpper, stripPrefix, isPrefixOf )
+import           Data.Text                      ( pack, unpack, Text, concat, toUpper, stripPrefix )
 import           Data.ByteString.Builder        ( lazyByteString, Builder, toLazyByteString )
 import           Database.PostgreSQL.Simple
 import qualified Network.HTTP.Simple            as HT
@@ -26,7 +26,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, nub, find, sortOn, intersect, sort, group, groupBy )
+import           Data.List                      ( intercalate, zip4, nub, find, sortOn, intersect, sort, group, groupBy, isPrefixOf, isInfixOf, isSuffixOf, union )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -90,8 +90,9 @@ data DraftsTagsL = DraftsTagsL { draft_idDTL :: Integer, tag_idDTL :: Integer }
 
 -- Types for JOIN tables
 data PostsLAuthorsL = PostsLAuthorsL { postsL_PAL :: PostsL, authorsL_PAL :: AuthorsL}
-data PostsLAuthorsLUsersL = PostsLAuthorsLUsersL { postsAuthorsL_PAUL :: PostsLAuthorsL, usersL_PAUL :: UsersL}
+data PostsLAuthorsLUsersL = PostsLAuthorsLUsersL { postsLAuthorsL_PAUL :: PostsLAuthorsL, usersL_PAUL :: UsersL}
 data PostsLCatsL = PostsLCatsL { postsL_PCL :: PostsL, catsL_PCL :: CatsL}
+data PostsTagsLTagsL = PostsTagsLTagsL { postsTagsL_PTLTL :: PostsTagsL, tagsL_PTLTL :: TagsL}
 
 data JoinTable1 = JoinTable1 { post_idJT1 :: Integer, tags_idJT1 :: [Integer]}
 data JoinTable2 = JoinTable2 { post_idJT2 :: Integer, isintagJT2 :: Bool}
@@ -163,7 +164,7 @@ tagsT1 = [tagsL1, tagsL2, tagsL3, tagsL4, tagsL5, tagsL6, tagsL7, tagsL8, tagsL9
 
 catsL1  = CatsL 1  "DELETED"    Nothing
 catsL2  = CatsL 2  "Sport"      Nothing
-catsL3  = CatsL 3  "Football"   (Just 2)
+catsL3  = CatsL 3  "football"   (Just 2)
 catsL4  = CatsL 4  "Basketball" (Just 2)
 catsL5  = CatsL 5  "Tennus"     (Just 2)
 catsL6  = CatsL 6  "Hobby"      Nothing
@@ -183,7 +184,7 @@ catsT1 = [catsL1,catsL2,catsL3,catsL4,catsL5,catsL6,catsL7,catsL8,catsL9,catsL10
 txt1 = "Do you want to know the history of jeans? In 1850 a young man, Levi Strauss, came to California from Germany. California was famous for its gold. Many people were working there. They were looking for gold and needed strong clothes. First Levi Strauss sold canvas to workers. Canvas was strong and soon Levi used it to make jeans. All workers liked his jeans and bought them. His first jeans had no colour. Then Levi coloured his jeans. Today everyone in the world knows the famous blue jeans of Levi Strauss."
 txt2 = "Advertising companies say advertising is necessary and important. It informs people about new products. Advertising hoardings in the street make our environment colourful. And adverts on TV are often funny. Sometimes they are mini-dramas and we wait for the next programme in the mini-drama. Advertising can educate, too. Adverts tell us about new, healthy products"
 txt3 = "some consumers argue that advertising is a bad thing. They say that advertising is bad for children. Adverts make children ‘pester’ their parents to buy things for them. Advertisers know we love our children and want to give them everything."
-txt4 = "Marco Polo is famous for his journeys across Asia. He was one of the first Europeans to travel in Mongolia and China. He wrote a famous book called ‘The Travels’."
+txt4 = "Marco Polo is famous for his journeys across Asia. He was one of the first Europeans to travel in Mongolia and China. He wrote a famous sook called ‘The Travels’."
 txt5 = "I’m having a great time here in Sydney. The different sports are exciting, and there are lots of other exciting things too. For example the mascots are really great! They are called Olly, Syd and Millie. They are Australian ‘ animals and they are the symbols of the Sydney Games. The kookaburra is an Australian bird. She got her name, Olly, from the word ‘Olympics’. She’s a symbol of friendship and honesty. Then there’s Syd (from Sydney). He’s a platypus with a duck’s nose."
 
 
@@ -722,13 +723,13 @@ selectLimitFromDbTest table orderBy page limitNumber params where' values filter
 
 fI = fromInteger
 
-sortIt :: [Integer] -> [([Integer] -> [[Integer]])] -> [[Integer]]
-sortIt [] _  = [[]]
-sortIt [x] _ = [[x]]
-sortIt xs [] = [xs]
-sortIt xs (f:[]) = f xs
-sortIt xs (f1:f2:[]) = concatMap f2 $ sortIt xs [f1]
-sortIt xs fs = concatMap (last fs) $ sortIt xs (init fs)
+runSort :: [Integer] -> [([Integer] -> [[Integer]])] -> [[Integer]]
+runSort [] _  = [[]]
+runSort [x] _ = [[x]]
+runSort xs [] = [xs]
+runSort xs (f:[]) = f xs
+runSort xs (f1:f2:[]) = concatMap f2 $ runSort xs [f1]
+runSort xs fs = concatMap (last fs) $ runSort xs (init fs)
 
 selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_id DESC" page limitNum ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] 
   "drafts.author_id = ?" [x] [] [] db =
@@ -739,12 +740,18 @@ selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_i
     let joinAuthorLine draftLine = fmap ((,) draftLine) $ filter ( ((==) (author_idDL draftLine)) . author_idAL) authors in
     let validLines = concatMap joinAuthorLine validDraftsLines in
       drop (fI ((page-1)*limitNum)) . take (fI (page*limitNum)) . reverse . sortOn draft_idD $ (fmap toDraft validLines)
+selectLim "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","user_id","comment_text"] "post_id=?" [x] [] [] db =
+  let numX = read $ unpack x in
+  let validComLs = filter ( (==) numX . post_idCL ) (commentsT db) in
+    fmap toComm validComLs
 selectLim "posts JOIN authors ON authors.author_id = posts.author_id" defOrderBy page limitNum ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] 
   "true" [] filterargs sortargs db =
-    let validPostIds = nub . intersectAll . fmap (foo db) $ filterargs in
-    let sortFoos = fmap (boo db) sortargs in
-    let postIds = P.concat $ sortIt validPostIds sortFoos in
+    let validPostIds = nub . intersectAll . fmap (filterIt db) $ filterargs in
+    let sortFoos = fmap (sortFoo db) sortargs in
+    let postIds = P.concat $ runSort validPostIds sortFoos in
     fmap toPost $ concatMap (toPostsLAuthorsL db) postIds
+
+toComm (CommentsL id txt pI usId) = Comment id usId txt
 
 intersectAll [] = []
 intersectAll [x] = x
@@ -758,50 +765,106 @@ toPostsLAuthorsL db postId  =
   let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) (authorsT db) in
     concatMap joinAuthorLine . toPostLines db $ postId
 
-foo :: TestDB -> FilterArg -> [Integer]
-foo db (FilterArg "" "post_create_date = ?" ([],[x])) = fmap post_idPL . filter (((==) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
-foo db (FilterArg "" "post_create_date < ?" ([],[x])) = fmap post_idPL . filter (((>) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
-foo db (FilterArg "" "post_create_date > ?" ([],[x])) = fmap post_idPL . filter (((<) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
-foo db (FilterArg "" "post_category_id = ?" ([],[x])) = 
+fromIlike :: String -> String
+fromIlike str = unEscapeUnderSc . unEscapePercent . tail . init $ str 
+
+unEscapePercent :: String -> String
+unEscapePercent [] = [] 
+unEscapePercent xs@(y:ys) = case isInfixOf "\\%" xs of
+  False -> xs
+  True  -> case isPrefixOf "\\%" xs of
+    False -> y : (unEscapePercent ys)
+    True  -> unEscapePercent ('%':(drop 2 xs))
+
+unEscapeUnderSc :: String -> String
+unEscapeUnderSc [] = [] 
+unEscapeUnderSc xs@(y:ys) = case isInfixOf "\\_" xs of
+  False -> xs
+  True  -> case isPrefixOf "\\_" xs of
+    False -> y : (unEscapeUnderSc ys)
+    True  -> unEscapeUnderSc ('_':(drop 2 xs))
+
+filterIt :: TestDB -> FilterArg -> [Integer]
+filterIt db (FilterArg "" "post_create_date = ?" ([],[x])) = fmap post_idPL . filter (((==) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+filterIt db (FilterArg "" "post_create_date < ?" ([],[x])) = fmap post_idPL . filter (((>) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+filterIt db (FilterArg "" "post_create_date > ?" ([],[x])) = fmap post_idPL . filter (((<) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
+filterIt db (FilterArg "" "post_category_id = ?" ([],[x])) = 
   let numX = read $ unpack x in
     fmap post_idPL . filter (((==) numX) . post_cat_idPL) . postsT $ db
-foo db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+filterIt db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
   "true" ([x],[])) = 
     let numX = read $ unpack x in
       fmap post_idPTL . filter ( ((==) numX) . tag_idPTL ) $ (postsTagsT db) 
---foo db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+--filterIt db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . unpack $ x) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
   --"true" ([],[])) = fmap (fromOnlyInt . post_idPTL) . filter ( (==) numX . tag_idPTL ) (postsTagsT db)
---foo db (FilterArg "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"     
+--filterIt db (FilterArg "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"     
   --"tags_id @> ARRAY" ++ show xs ++ "::bigint[]" ([],[])) = fmap (fromOnlyInt . post_idPTL) . filter ( (==) numX . tag_idPTL ) (postsTagsT db)
---foo db (FilterArg "" "post_name ILIKE ?" ([],[xs])) = fmap post_idPL . filter ((>) readGregorian x) . post_create_datePL . postsT $ db
+filterIt db (FilterArg "" "post_name ILIKE ?" ([],[xs])) = fmap post_idPL . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . post_namePL) . postsT $ db
+filterIt db (FilterArg "" "post_text ILIKE ?" ([],[xs])) = fmap post_idPL . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . post_textPL) . postsT $ db
+filterIt db (FilterArg "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
+  "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)" ([xs],[ys,zs,as,bs])) =
+    let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) (authorsT db) in
+    let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
+    let joinCatLine pL = fmap (\cL -> PostsLCatsL pL cL) $ filter ( ((==) (post_cat_idPL pL)) . cat_idCL) (catsT db) in
+    let joinTagLine ptL = fmap (\tL -> PostsTagsLTagsL ptL tL) $ filter ( ((==) (tag_idPTL ptL)) . tag_idTL) (tagsT db) in
+    let validPostTxtIds  = nub . fmap post_idPL . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . post_textPL) . postsT $ db in
+    let validPostNameIds = nub . fmap post_idPL . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . post_namePL) . postsT $ db in
+    let validUsNameIds   = nub . fmap (post_idPL . postsL_PAL . postsLAuthorsL_PAUL ) . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . first_nameUL . usersL_PAUL ) . concatMap joinUserLine . concatMap joinAuthorLine $ (postsT db) in
+    let validCatNameIds  = nub . fmap (post_idPL . postsL_PCL ) . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . cat_nameCL . catsL_PCL ) . concatMap joinCatLine $ (postsT db) in
+    let validTagNameIds  = nub . fmap (post_idPTL . postsTagsL_PTLTL ) . filter (isInfixOf (fromIlike . unpack $ xs) . unpack . tag_nameTL . tagsL_PTLTL ) . concatMap joinTagLine $ (postsTagsT db) in
+      validPostTxtIds `union` validPostNameIds `union` validUsNameIds `union` validCatNameIds `union` validTagNameIds
+filterIt db (FilterArg "JOIN users AS us ON authors.user_id=us.user_id"
+  "us.first_name = ?" ([],[x])) =
+    let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) (authorsT db) in
+    let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
+    fmap (post_idPL . postsL_PAL . postsLAuthorsL_PAUL ) . filter ((==) (x) . first_nameUL . usersL_PAUL ) . concatMap joinUserLine . concatMap joinAuthorLine $ (postsT db)
+filterIt db (FilterArg "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+  where' ([],[])) =
+    let phrase1 = "tags_id @> ARRAY" in
+    let phrase2 = "::bigint[]" in
+    case and [(isPrefixOf phrase1 where'),(isSuffixOf phrase2 where')] of
+      False -> error "Pattern match fail in filterIt function in \"tags_all\" search"
+      True  -> 
+        let xs = read . reverse . drop (length phrase2) . reverse . drop (length phrase1) $ where' :: [Integer] in
+        let joinTable1 postsTagsLs = case postsTagsLs of {[] -> JoinTable1 0 []; lines -> JoinTable1 (post_idPTL . head $ lines) (fmap tag_idPTL lines)} in
+          fmap post_idJT1 . filter ( (\ys -> all (`elem` ys) xs) . tags_idJT1) . fmap joinTable1 . groupMy post_idPTL . sortOn post_idPTL $ (postsTagsT db)
+filterIt db (FilterArg table "true" ([],[])) =
+    let phrase1 = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" in
+    let phrase2 = ") GROUP BY post_id) AS t ON posts.post_id=t.post_id" in
+    case and [(isPrefixOf phrase1 table),(isSuffixOf phrase2 table)] of
+      False -> error "Pattern match fail in filterIt function in where='true' search"
+      True  -> 
+        let xs = read . reverse . (']':) . drop (length phrase2) . reverse . ('[':) . drop (length phrase1) $ table :: [Integer] in
+        let joinTable1 postsTagsLs = case postsTagsLs of {[] -> JoinTable1 0 []; lines -> JoinTable1 (post_idPTL . head $ lines) (fmap tag_idPTL lines)} in
+          fmap post_idJT1 . filter ( (\ys -> any (`elem` ys) xs) . tags_idJT1) . fmap joinTable1 . groupMy post_idPTL . sortOn post_idPTL $ (postsTagsT db)
 
 groupMy :: Ord b => (a -> b) -> ([a] -> [[a]])
 groupMy f = groupBy (\a b -> f a == f b)
 
-boo :: TestDB -> SortArg -> ([Integer] -> [[Integer]])
-boo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+sortFoo :: TestDB -> SortArg -> ([Integer] -> [[Integer]])
+sortFoo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
   "count_pics ASC" dS) =
     let pullValidLines postId = filter ( (==) postId . post_idPPL ) (postsPicsT db) in
       (fmap . fmap) post_idJT3 . groupMy count_picsJT3 . sortOn count_picsJT3 . fmap toJoinTable3 . group . sort . fmap post_idPPL . concatMap pullValidLines 
-boo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+sortFoo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
   "count_pics DESC" dS) =
     let pullValidLines postId = filter ( (==) postId . post_idPPL ) (postsPicsT db) in
       reverse . (fmap . fmap) post_idJT3 . groupMy count_picsJT3 . sortOn count_picsJT3 . fmap toJoinTable3 . group . sort . fmap post_idPPL . concatMap pullValidLines 
-boo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
+sortFoo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
   "category_name ASC" dS) =
     let joinCatLine pL = fmap (\cL -> PostsLCatsL pL cL) $ filter ( ((==) (post_cat_idPL pL)) . cat_idCL) (catsT db) in
       (fmap . fmap) (post_idPL . postsL_PCL ) . groupMy (cat_nameCL . catsL_PCL ) . sortOn (cat_nameCL . catsL_PCL ) . concatMap joinCatLine . concatMap (toPostLines db) 
-boo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
+sortFoo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
   "category_name DESC" dS) =
     let joinCatLine pL = fmap (\cL -> PostsLCatsL pL cL) $ filter ( ((==) (post_cat_idPL pL)) . cat_idCL) (catsT db) in
       reverse . (fmap . fmap) (post_idPL . postsL_PCL ). groupMy (cat_nameCL . catsL_PCL ) . sortOn (cat_nameCL . catsL_PCL ) . concatMap joinCatLine . concatMap (toPostLines db) 
-boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name ASC" dS) = 
+sortFoo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name ASC" dS) = 
   let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
-    (fmap . fmap) (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
-boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name DESC" dS) = 
+    (fmap . fmap) (post_idPL . postsL_PAL . postsLAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+sortFoo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name DESC" dS) = 
   let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
-    reverse . (fmap . fmap) (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
-boo db (SortArg "" "true" dS) = (\a -> [a])
+    reverse . (fmap . fmap) (post_idPL . postsL_PAL . postsLAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+sortFoo db (SortArg "" "true" dS) = (\a -> [a])
 
 --defOrdFuncs db "post_create_date ASC, post_id ASC" =
   --sortOn post_create_datePL . concatMap (toPostLines db)
@@ -826,7 +889,6 @@ delete' "poststags"  where' values db acts = deleteFromPostsTags where' values d
 delete' "postspics"  where' values db acts = deleteFromPostsPics where' values db acts
 delete' "posts"      where' values db acts = deleteFromPosts     where' values db acts
 delete' "comments"   where' values db acts = deleteFromComments  where' values db acts
-
 
 deleteFromUsers "user_id=?" [x] db acts = 
   let numX = read $ unpack x in
@@ -1179,7 +1241,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest20) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"draft_id\":6,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"  
+        "{\"draft_id\":6,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"  
   describe "createPostsDraft" $  do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest21) (testDB1,[])
@@ -1215,7 +1277,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest24) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"page\":1,\"drafts\":[{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Cort\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"draft_main_pic_id\":3,\"draft_main_pic_url\":\"http://localhost:3000/picture/3\",\"draft_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"draft_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]},{\"draft_id\":4,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Table\",\"draft_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"draft_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"draft_main_pic_id\":2,\"draft_main_pic_url\":\"http://localhost:3000/picture/2\",\"draft_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"draft_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}]}"
+        "{\"page\":1,\"drafts\":[{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Cort\",\"draft_category\":{\"category_id\":3,\"category_name\":\"football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"draft_main_pic_id\":3,\"draft_main_pic_url\":\"http://localhost:3000/picture/3\",\"draft_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"draft_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]},{\"draft_id\":4,\"post_id\":3,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"draft_name\":\"Table\",\"draft_category\":{\"category_id\":14,\"category_name\":\"Africa\",\"sub_categories\":[16],\"super_category\":{\"category_id\":11,\"category_name\":\"Place\",\"sub_categories\":[12,14],\"super_category\":\"NULL\"}},\"draft_text\":\"People say that travelling is dangerous, for example, driving a car. They point to the fact that there are so many cars on the roads that the chances of an accident are very high. But that\226\128\153s nothing compared to Space. Space will soon be so dangerous to travel in that only a mad man would even try.\",\"draft_main_pic_id\":2,\"draft_main_pic_url\":\"http://localhost:3000/picture/2\",\"draft_pics\":[{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"},{\"pic_id\":8,\"pic_url\":\"http://localhost:3000/picture/8\"},{\"pic_id\":9,\"pic_url\":\"http://localhost:3000/picture/9\"},{\"pic_id\":10,\"pic_url\":\"http://localhost:3000/picture/10\"},{\"pic_id\":3,\"pic_url\":\"http://localhost:3000/picture/3\"}],\"draft_tags\":[{\"tag_id\":8,\"tag_name\":\"Spring\"}]}]}"
   describe "getDrafts page2" $  do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest25) (testDB1,[])
@@ -1233,7 +1295,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest26) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"
+        "{\"draft_id\":5,\"post_id\":\"NULL\",\"author\":{\"author_id\":3,\"author_info\":\"London is the capital\",\"user_id\":6},\"draft_name\":\"rock\",\"draft_category\":{\"category_id\":3,\"category_name\":\"football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"draft_text\":\"heyhey\",\"draft_main_pic_id\":11,\"draft_main_pic_url\":\"http://localhost:3000/picture/11\",\"draft_pics\":[{\"pic_id\":12,\"pic_url\":\"http://localhost:3000/picture/12\"},{\"pic_id\":13,\"pic_url\":\"http://localhost:3000/picture/13\"}],\"draft_tags\":[]}"
   describe "deleteDraft" $  do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest27) (testDB1,[])
@@ -1251,7 +1313,7 @@ main = hspec $ do
       ansE <- evalStateT (runExceptT $ answerEx handle1 reqTest28) (testDB1,[])
       let resInfo = fromE ansE
       (toLazyByteString . resBuilder $ resInfo) `shouldBe`
-        "{\"post_id\":6,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"post_name\":\"Cort\",\"post_create_date\":\"2020-02-20\",\"post_category\":{\"category_id\":3,\"category_name\":\"Football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"post_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"post_main_pic_id\":3,\"post_main_pic_url\":\"http://localhost:3000/picture/3\",\"post_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"post_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]}"
+        "{\"post_id\":6,\"author\":{\"author_id\":4,\"author_info\":\"i have a cat\",\"user_id\":8},\"post_name\":\"Cort\",\"post_create_date\":\"2020-02-20\",\"post_category\":{\"category_id\":3,\"category_name\":\"football\",\"sub_categories\":[],\"super_category\":{\"category_id\":2,\"category_name\":\"Sport\",\"sub_categories\":[3,4,5],\"super_category\":\"NULL\"}},\"post_text\":\"The reason is simple; ever since we started exploring Space in the late 1950s we have been leaving things up there. There is now so much rubbish circling the Earth that from a distance our planet appears to have a ring around it, making it look a bit like Saturn. Unless we start cleaning up after ourselves, we are in danger.\",\"post_main_pic_id\":3,\"post_main_pic_url\":\"http://localhost:3000/picture/3\",\"post_pics\":[{\"pic_id\":7,\"pic_url\":\"http://localhost:3000/picture/7\"},{\"pic_id\":6,\"pic_url\":\"http://localhost:3000/picture/6\"}],\"post_tags\":[{\"tag_id\":4,\"tag_name\":\"Love\"},{\"tag_id\":6,\"tag_name\":\"Sommer\"},{\"tag_id\":9,\"tag_name\":\"Mondey\"}]}"
   describe "publishDraft  (posts draft)" $  do
     it "work" $ do
       state <- execStateT (runExceptT $ answerEx handle1 reqTest29) (testDB1,[])
