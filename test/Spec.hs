@@ -26,7 +26,7 @@ import           Data.Time.Calendar.OrdinalDate
 import           Data.Time.Calendar             ( showGregorian, Day, fromGregorian )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, nub, find, sortOn, intersect )
+import           Data.List                      ( intercalate, zip4, nub, find, sortOn, intersect, sort, group, groupBy )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Codec.Picture                  ( decodeImage )
@@ -38,6 +38,7 @@ import qualified Data.Vector                    as V
 import           Data.Int                       ( Int64 )
 import qualified Database.PostgreSQL.Simple.FromField as FF
 import           Database.PostgreSQL.Simple.ToRow
+import           Prelude                        as P
 
 
 data MockAction = EXISTCHEK | LOGMSG | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA | INSERTMANYDATA | SELECTLIMITDATA
@@ -90,8 +91,11 @@ data DraftsTagsL = DraftsTagsL { draft_idDTL :: Integer, tag_idDTL :: Integer }
 -- Types for JOIN tables
 data PostsLAuthorsL = PostsLAuthorsL { postsL_PAL :: PostsL, authorsL_PAL :: AuthorsL}
 data PostsLAuthorsLUsersL = PostsLAuthorsLUsersL { postsAuthorsL_PAUL :: PostsLAuthorsL, usersL_PAUL :: UsersL}
---data PostsLCatsL = PostsLCatsL {}
+data PostsLCatsL = PostsLCatsL { postsL_PCL :: PostsL, catsL_PCL :: CatsL}
 
+data JoinTable1 = JoinTable1 { post_idJT1 :: Integer, tags_idJT1 :: [Integer]}
+data JoinTable2 = JoinTable2 { post_idJT2 :: Integer, isintagJT2 :: Bool}
+data JoinTable3 = JoinTable3 { post_idJT3 :: Integer, count_picsJT3 :: Int}
 
 
 logTest :: Priority -> String -> StateT (TestDB,[MockAction]) IO ()
@@ -717,8 +721,14 @@ selectLimitFromDbTest table orderBy page limitNumber params where' values filter
   return (selectLim table orderBy page limitNumber params where' values filterargs sortargs db, (db,SELECTLIMITDATA:acts))
 
 fI = fromInteger
-doIt []     ys = ys
-doIt (x:xs) ys = doIt xs (x $ ys)
+
+sortIt :: [Integer] -> [([Integer] -> [[Integer]])] -> [[Integer]]
+sortIt [] _  = [[]]
+sortIt [x] _ = [[x]]
+sortIt xs [] = [xs]
+sortIt xs (f:[]) = f xs
+sortIt xs (f1:f2:[]) = concatMap f2 $ sortIt xs [f1]
+sortIt xs fs = concatMap (last fs) $ sortIt xs (init fs)
 
 selectLim "drafts JOIN authors ON authors.author_id = drafts.author_id" "draft_id DESC" page limitNum ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"] 
   "drafts.author_id = ?" [x] [] [] db =
@@ -733,18 +743,20 @@ selectLim "posts JOIN authors ON authors.author_id = posts.author_id" defOrderBy
   "true" [] filterargs sortargs db =
     let validPostIds = nub . intersectAll . fmap (foo db) $ filterargs in
     let sortFoos = fmap (boo db) sortargs in
-    let postIds = doIt sortFoos validPostIds in
+    let postIds = P.concat $ sortIt validPostIds sortFoos in
     fmap toPost $ concatMap (toPostsLAuthorsL db) postIds
 
 intersectAll [] = []
 intersectAll [x] = x
 intersectAll (x:xs) = x `intersect` (intersectAll xs)
 
+toPostLines :: TestDB -> Integer -> [PostsL]
+toPostLines db postId = filter ( ((==) postId) . post_idPL) (postsT db)
+
 toPostsLAuthorsL :: TestDB -> Integer -> [PostsLAuthorsL]
 toPostsLAuthorsL db postId  =
-  let toPostLines postId = filter ( ((==) (postId)) . post_idPL) (postsT db) in
   let joinAuthorLine postL = fmap (\auL -> PostsLAuthorsL postL auL) $ filter ( ((==) (author_idPL postL)) . author_idAL) (authorsT db) in
-    concatMap joinAuthorLine . toPostLines $ postId
+    concatMap joinAuthorLine . toPostLines db $ postId
 
 foo :: TestDB -> FilterArg -> [Integer]
 foo db (FilterArg "" "post_create_date = ?" ([],[x])) = fmap post_idPL . filter (((==) (readGregorian . unpack $ x)) . post_create_datePL) . postsT $ db
@@ -763,13 +775,39 @@ foo db (FilterArg "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY
   --"tags_id @> ARRAY" ++ show xs ++ "::bigint[]" ([],[])) = fmap (fromOnlyInt . post_idPTL) . filter ( (==) numX . tag_idPTL ) (postsTagsT db)
 --foo db (FilterArg "" "post_name ILIKE ?" ([],[xs])) = fmap post_idPL . filter ((>) readGregorian x) . post_create_datePL . postsT $ db
 
-boo :: TestDB -> SortArg -> ([Integer] -> [Integer])
-boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name DESC" dS) = 
-  let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
-    fmap (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+groupMy :: Ord b => (a -> b) -> ([a] -> [[a]])
+groupMy f = groupBy (\a b -> f a == f b)
+
+boo :: TestDB -> SortArg -> ([Integer] -> [[Integer]])
+boo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+  "count_pics ASC" dS) =
+    let pullValidLines postId = filter ( (==) postId . post_idPPL ) (postsPicsT db) in
+      (fmap . fmap) post_idJT3 . groupMy count_picsJT3 . sortOn count_picsJT3 . fmap toJoinTable3 . group . sort . fmap post_idPPL . concatMap pullValidLines 
+boo db (SortArg "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+  "count_pics DESC" dS) =
+    let pullValidLines postId = filter ( (==) postId . post_idPPL ) (postsPicsT db) in
+      reverse . (fmap . fmap) post_idJT3 . groupMy count_picsJT3 . sortOn count_picsJT3 . fmap toJoinTable3 . group . sort . fmap post_idPPL . concatMap pullValidLines 
+boo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
+  "category_name ASC" dS) =
+    let joinCatLine pL = fmap (\cL -> PostsLCatsL pL cL) $ filter ( ((==) (post_cat_idPL pL)) . cat_idCL) (catsT db) in
+      (fmap . fmap) (post_idPL . postsL_PCL ) . groupMy (cat_nameCL . catsL_PCL ) . sortOn (cat_nameCL . catsL_PCL ) . concatMap joinCatLine . concatMap (toPostLines db) 
+boo db (SortArg "JOIN categories ON posts.post_category_id=categories.category_id"
+  "category_name DESC" dS) =
+    let joinCatLine pL = fmap (\cL -> PostsLCatsL pL cL) $ filter ( ((==) (post_cat_idPL pL)) . cat_idCL) (catsT db) in
+      reverse . (fmap . fmap) (post_idPL . postsL_PCL ). groupMy (cat_nameCL . catsL_PCL ) . sortOn (cat_nameCL . catsL_PCL ) . concatMap joinCatLine . concatMap (toPostLines db) 
 boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name ASC" dS) = 
   let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
-    reverse . fmap (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+    (fmap . fmap) (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+boo db (SortArg "JOIN users AS u ON authors.user_id=u.user_id" "u.first_name DESC" dS) = 
+  let joinUserLine pAuL = fmap (\uL -> PostsLAuthorsLUsersL pAuL uL) $ filter ( ((==) (user_idAL . authorsL_PAL $ pAuL)) . user_idUL) (usersT db) in
+    reverse . (fmap . fmap) (post_idPL . postsL_PAL . postsAuthorsL_PAUL) . groupMy (first_nameUL . usersL_PAUL) . sortOn (first_nameUL . usersL_PAUL) . concatMap joinUserLine . concatMap (toPostsLAuthorsL db)
+boo db (SortArg "" "true" dS) = (\a -> [a])
+
+--defOrdFuncs db "post_create_date ASC, post_id ASC" =
+  --sortOn post_create_datePL . concatMap (toPostLines db)
+
+toJoinTable3 []        = JoinTable3 0 0
+toJoinTable3 xs@(y:ys) = JoinTable3 y (length xs)
 
 
 deleteFromDbTest :: String -> String -> [Text] -> StateT (TestDB,[MockAction]) IO ()
