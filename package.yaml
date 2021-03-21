@@ -39,6 +39,7 @@ dependencies:
 - vector
 - hspec
 - containers
+- configurator
 
 library:
   source-dirs: src

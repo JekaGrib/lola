@@ -29,7 +29,18 @@ import           Data.Time.Calendar             ( showGregorian, Day )
 import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
 import           Control.Monad.Catch            ( catch, throwM, MonadCatch )
+import qualified Data.Configurator              as C
+import qualified Data.Configurator.Types        as C
+import qualified Control.Exception              as E
 
+
+pullConfig :: IO C.Config
+pullConfig = do
+  C.load [C.Required "./postApp.config"] 
+    `E.catch` (\e -> putStrLn (show (e :: C.ConfigError)) >> return C.empty)
+    `E.catch` (\e -> putStrLn (show (e :: C.KeyError   )) >> return C.empty)
+    `E.catch` (\e -> putStrLn (show (e :: E.IOException  )) >> return C.empty)
+    
 
 defaultPictureUrl :: Text
 defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
@@ -93,7 +104,59 @@ main = do
   addDefaultParameters
   time <- getTime                          
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " .log"
+  conf           <- pullConfig
+  defPicId       <- parseConfDefPicId   conf 
+  defUsId       <- parseConfDefUsId   conf 
+  defAuthId       <- parseConfDefAuthId   conf 
+  defCatId       <- parseConfDefCatId   conf 
   let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
-  let config = Config 1 1 1 1 
+  let config = Config defPicId defUsId defAuthId defCatId 
   run 3000 (application config handleLog)
 
+parseConfDefPicId :: C.Config -> IO Integer
+parseConfDefPicId conf = do
+  str <- ((C.lookup conf "postApp.defaultPictureId") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  case str of
+    Nothing -> inputDefId
+    Just x  -> return x
+
+parseConfDefUsId :: C.Config -> IO Integer
+parseConfDefUsId conf = do
+  str <- ((C.lookup conf "postApp.defaultUserId") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  case str of
+    Nothing -> inputDefId
+    Just x  -> return x
+
+parseConfDefAuthId :: C.Config -> IO Integer
+parseConfDefAuthId conf = do
+  str <- ((C.lookup conf "postApp.defaultAuthorId") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  case str of
+    Nothing -> inputDefId
+    Just x  -> return x
+
+parseConfDefCatId :: C.Config -> IO Integer
+parseConfDefCatId conf = do
+  str <- ((C.lookup conf "postApp.defaultCategoryId") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  case str of
+    Nothing -> inputDefId
+    Just x  -> return x
+
+inputDefId :: IO Integer
+inputDefId = do
+  putStrLn "Can`t parse value \"startN\" from configuration file or command line\nPlease, enter start number of repeats. Number from 1 to 5"
+  input <- getLine
+  case input of
+    "1" -> return 1
+    "2" -> return 2
+    "3" -> return 3
+    "4" -> return 4
+    "5" -> return 5
+    _   -> inputDefId
