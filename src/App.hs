@@ -384,10 +384,13 @@ answerEx h req = do
       picsIdsSel <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
       let picsIds = fmap fromOnlyInt picsIdsSel
       tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
+      let tagsIds = fmap tag_idT tagS
       allSuperCats <- findAllSuperCats h  postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
-      draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues 
+      draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues
+      insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
+      insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds) 
       okHelper h $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDraft"]  -> do
       lift $ logInfo (hLog h) $ "Get draft command"
@@ -1290,12 +1293,5 @@ inCatResp [(x,y,z)] = CatResponse { cat_id = x , cat_name =  y, one_level_sub_ca
 inCatResp ((x,y,z):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , one_level_sub_categories = z , super_category = inCatResp xs} 
       
 
-
-
-
-
-firstThree  (a,b,c) = a
-secondThree (a,b,c) = b
-thirdThree  (a,b,c) = c
 
 
