@@ -60,8 +60,13 @@ main :: IO ()
 main = do
   time <- getTime                          
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " .log"
-  conn <- connectPostgreSQL (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'") 
   conf            <- pullConfig
+  hostDB          <- parseConfDBHost      conf     
+  portDB          <- parseConfDBport      conf
+  userDB          <- parseConfDBUser      conf
+  dbName          <- parseConfDBname      conf
+  pwdDB           <- parseConfDBpwd       conf
+  conn            <- tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) 
   defPicId        <- parseConfDefPicId    conf conn 
   defUsId         <- parseConfDefUsId     conf conn defPicId
   defAuthId       <- parseConfDefAuthId   conf conn defUsId
@@ -73,6 +78,23 @@ main = do
   let config = Config defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
   run 3000 (application config handleLog)
 
+data ConnDB = ConnDB String Integer String String String 
+
+tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) = do
+  let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
+  (do 
+    conn <- connectPostgreSQL (fromString str) 
+    return conn) `catch` (\e -> do
+      putStrLn $ "Invalid database connection parameters: " ++ str ++ ". " ++ (show (e :: E.SomeException))
+      connDB <- getConnDBParams
+      tryConnect connDB)
+getConnDBParams = do
+  hostDB          <- inputString  "DataBase.host"
+  portDB          <- inputInteger "DataBase.port"
+  userDB          <- inputString  "DataBase.user"
+  dbName          <- inputString  "DataBase.dbname"
+  pwdDB           <- inputString  "DataBase.password"
+  return (ConnDB hostDB portDB userDB dbName pwdDB)
 
 parseConfDefPicId :: C.Config -> Connection -> IO Integer
 parseConfDefPicId conf conn = do
@@ -146,6 +168,52 @@ checkExistId conn table checkname where' [value] ifTrue ifFalse = do
       putStrLn $ checkname ++ ": " ++ unpack value ++ " doesn`t exist"
       ifFalse
 
+
+parseConfDBHost :: C.Config -> IO String
+parseConfDBHost conf = do
+  str <- ((C.lookup conf "DataBase.host") :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputString "DataBase.host"
+    Just x  -> return x
+
+parseConfDBport :: C.Config -> IO Integer
+parseConfDBport conf = do
+  str <- ((C.lookup conf "DataBase.port") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  case str of
+    Nothing -> inputInteger "DataBase.port"
+    Just x  -> return x
+
+parseConfDBUser :: C.Config -> IO String
+parseConfDBUser conf = do
+  str <- ((C.lookup conf "DataBase.user") :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputString "DataBase.user"
+    Just x  -> return x
+
+parseConfDBname :: C.Config -> IO String
+parseConfDBname conf = do
+  str <- ((C.lookup conf "DataBase.dbname") :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputString "DataBase.dbname"
+    Just x  -> return x
+
+parseConfDBpwd :: C.Config -> IO String
+parseConfDBpwd conf = do
+  str <- ((C.lookup conf "DataBase.password") :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputString "DataBase.password"
+    Just x  -> return x
+
 parseConfCommLimit :: C.Config -> IO Integer
 parseConfCommLimit conf = do
   str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Integer))
@@ -180,6 +248,12 @@ inputInteger valueName = do
   case reads input of
     [(a,"")] -> return a
     _        -> inputInteger valueName
+
+inputString :: String -> IO String
+inputString valueName = do
+  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
+  input <- getLine
+  return input
 
 inputIntegerOr :: String -> IO Integer -> IO Integer
 inputIntegerOr valueName action = do
