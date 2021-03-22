@@ -62,10 +62,13 @@ data Handle m = Handle
     }
 
 data Config = Config 
-  { cDefPicId   :: Integer,
-    cDefUsId    :: Integer,
-    cDefAuthId  :: Integer,
-    cDefCatId  :: Integer
+  { cDefPicId    :: Integer,
+    cDefUsId     :: Integer,
+    cDefAuthId   :: Integer,
+    cDefCatId    :: Integer,
+    cCommLimit   :: Integer,
+    cDraftsLimit :: Integer,
+    cPostsLimit  :: Integer
     }
 
 data SelectType = 
@@ -424,7 +427,7 @@ answerEx h req = do
       let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
-      params <- selectListLimitFromDbE h table orderBy pageNum draftNumberLimit extractParams where' values [] []
+      params <- selectListLimitFromDbE h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
       let alldraftIdsText = fmap (pack . show . draft_idD) params
       let allCatIdsNum = fmap draft_cat_idD params
       manyAllSuperCats <- mapM (findAllSuperCats h ) allCatIdsNum
@@ -537,7 +540,7 @@ answerEx h req = do
       let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
       let defWhere = "true"
       let defValues = []
-      params <- selectListLimitFromDbE h defTable defOrderBy pageNum postNumberLimit extractParams defWhere defValues filterArgs sortArgs 
+      params <- selectListLimitFromDbE h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs 
       let postIdsText = fmap (pack . show . post_idP) params
       let postCatsIds = fmap post_cat_idP params 
       manySuperCats <- mapM (findAllSuperCats h ) postCatsIds
@@ -571,7 +574,7 @@ answerEx h req = do
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
       [postIdNum,pageNum]     <- mapM tryReadNum [postIdParam,pageParam] 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum commentNumberLimit ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
+      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
       okHelper h $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       lift $ logInfo (hLog h) $ "Update comment command"
