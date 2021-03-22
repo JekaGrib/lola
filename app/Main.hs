@@ -18,7 +18,7 @@ import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11 )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
-import           Data.Text                      ( pack, unpack, Text, concat, toUpper, stripPrefix, isPrefixOf )
+import           Data.Text                      ( pack, unpack, Text, concat, stripPrefix, isPrefixOf )
 import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
 import qualified Network.HTTP.Simple            as HT
@@ -34,6 +34,7 @@ import qualified Data.Configurator.Types        as C
 import qualified Control.Exception              as E
 import qualified Data.ByteString.Lazy           as BSL
 import           Codec.Picture                  ( decodeImage )
+import           Data.Char                      ( toUpper )
 
 
 pullConfig :: IO C.Config
@@ -74,7 +75,8 @@ main = do
   commNumLimit    <- parseConfCommLimit   conf
   draftsNumLimit  <- parseConfDraftsLimit conf
   postsNumLimit   <- parseConfPostsLimit  conf
-  let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
+  prio            <- parseConfPrio     conf 
+  let handleLog = LogHandle (LogConfig prio) (logger handleLog currLogPath)
   let config = Config connDB defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
   run 3000 (application config handleLog)
 
@@ -240,6 +242,30 @@ parseConfPostsLimit conf = do
   case str of
     Nothing -> inputInteger "postNumberLimit"
     Just x  -> return x
+
+parseConfPrio :: C.Config -> IO Priority
+parseConfPrio conf = do
+  str <- (C.lookup conf "log.logLevel" :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputLogLevel
+    Just "DEBUG"   -> return DEBUG
+    Just "INFO"    -> return INFO
+    Just "WARNING" -> return WARNING
+    Just "ERROR"   -> return ERROR
+    Just _         -> inputLogLevel
+
+inputLogLevel :: IO Priority
+inputLogLevel = do
+  putStrLn "Can`t parse value \"logLevel\" from configuration file or command line\nPlease, enter logging level (logs of this level and higher will be recorded)\nAvailable levels: DEBUG ; INFO ; WARNING ; ERROR (without quotes)"
+  input <- getLine
+  case (map toUpper input) of
+    "DEBUG"   -> return DEBUG
+    "INFO"    -> return INFO
+    "WARNING" -> return WARNING
+    "ERROR"   -> return ERROR
+    _         -> inputLogLevel
 
 inputInteger :: String -> IO Integer
 inputInteger valueName = do
