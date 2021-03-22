@@ -66,7 +66,7 @@ main = do
   userDB          <- parseConfDBUser      conf
   dbName          <- parseConfDBname      conf
   pwdDB           <- parseConfDBpwd       conf
-  conn            <- tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) 
+  (conn,connDB)   <- tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) 
   defPicId        <- parseConfDefPicId    conf conn 
   defUsId         <- parseConfDefUsId     conf conn defPicId
   defAuthId       <- parseConfDefAuthId   conf conn defUsId
@@ -75,19 +75,19 @@ main = do
   draftsNumLimit  <- parseConfDraftsLimit conf
   postsNumLimit   <- parseConfPostsLimit  conf
   let handleLog = LogHandle (LogConfig DEBUG) (logger handleLog currLogPath)
-  let config = Config defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
+  let config = Config connDB defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
   run 3000 (application config handleLog)
 
-data ConnDB = ConnDB String Integer String String String 
 
-tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) = do
+tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
   let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
   (do 
     conn <- connectPostgreSQL (fromString str) 
-    return conn) `catch` (\e -> do
+    return (conn,connDB)) `catch` (\e -> do
       putStrLn $ "Invalid database connection parameters: " ++ str ++ ". " ++ (show (e :: E.SomeException))
-      connDB <- getConnDBParams
-      tryConnect connDB)
+      connDB2 <- getConnDBParams
+      tryConnect connDB2)
+
 getConnDBParams = do
   hostDB          <- inputString  "DataBase.host"
   portDB          <- inputInteger "DataBase.port"

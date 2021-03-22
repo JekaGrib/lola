@@ -62,7 +62,8 @@ data Handle m = Handle
     }
 
 data Config = Config 
-  { cDefPicId    :: Integer,
+  { cConnDB      :: ConnDB,    
+    cDefPicId    :: Integer,
     cDefUsId     :: Integer,
     cDefAuthId   :: Integer,
     cDefCatId    :: Integer,
@@ -70,6 +71,8 @@ data Config = Config
     cDraftsLimit :: Integer,
     cPostsLimit  :: Integer
     }
+
+data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
 
 data SelectType = 
   OnlyInt {fromOnlyInt :: Integer} 
@@ -128,7 +131,9 @@ logOnErr h m = m `catchE` (\e -> do
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
-  conn <- connectPostgreSQL (fromString $ "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'")
+  let connDB = cConnDB config
+  let str = "host='" ++ hostCDB connDB ++ "' port=" ++ show (portCDB connDB) ++ " user='" ++ userCDB connDB ++ "' dbname='" ++ nameCDB connDB ++ "' password='" ++ pwdCDB connDB ++ "'"
+  conn <- connectPostgreSQL (fromString str)
   let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
