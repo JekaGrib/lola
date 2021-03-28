@@ -7,28 +7,17 @@
 
 module Main where
 
-import           Test.Hspec
-import           Control.Monad.State            
 
 
 import           App
-import           Api
 import           Logger
-import           Network.Wai
-import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11 )
-import           Network.HTTP.Types.URI         ( queryToQueryText )
+import           Data.Text                      ( Text, pack, unpack, intercalate )
 import           Network.Wai.Handler.Warp       ( run )
-import           Data.Text                      ( pack, unpack, Text, concat, stripPrefix, isPrefixOf )
-import           Data.ByteString.Builder        ( lazyByteString )
 import           Database.PostgreSQL.Simple
 import qualified Network.HTTP.Simple            as HT
-import           Data.Time.Clock
 import           Data.Time.LocalTime
-import           Data.Time.Calendar.OrdinalDate
-import           Data.Time.Calendar             ( showGregorian, Day )
-import           Database.PostgreSQL.Simple.Time
 import           Data.String                    ( fromString )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch )
+import           Control.Monad.Catch            ( catch )
 import qualified Data.Configurator              as C
 import qualified Data.Configurator.Types        as C
 import qualified Control.Exception              as E
@@ -79,7 +68,7 @@ main = do
   let config = Config connDB defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
   run 3000 (application config handleLog)
 
-
+tryConnect :: ConnDB -> IO (Connection, ConnDB)
 tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
   let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
   (do 
@@ -89,6 +78,7 @@ tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
       connDB2 <- getConnDBParams
       tryConnect connDB2)
 
+getConnDBParams :: IO ConnDB
 getConnDBParams = do
   hostDB          <- inputString  "DataBase.host"
   portDB          <- inputInteger "DataBase.port"
@@ -161,12 +151,13 @@ parseConfDefCatId conf conn = do
         (return x) 
         (inputIntegerOr "defaultCategoryId" crateNewDefCat)
 
-checkExistId conn table checkname where' [value] ifTrue ifFalse = do
-  check <- isExistInDb' conn table checkname where' [value]
+checkExistId :: Connection -> String -> String -> String -> [Text] -> IO b -> IO b -> IO b
+checkExistId conn table checkname where' values ifTrue ifFalse = do
+  check <- isExistInDb' conn table checkname where' values
   case check of
     True  -> ifTrue
     False -> do
-      putStrLn $ checkname ++ ": " ++ unpack value ++ " doesn`t exist"
+      putStrLn $ checkname ++ ": " ++ (unpack . intercalate "; " $ values) ++ " doesn`t exist"
       ifFalse
 
 
@@ -324,6 +315,8 @@ crateNewDefUser picId = do
   putStrLn $ "Default user created, id:" ++ show userId
   return userId
 
+
+createDefaultUser :: Integer -> IO Integer
 createDefaultUser picId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   day <- App.getDay'  
@@ -336,6 +329,7 @@ crateNewDefAuthor userId = do
   putStrLn $ "Default author created, id:" ++ show authorId
   return authorId
 
+createDefaultAuthor :: Integer -> IO Integer
 createDefaultAuthor userId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
   [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,'DELETED' ) RETURNING author_id" [pack . show $ userId]  
@@ -354,6 +348,8 @@ createDefaultCategory = do
   return catId
 
 
+addCreateAdminKey :: IO ()
 addCreateAdminKey = do
   conn1 <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  execute_ conn1 "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
+  _ <- execute_ conn1 "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
+  return ()

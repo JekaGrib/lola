@@ -178,7 +178,8 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "All parameters parsed"
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE h "users" "user_id" "user_id=?" [usId] 
-      User fName lName picId usCreateDate <- selectOneFromDbE h "users" selectParams "user_id=?" [usId]
+      selectType <- selectOneFromDbE h "users" selectParams "user_id=?" [usId]
+      User fName lName picId usCreateDate <- fromSelUser selectType
       okHelper h $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       lift $ logInfo (hLog h) $ "Delete user command"
@@ -192,10 +193,11 @@ answerEx h req = do
       check <- isUserAuthorBool h usIdNum 
       case check of
         True -> do
-          OnlyInt authorId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]  
+          selectType <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]
+          authorId   <- fromSelInt selectType
           updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),pack . show $ authorId]
-          draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
-          let draftsIds = fmap fromOnlyInt draftsIdsSel
+          selectTypeList <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
+          draftsIds      <- mapM fromSelInt selectTypeList
           deleteAllAboutDrafts h draftsIds
           deleteFromDbE h "authors" "author_id=?" [pack . show $ authorId]
           return () 
@@ -207,12 +209,12 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Create admin command"
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
       [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
-      keysSel <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
-      let keys = fmap fromOnlyTxt keysSel
+      selectTypeList <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
+      keys           <- mapM fromSelTxt selectTypeList
       checkEmptyList keys
       checkKeyE keyParam (last keys)
       picId <- getPicId  h picUrlParam 
-      day <- lift $ getDay h
+      day   <- lift $ getDay h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
       let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <-  insertReturnInDbE h "users" "user_id" insNames insValues 
@@ -238,7 +240,8 @@ answerEx h req = do
       [auIdParam] <- mapM (checkParam req) paramsNames
       [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
-      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "author_id=?" [auIdParam] 
+      selectType <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "author_id=?" [auIdParam] 
+      Author auId auInfo usId <- fromSelAuth selectType
       okHelper h $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Update author command"
@@ -259,8 +262,8 @@ answerEx h req = do
       [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
-      draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
-      let draftsIds = fmap fromOnlyInt draftsIdsSel 
+      selectTypeList <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
+      draftsIds      <- mapM fromSelInt selectTypeList 
       deleteAllAboutDrafts h  draftsIds
       deleteFromDbE h "authors" "author_id=?" [auIdParam]
       okHelper h $ OkResponse {ok = True}
@@ -326,7 +329,8 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Get tag command"
       tagIdNum <- tryReadNum tagId
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagId] 
-      OnlyTxt tagName <- selectOneFromDbE h "tags" ["tag_name"] "tag_id=?" [tagId] 
+      selectType <- selectOneFromDbE h "tags" ["tag_name"] "tag_id=?" [tagId]
+      tagName    <- fromSelTxt selectType
       okHelper h $ TagResponse tagIdNum tagName
     ["updateTag"]        -> do
       lift $ logInfo (hLog h) $ "Update tag command"
@@ -360,7 +364,8 @@ answerEx h req = do
       let tagsIds      = nub . draft_tags_ids $ body
       let picsUrls     = draft_pics_urls $ body
       isExistInDbE h "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      selectType <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      pwd        <- fromSelTxt selectType
       userAuth pwdParam pwd
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
@@ -374,7 +379,8 @@ answerEx h req = do
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      tagS <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
+      selectTypeList <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
+      tagS           <- mapM fromSelTag selectTypeList
       allSuperCats <- findAllSuperCats h  catIdParam  
       okHelper h $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId auInfo usId, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["createPostsDraft"]  -> do
@@ -383,7 +389,8 @@ answerEx h req = do
       [postIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [postIdNum,usIdNum]              <- mapM tryReadNum [postIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd        <- fromSelTxt selectType
       userAuth pwdParam pwd
       isUserAuthorE h  usIdNum 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam]
@@ -391,9 +398,10 @@ answerEx h req = do
       let params = ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
       PostInfo auId auInfo postName postCatId postTxt mPicId <- selectOneFromDbE h table params "post_id=?" [postIdParam]
       isPostAuthorE h  postIdParam usIdParam          
-      picsIdsSel <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
-      let picsIds = fmap fromOnlyInt picsIdsSel
-      tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
+      selectTypeList <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
+      picsIds        <- mapM fromSelInt selectTypeList
+      selectTypeList <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
+      tagS           <- mapM fromSelTag selectTypeList
       let tagsIds = fmap tag_idT tagS
       allSuperCats <- findAllSuperCats h  postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -408,16 +416,19 @@ answerEx h req = do
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd        <- fromSelTxt selectType
       userAuth pwdParam pwd
       auId <- isUserAuthorE h  usIdNum  
       isDraftAuthor h  draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]        
-      picsIdsSel <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam]
-      let picsIds = fmap fromOnlyInt picsIdsSel
-      tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+      selectType <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]        
+      Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- fromSelDraft selectType
+      selectTypeList <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam]
+      picsIds        <- mapM fromSelInt selectTypeList
+      selectTypeList <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+      tagS           <- mapM fromSelTag selectTypeList
       allSuperCats <- findAllSuperCats h  draftCatId
       okHelper h $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDrafts"]  -> do
@@ -426,7 +437,8 @@ answerEx h req = do
       [pageParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [pageNum,usIdNum]              <- mapM tryReadNum [pageParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd        <- fromSelTxt selectType
       userAuth pwdParam pwd
       auId <- isUserAuthorE h  usIdNum  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
@@ -434,14 +446,16 @@ answerEx h req = do
       let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
-      params <- selectListLimitFromDbE h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
-      let alldraftIdsText = fmap (pack . show . draft_idD) params
-      let allCatIdsNum = fmap draft_cat_idD params
+      selectTypeList <- selectListLimitFromDbE h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
+      drafts         <- mapM fromSelDraft selectTypeList
+      let alldraftIdsText = fmap (pack . show . draft_idD) drafts
+      let allCatIdsNum = fmap draft_cat_idD drafts
       manyAllSuperCats <- mapM (findAllSuperCats h ) allCatIdsNum
-      manyDraftPicsIdsSel <- mapM (selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
-      let manyDraftPicsIds = (fmap . fmap) fromOnlyInt manyDraftPicsIdsSel
-      tagSMany <- mapM (selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
-      let allParams = zip4 params manyAllSuperCats manyDraftPicsIds tagSMany
+      selectTypeList   <- mapM (selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
+      manyDraftPicsIds <- (mapM . mapM) fromSelInt selectTypeList
+      selectTypeList <- mapM (selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
+      tagSMany       <- (mapM . mapM) fromSelTag selectTypeList
+      let allParams = zip4 drafts manyAllSuperCats manyDraftPicsIds tagSMany
       okHelper h $ DraftsResponse 
         { page9 = pageNum
         , drafts9 = fmap (\(( Draft draftId auInfo postId draftName draftCat draftText draftMainPicId ),cats,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
@@ -459,14 +473,17 @@ answerEx h req = do
       let tagsIds      = nub . draft_tags_ids $ body
       let picsUrls     = draft_pics_urls $ body
       isExistInDbE h "users" "user_id" "user_id=?" [pack . show $ usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      selectType1 <- selectOneFromDbE h "users" ["password"] "user_id=?" [pack . show $ usIdParam] 
+      pwd         <- fromSelTxt selectType1
       userAuth pwdParam pwd
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftId] 
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
       isUserAuthorE h  usIdParam  
-      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdParam] 
-      OnlyInt postId <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
+      selectType2 <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdParam] 
+      Author auId auInfo usId <- fromSelAuthor selectType2
+      selectType3 <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
+      postId     <- fromSelInt selectType3
       picId <- getPicId  h mPicUrlParam
       picsIds <- mapM (getPicId  h) picsUrls
       deleteDraftsPicsTags h [draftIdNum]
@@ -474,7 +491,8 @@ answerEx h req = do
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      tagS <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
+      selectTypeList <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
+      tagS           <- mapM fromSelTag selectTypeList
       allSuperCats <- findAllSuperCats h  catIdParam  
       okHelper h $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdParam, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["deleteDraft"]  -> do
@@ -483,7 +501,8 @@ answerEx h req = do
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd        <- fromSelTxt selectType
       userAuth pwdParam pwd
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam] 
       isUserAuthorE h  usIdNum  
@@ -496,19 +515,22 @@ answerEx h req = do
       [draftIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [draftIdNum,usIdNum]              <- mapM tryReadNum [draftIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType1 <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd         <- fromSelTxt selectType1
       userAuth pwdParam pwd
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam] 
       auId <- isUserAuthorE h  usIdNum  
       isDraftAuthor h  draftIdParam usIdParam
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]
+      selectType2 <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]
+      Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- fromSelDraft selectType2
       case draftPostId of
         0 -> do    
-          picsIdsSel <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          let picsIds = fmap fromOnlyInt picsIdsSel
-          tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
+          selectTypeList1 <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          picsIds         <- mapM fromSelInt selectTypeList1
+          selectTypeList2 <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
+          tagS            <- mapM fromSelTag selectTypeList2
           day <- lift $ getDay h 
           let insNames  = ["author_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
           let insValues = [pack . show $ auId,draftName,pack day,pack . show $ draftCatId,draftTxt,pack . show $ mPicId]          
@@ -518,24 +540,28 @@ answerEx h req = do
           allSuperCats <- findAllSuperCats h  draftCatId 
           okHelper h $ PostResponse {post_id = postId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
         _ -> do       
-          picsIdsSel <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          let picsIds = fmap fromOnlyInt picsIdsSel
-          tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+          selectTypeList1 <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          picsIds         <- mapM fromSelInt selectTypeList1
+          selectTypeList2 <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
+          tagS            <- mapM fromSelTag selectTypeList2
           updateInDbE h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [draftName,pack . show $ draftCatId,draftTxt,pack . show $ mPicId,pack . show $ draftPostId]
           deletePostsPicsTags h  [draftPostId]
           insertManyInDbE h "postspics" ["post_id","pic_id"] (zip (repeat draftPostId) picsIds)
           insertManyInDbE h "poststags" ["post_id","tag_id"] (zip (repeat draftPostId) (fmap tag_idT tagS))
           allSuperCats <- findAllSuperCats h  draftCatId
-          OnlyDay day <- selectOneFromDbE h "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
+          selectType3 <- selectOneFromDbE h "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
+          day         <- fromSelDay selectType3
           okHelper h $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPost",postId]  -> do
       lift $ logInfo (hLog h) $ "Get post command"
       postIdNum <- tryReadNum postId
       isExistInDbE h "posts" "post_id" "post_id=?" [postId]
-      Post pId auId auInfo usId pName pDate pCatId pText picId <- selectOneFromDbE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
-      picsIdsSel <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postId] 
-      let picsIds = fmap fromOnlyInt picsIdsSel
-      tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
+      selectType <- selectOneFromDbE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
+      Post pId auId auInfo usId pName pDate pCatId pText picId <- fromSelPost selectType
+      selectTypeList1 <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postId] 
+      picsIds         <- mapM fromSelInt selectTypeList1
+      selectTypeList2 <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
+      tagS            <- mapM fromSelTag selectTypeList2
       allSuperCats <- findAllSuperCats h  pCatId
       okHelper h $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPosts", page] -> do
@@ -551,9 +577,10 @@ answerEx h req = do
       let postIdsText = fmap (pack . show . post_idP) params
       let postCatsIds = fmap post_cat_idP params 
       manySuperCats <- mapM (findAllSuperCats h ) postCatsIds
-      manyPostPicsIdsSel <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
-      let manyPostPicsIds = (fmap . fmap) fromOnlyInt manyPostPicsIdsSel
-      tagSMany <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
+      selectTypeList1 <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
+      manyPostPicsIds <- (mapM . mapM) fromSelInt selectTypeList1
+      selectTypeList2 <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
+      tagSMany        <- (mapM . mapM) fromSelTag selectTypeList2
       let allParams = zip4 params manySuperCats manyPostPicsIds tagSMany
       okHelper h $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate pCat pText picId),cats,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
     ["deletePost"]  -> do
@@ -570,7 +597,8 @@ answerEx h req = do
       [postIdParam,txtParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
       [postIdNum,usIdNum]                       <- mapM tryReadNum [postIdParam,usIdParam] 
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-      OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      selectType1 <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+      pwd         <- fromSelTxt selectType1
       userAuth pwdParam pwd
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
       commId <-  insertReturnInDbE h "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
@@ -581,7 +609,8 @@ answerEx h req = do
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
       [postIdNum,pageNum]     <- mapM tryReadNum [postIdParam,pageParam] 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
+      selectTypeList <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
+      comms <- mapM fromSelComment selectTypeList
       okHelper h $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       lift $ logInfo (hLog h) $ "Update comment command"
@@ -610,9 +639,11 @@ answerEx h req = do
           [commIdParam,usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
           [commIdNum,usIdNum]              <- mapM tryReadNum [commIdParam,usIdParam]
           isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-          OnlyTxt pwd <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+          selectType1 <- selectOneFromDbE h "users" ["password"] "user_id=?" [usIdParam] 
+          pwd         <- fromSelTxt selectType1
           userAuth pwdParam pwd
-          OnlyInt postId <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+          selectType2 <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+          postId      <- fromSelInt selectType2          
           isCommOrPostAuthor h commIdParam (pack . show $ (postId :: Integer)) usIdParam
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
           okHelper h $ OkResponse {ok = True}      
@@ -620,7 +651,8 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Picture command"
       picIdNum <- tryReadNum picId 
       isExistInDbE h "pics" "pic_id" "pic_id=?" [picId] 
-      OnlyTxt picUrl <- selectOneFromDbE h "pics" ["pic_url"] "pic_id=?" [picId] 
+      selectType1 <- selectOneFromDbE h "pics" ["pic_url"] "pic_id=?" [picId] 
+      picUrl         <- fromSelTxt selectType1          
       res <- getPicFromUrlE h picUrl
       lift $ logInfo (hLog h) $ "Sending picture"
       return $ ResponseInfo 
@@ -1257,14 +1289,61 @@ isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
 data ReqError = SecretError String | SimpleError String | DatabaseError String
   deriving (Eq,Show)
 
-data DbException = SqlError | ExecStatus | FormatError| QueryError | ResultError deriving Show
+data DbException = SqlError | FormatError| QueryError | ResultError deriving Show
 instance Exception DbException
 
-catchDbErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: DbException) ) `catch` (\e -> do
-    throwE . DatabaseError $ show (e :: E.IOException) )
+cathSqlErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: SqlError) )
 
-{-instance Monoid ReqError where
+cathFormatErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: FormatError) )
+
+cathQueryErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: QueryError) )
+
+cathResultErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: ResultError) )
+
+catchIOErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: E.IOException) )
+
+catchPatMatchErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: E.PatternMatchFail) )
+
+
+catchDbErr m = catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
+
+fromSelInt (OnlyInt x) = return x
+fromSelInt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyInt\n with actual: " ++ show x
+fromSelTxt (OnlyTxt x) = return x
+fromSelTxt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyTxt\n with actual: " ++ show x
+fromSelDay (OnlyDay x) = return x
+fromSelDay x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyDay\n with actual: " ++ show x
+fromSelAuth x@(Auth _ _) = return x
+fromSelAuth x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Auth\n with actual: " ++ show x
+fromSelCat x@(Cat _ _) = return x
+fromSelCat x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Cat (category)\n with actual: " ++ show x
+fromSelTag x@(Tag _ _) = return x
+fromSelTag x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Tag\n with actual: " ++ show x
+fromSelAuthor x@(Author _ _ _) = return x
+fromSelAuthor x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Author\n with actual: " ++ show x
+fromSelComment x@(Comment _ _ _) = return x
+fromSelComment x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Comment\n with actual: " ++ show x
+fromSelUser x@(User _ _ _ _) = return x
+fromSelUser x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: User\n with actual: " ++ show x
+fromSelPostInfo x@(PostInfo _ _ _ _ _ _) = return x
+fromSelPostInfo x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: PostInfo\n with actual: " ++ show x
+fromSelDraft x@(Draft _ _ _ _ _ _ _) = return x
+fromSelDraft x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Draft\n with actual: " ++ show x
+fromSelPost x@(Post _ _ _ _ _ _ _ _ _) = return x
+fromSelPost x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Post\n with actual: " ++ show x
+
+
+
+ {-`catch` (\e -> do
+      throwE . DatabaseError $ show (e :: E.PatternMatchFail) )
+
+instance Monoid ReqError where
   mempty = SimpleError mempty
   mappend ( SimpleError a ) ( SimpleError b ) = SimpleError (a `mappend` b)-}
 
