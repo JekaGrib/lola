@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 12e47e6308fd20ead6284fc1fc0a97056661dcaf029120dbd65a92da8d400564
+-- hash: adf1abfb3c93cee3998c644f9c7c37d95e78045f5d11bd7487f7458df96a74d4
 
 name:           lola
 version:        0.1.0.0
@@ -63,7 +63,7 @@ executable lola-exe
       Paths_lola
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
     , aeson

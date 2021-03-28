@@ -42,6 +42,7 @@ import qualified Database.PostgreSQL.Simple.FromField as FF
 import qualified Data.Map                       as M
 import           Database.PostgreSQL.Simple.FromRow
 import           Control.Applicative
+import qualified Control.Exception              as E
 
 
 
@@ -146,10 +147,11 @@ responseBuilderFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE ansE = case ansE of
-  Right a                -> a
-  Left (SimpleError str) -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
+  Right a                  -> a
+  Left (SimpleError str)   -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
                                 (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
-  Left (SecretError str) -> ResponseInfo status404 [] "Status 404 Not Found"
+  Left (SecretError str)   -> ResponseInfo status404 [] "Status 404 Not Found"
+  Left (DatabaseError str) -> ResponseInfo status200 [] "Internal server error"
 
 okHelper h x = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ x)
 
@@ -648,12 +650,14 @@ getPicFromUrlE h picUrl = do
 
 isCommOrPostAuthor h commIdParam postIdParam usIdParam = do
   isCommAuthor h commIdParam usIdParam
-    `catchE`
-      (\(SimpleError str) -> 
-        withExceptT 
-          (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
-            isPostAuthorE h  postIdParam usIdParam
-            return ())
+    `catchE` (catchFoo h postIdParam usIdParam)
+
+catchFoo h postIdParam usIdParam (SimpleError str) = withExceptT 
+  (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
+    isPostAuthorE h  postIdParam usIdParam
+    return ()
+catchFoo _ _ _ err = throwE err
+
 
 accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
   [True,_] -> UserMode
@@ -840,19 +844,17 @@ deletePostsPicsTags h postsIds = do
 
 isUserAuthorBool h usIdParam = do
   lift $ logDebug (hLog h) $ "Checking in DB is user author"  
-  lift $ isExistInDb h "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
+  catchDbErr $ lift $ isExistInDb h "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
 
 isUserAuthorE h  usIdParam = do
   lift $ logDebug (hLog h) $ "Checking in DB is user author"  
-  auIds <- lift $ selectFromDb h "authors" ["author_id"] "user_id=?" [pack . show $ usIdParam]
-  case auIds of
-    [] -> throwE $ SimpleError $ "user_id: " ++ show usIdParam ++ " isn`t author." 
-    [OnlyInt auId] -> return auId
-    _ -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show auIds
+  OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [pack . show $ usIdParam]
+  return auId
+
     
 
 checkRelationUsAu h usIdParam auIdParam = do
-  check <- lift $ isExistInDb h "authors" "user_id" "user_id=?" [usIdParam] 
+  check <- catchDbErr $ lift $ isExistInDb h "authors" "user_id" "user_id=?" [usIdParam] 
   case check of
     True -> do
       OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam] 
@@ -999,7 +1001,7 @@ isExistInDb' conn table checkName where' values = do
   return check
 
 isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-isExistInDbE h table checkName where' values = do
+isExistInDbE h table checkName where' values = catchDbErr $ do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- lift $ isExistInDb h table checkName where' values 
   case check of
@@ -1009,7 +1011,7 @@ isExistInDbE h table checkName where' values = do
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
   
 ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-ifExistInDbThrowE h table checkName where' values = do
+ifExistInDbThrowE h table checkName where' values = catchDbErr $ do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- lift $ isExistInDb h table checkName where' values 
   case check of
@@ -1063,7 +1065,7 @@ checkMyPicUrl url = do
 readUrlEnd :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Text -> Text -> ExceptT ReqError m Integer
 readUrlEnd h url urlEnd = do
   picIdNum <- tryReadNum urlEnd 
-  check    <- lift $ isExistInDb h "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
+  check    <- catchDbErr $ lift $ isExistInDb h "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
   case check of 
     True  -> return picIdNum 
     False -> throwE $ SimpleError $ "Invalid end of picture url:" ++ unpack url
@@ -1259,7 +1261,8 @@ data DbException = SqlError | ExecStatus | FormatError| QueryError | ResultError
 instance Exception DbException
 
 catchDbErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: DbException) )
+  throwE . DatabaseError $ show (e :: DbException) ) `catch` (\e -> do
+    throwE . DatabaseError $ show (e :: E.IOException) )
 
 {-instance Monoid ReqError where
   mempty = SimpleError mempty

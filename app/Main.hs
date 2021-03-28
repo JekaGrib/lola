@@ -36,7 +36,6 @@ import qualified Data.ByteString.Lazy           as BSL
 import           Codec.Picture                  ( decodeImage )
 import           Data.Char                      ( toUpper )
 
-
 pullConfig :: IO C.Config
 pullConfig = do
   C.load [C.Required "./postApp.config"] 
@@ -86,7 +85,7 @@ tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
   (do 
     conn <- connectPostgreSQL (fromString str) 
     return (conn,connDB)) `catch` (\e -> do
-      putStrLn $ "Invalid database connection parameters: " ++ str ++ ". " ++ (show (e :: E.SomeException))
+      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ (show (e :: E.IOException))
       connDB2 <- getConnDBParams
       tryConnect connDB2)
 
