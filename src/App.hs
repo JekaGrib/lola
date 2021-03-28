@@ -78,7 +78,8 @@ data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, 
 data SelectType = 
   OnlyInt {fromOnlyInt :: Integer} 
   | OnlyTxt  {fromOnlyTxt :: Text} 
-  | OnlyDay  {fromOnlyDay :: Day} 
+  | OnlyDay  {fromOnlyDay :: Day}
+  | TwoIds   {id_1 :: Integer, id_2 :: Integer} 
   | Auth     {pwdAu :: Text, admBoolAu :: Bool}
   | Cat      {cat_nameC :: Text, super_cat_idC :: Integer}
   | Tag      {tag_idT :: Integer, tag_nameT :: Text}
@@ -99,9 +100,10 @@ instance FromRow SelectType where
     <|> (User    <$> field <*> field <*> field <*> field)
     <|> (Comment <$> field <*> field <*> field)
     <|> (Author  <$> field <*> field <*> field)
-    <|> (Tag  <$> field <*> field)
-    <|> (Cat  <$> field <*> field)
-    <|> (Auth <$> field <*> field)
+    <|> (Tag    <$> field <*> field)
+    <|> (Cat    <$> field <*> field)
+    <|> (Auth   <$> field <*> field)
+    <|> (TwoIds <$> field <*> field)
     <|> (OnlyDay <$> field)
     <|> (OnlyTxt <$> field)
     <|> (OnlyInt <$> field) 
@@ -133,8 +135,7 @@ logOnErr h m = m `catchE` (\e -> do
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
   let connDB = cConnDB config
-  let str = "host='" ++ hostCDB connDB ++ "' port=" ++ show (portCDB connDB) ++ " user='" ++ userCDB connDB ++ "' dbname='" ++ nameCDB connDB ++ "' password='" ++ pwdCDB connDB ++ "'"
-  conn <- connectPostgreSQL (fromString str)
+  (conn,_) <- tryConnect connDB
   let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
@@ -152,6 +153,8 @@ fromE ansE = case ansE of
                                 (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
   Left (SecretError str)   -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (DatabaseError str) -> ResponseInfo status200 [] "Internal server error"
+  Left (DatabaseAndUnrollError str) -> ResponseInfo status200 [] "Internal server error"
+  
 
 okHelper h x = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ x)
 
@@ -346,10 +349,15 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["tag_id"]
       [tagIdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum]              <- mapM tryReadNum [tagIdParam] 
-      deleteFromDbE h "draftstags" "tag_id=?" [tagIdParam]
-      deleteFromDbE h "poststags" "tag_id=?" [tagIdParam]
-      deleteFromDbE h "tags" "tag_id=?" [tagIdParam]
+      [tagIdNum]              <- mapM tryReadNum [tagIdParam]
+      isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam]
+      let delete1 = deleteFromDbE h "draftstags" "tag_id=?" [tagIdParam] 
+      selectTypeList1 <- preSelectE h "draftstags" ["draft_id","tag_id"] "tag_id=?" [tagIdParam] delete1 
+      drTagIds <- mapM fromSelTwoIds selectTypeList1
+      let delete2 = deleteFromDbE h "poststags" "tag_id=?" [tagIdParam] 
+      selectTypeList2 <- unrollDelTag1 h drTagIds $ preSelectE h "poststags" ["post_id","tag_id"] "tag_id=?" [tagIdParam] delete2
+      psTagIds <- unrollDelTag1 h drTagIds $ mapM fromSelTwoIds selectTypeList2
+      unrollDelTag2 h drTagIds psTagIds $ deleteFromDbE h "tagsstacks" "tag_id=?" [tagIdParam]
       okHelper h $ OkResponse {ok = True}
     ["createNewDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create new draft command"
@@ -962,9 +970,9 @@ selectFromDb' conn table params where' values = do
   return xs
 
 selectOneFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> [String] -> String -> [Text] -> ExceptT ReqError m SelectType
-selectOneFromDbE h table params where' values = catchDbErr $ do
+selectOneFromDbE h table params where' values = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- lift $ selectFromDb h table params where' values
+  xs <- catchDbErr $ lift $ selectFromDb h table params where' values
   case xs of
     []           -> throwE $ DatabaseError "DatabaseError.Empty output"
     [x] -> do
@@ -973,9 +981,9 @@ selectOneFromDbE h table params where' values = catchDbErr $ do
     _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
 selectListFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [SelectType]
-selectListFromDbE h table params where' values = catchDbErr $ do
+selectListFromDbE h table params where' values = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
-  xs <- lift $ selectFromDb h table params where' values
+  xs <- catchDbErr $ lift $ selectFromDb h table params where' values
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs 
 
@@ -1005,9 +1013,9 @@ selectLimitFromDb' conn defTable defOrderBy page limitNumber params defWhere def
   -}
 
 selectListLimitFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [SelectType]
-selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = catchDbErr $ do
+selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
   lift $ logDebug (hLog h) $ "Select data from DB."
-  xs <- lift $ selectLimitFromDb h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
+  xs <- catchDbErr $ lift $ selectLimitFromDb h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs
 
@@ -1033,9 +1041,9 @@ isExistInDb' conn table checkName where' values = do
   return check
 
 isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-isExistInDbE h table checkName where' values = catchDbErr $ do
+isExistInDbE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- lift $ isExistInDb h table checkName where' values 
+  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
   case check of
     True -> do
       lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") exist"
@@ -1043,9 +1051,9 @@ isExistInDbE h table checkName where' values = catchDbErr $ do
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
   
 ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-ifExistInDbThrowE h table checkName where' values = catchDbErr $ do
+ifExistInDbThrowE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- lift $ isExistInDb h table checkName where' values 
+  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
   case check of
     True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
     False -> do
@@ -1059,8 +1067,8 @@ insertReturnInDb' conn table returnName insNames insValues = do
   return (fmap fromOnly xs) 
 
 insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
-insertReturnInDbE h table returnName insNames insValues = catchDbErr $ do
-  xs <- lift $ insertReturnInDb h table returnName insNames insValues
+insertReturnInDbE h table returnName insNames insValues =  do
+  xs <- catchDbErr $ lift $ insertReturnInDb h table returnName insNames insValues
   case xs of
     []           -> throwE $ DatabaseError "DatabaseError.Empty output"
     [x] -> do 
@@ -1286,11 +1294,11 @@ isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
   Just _  -> True
   Nothing -> False
 
-data ReqError = SecretError String | SimpleError String | DatabaseError String
+data ReqError = SecretError String | SimpleError String | DatabaseError String | DatabaseAndUnrollError String
   deriving (Eq,Show)
 
-data DbException = SqlError | FormatError| QueryError | ResultError deriving Show
-instance Exception DbException
+{-data DbException = SqlError | FormatError| QueryError | ResultError deriving Show
+instance Exception DbException-}
 
 cathSqlErr m = m `catch` (\e -> do
   throwE . DatabaseError $ show (e :: SqlError) )
@@ -1307,8 +1315,6 @@ cathResultErr m = m `catch` (\e -> do
 catchIOErr m = m `catch` (\e -> do
   throwE . DatabaseError $ show (e :: E.IOException) )
 
-catchPatMatchErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: E.PatternMatchFail) )
 
 
 catchDbErr m = catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
@@ -1319,6 +1325,8 @@ fromSelTxt (OnlyTxt x) = return x
 fromSelTxt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyTxt\n with actual: " ++ show x
 fromSelDay (OnlyDay x) = return x
 fromSelDay x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyDay\n with actual: " ++ show x
+fromSelTwoIds x@(TwoIds a b) = return (a,b)
+fromSelTwoIds x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: TwoIds\n with actual: " ++ show x
 fromSelAuth x@(Auth _ _) = return x
 fromSelAuth x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Auth\n with actual: " ++ show x
 fromSelCat x@(Cat _ _) = return x
@@ -1383,5 +1391,60 @@ inCatResp [(x,y,z)] = CatResponse { cat_id = x , cat_name =  y, one_level_sub_ca
 inCatResp ((x,y,z):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , one_level_sub_categories = z , super_category = inCatResp xs} 
       
 
+tryConnect :: ConnDB -> IO (Connection, ConnDB)
+tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
+  let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
+  (do 
+    conn <- connectPostgreSQL (fromString str) 
+    return (conn,connDB)) `catch` (\e -> do
+      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ (show (e :: E.IOException))
+      connDB2 <- getConnDBParams
+      tryConnect connDB2)
 
+getConnDBParams :: IO ConnDB
+getConnDBParams = do
+  hostDB          <- inputString  "DataBase.host"
+  portDB          <- inputInteger "DataBase.port"
+  userDB          <- inputString  "DataBase.user"
+  dbName          <- inputString  "DataBase.dbname"
+  pwdDB           <- inputString  "DataBase.password"
+  return (ConnDB hostDB portDB userDB dbName pwdDB)
 
+inputInteger :: String -> IO Integer
+inputInteger valueName = do
+  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName
+  input <- getLine
+  case reads input of
+    [(a,"")] -> return a
+    _        -> inputInteger valueName
+
+inputString :: String -> IO String
+inputString valueName = do
+  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
+  input <- getLine
+  return input
+
+unroll :: (Monad m, MonadCatch m,MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m b -> ExceptT ReqError m a
+unroll m todo = m `catchE` (\err -> case err of
+  DatabaseError str -> do
+    let action = todo `catchE` (\unrollErr -> throwE . DatabaseAndUnrollError $ "DatabaseError:" ++ show err ++ "UnrollError:" ++ show unrollErr )
+    action
+    eitherErr <- lift $ runExceptT action
+    case eitherErr of
+      Right _ -> throwE err
+      Left (DatabaseAndUnrollError str1) -> throwE (DatabaseAndUnrollError str1)
+  _               -> throwE err)
+
+unrollDelTag1 h drTagIds m = unroll m $ do
+  insertManyInDbE h "draftstags" ["draft_id","tag_id"] drTagIds
+
+unrollDelTag2 h drTagIds psTagIds m = unroll m $ do
+  insertManyInDbE h "poststags"  ["post_id","tag_id"] psTagIds
+  insertManyInDbE h "draftstagsss" ["draft_id","tag_id"] drTagIds
+
+preSelectE h table params where' values todo = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
+  xs <- catchDbErr $ lift $ selectFromDb h table params where' values
+  lift $ logInfo (hLog h) $ "Data received from DB"
+  todo  
+  return xs 

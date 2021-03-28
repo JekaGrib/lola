@@ -68,24 +68,7 @@ main = do
   let config = Config connDB defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
   run 3000 (application config handleLog)
 
-tryConnect :: ConnDB -> IO (Connection, ConnDB)
-tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
-  let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
-  (do 
-    conn <- connectPostgreSQL (fromString str) 
-    return (conn,connDB)) `catch` (\e -> do
-      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ (show (e :: E.IOException))
-      connDB2 <- getConnDBParams
-      tryConnect connDB2)
 
-getConnDBParams :: IO ConnDB
-getConnDBParams = do
-  hostDB          <- inputString  "DataBase.host"
-  portDB          <- inputInteger "DataBase.port"
-  userDB          <- inputString  "DataBase.user"
-  dbName          <- inputString  "DataBase.dbname"
-  pwdDB           <- inputString  "DataBase.password"
-  return (ConnDB hostDB portDB userDB dbName pwdDB)
 
 parseConfDefPicId :: C.Config -> Connection -> IO Integer
 parseConfDefPicId conf conn = do
@@ -257,19 +240,7 @@ inputLogLevel = do
     "ERROR"   -> return ERROR
     _         -> inputLogLevel
 
-inputInteger :: String -> IO Integer
-inputInteger valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName
-  input <- getLine
-  case reads input of
-    [(a,"")] -> return a
-    _        -> inputInteger valueName
 
-inputString :: String -> IO String
-inputString valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
-  input <- getLine
-  return input
 
 inputIntegerOr :: String -> IO Integer -> IO Integer
 inputIntegerOr valueName action = do
