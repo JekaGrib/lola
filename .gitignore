@@ -1,5 +1,5 @@
 .stack-work/
-my.config
+postApp.config
 *.log
 .vscode
 .history
