@@ -1,16 +1,11 @@
 {
-    "user_id": 2,
+    "user_id": 607,
     "password": "654321",
     "draft_name": "rock",
     "draft_category_id": 8,
     "draft_text": "heyhey",
     "draft_main_pic_url": "https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg",
-    "draft_tags_ids" : [
-        { "tag_id": 1 },
-        { "tag_id": 3 },
-        { "tag_id": 7 },
-        { "tag_id": 4 }
-    ],
+    "draft_tags_ids" : [ 1, 2, 12, 4, 7 ],
     "draft_pics_urls": [
         { "pic_url": "https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg" },
         { "pic_url": "https://cdn.pixabay.com/photo/2019/12/17/17/09/woman-4702060_960_720.jpg" },

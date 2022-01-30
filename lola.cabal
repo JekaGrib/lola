@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: adf1abfb3c93cee3998c644f9c7c37d95e78045f5d11bd7487f7458df96a74d4
+-- hash: 8b0e44bafca1c2e6ba5928cad6ffda8155de86c276dda13d6f47cb760443cb6c
 
 name:           lola
 version:        0.1.0.0
@@ -41,6 +41,7 @@ library
     , bytestring
     , configurator
     , containers
+    , cryptonite
     , exceptions
     , hspec
     , http-conduit
@@ -71,6 +72,7 @@ executable lola-exe
     , bytestring
     , configurator
     , containers
+    , cryptonite
     , exceptions
     , hspec
     , http-conduit
@@ -103,6 +105,7 @@ test-suite lola-test
     , bytestring
     , configurator
     , containers
+    , cryptonite
     , exceptions
     , hspec
     , http-conduit

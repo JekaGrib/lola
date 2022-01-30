@@ -1,11 +1,11 @@
 {
-    "user_id": 5,
-    "password": "y7ldAT",
+    "user_id": 607,
+    "password": "654321",
     "draft_name": "rock",
     "draft_category_id": 3,
     "draft_text": "heyhey",
     "draft_main_pic_url": "https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg",
-    "draft_tags_ids" : [ 1, 2, 3 ],
+    "draft_tags_ids" : [ 1, 2, 4 ],
     "draft_pics_urls": [
         "https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg" ,
         "https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg" ,
@@ -14,5 +14,3 @@
         "https://cdn.pixabay.com/photo/2020/09/02/18/03/girl-5539094_960_720.jpg"
     ]
 }
-
-"{\"user_id\": 5,\"password\":\"y7ldAT\",\"draft_name\":\"rock\",\"draft_category_id\":3,\"draft_text\":\"heyhey\",\"draft_main_pic_url\":\"https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg\",\"draft_tags_ids\":[1,2,3],\"draft_pics_urls\":[\"https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg\",\"https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg\"]}"

@@ -1,3 +1,5 @@
+--{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 --{-# LANGUAGE FlexibleInstances #-}
@@ -43,7 +45,8 @@ import qualified Data.Map                       as M
 import           Database.PostgreSQL.Simple.FromRow
 import           Control.Applicative
 import qualified Control.Exception              as E
-
+import           Crypto.Hash                    (hash,Digest)
+import Crypto.Hash.Algorithms (SHA1)
 
 
 data Handle m = Handle 
@@ -97,16 +100,16 @@ instance FromRow SelectType where
     (Post         <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (Draft    <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
     <|> (PostInfo <$> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (User    <$> field <*> field <*> field <*> field)
-    <|> (Comment <$> field <*> field <*> field)
-    <|> (Author  <$> field <*> field <*> field)
-    <|> (Tag    <$> field <*> field)
-    <|> (Cat    <$> field <*> field)
-    <|> (Auth   <$> field <*> field)
-    <|> (TwoIds <$> field <*> field)
-    <|> (OnlyDay <$> field)
-    <|> (OnlyTxt <$> field)
-    <|> (OnlyInt <$> field) 
+    <|> (User     <$> field <*> field <*> field <*> field)
+    <|> (Comment  <$> field <*> field <*> field)
+    <|> (Author   <$> field <*> field <*> field)
+    <|> (Tag      <$> field <*> field)
+    <|> (Cat      <$> field <*> field)
+    <|> (Auth     <$> field <*> field)
+    <|> (TwoIds   <$> field <*> field)
+    <|> (OnlyDay  <$> field)
+    <|> (OnlyTxt  <$> field)
+    <|> (OnlyInt  <$> field) 
 
 
 
@@ -115,9 +118,9 @@ instance FromRow SelectType where
 --(cDefAuthId $ hConf h) = 1
 --(cDefCatId $ hConf h) = 1
 
-commentNumberLimit = 20
-draftNumberLimit = 5
-postNumberLimit = 5
+--commentNumberLimit = 20
+--draftNumberLimit = 5
+--postNumberLimit = 5
 
 
 getDay' :: IO String
@@ -158,19 +161,26 @@ fromE ansE = case ansE of
 
 okHelper h x = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ x)
 
+sha1 :: ByteString -> Digest SHA1
+sha1 = hash
+
+strSha1 :: ByteString -> String
+strSha1 = show . sha1
+
 answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 answerEx h req = do
    lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
    case pathInfo req of
     ["createUser"] -> do
-      lift $ logInfo (hLog h) $ "Create user command"
+      lift $ logInfo (hLog h) $ "Create user command" 
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
       [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
       lift $ logInfo (hLog h) $ "All parameters parsed"
       picId <- getPicId  h picUrlParam
       day <- lift $ getDay h
+      let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
-      let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
+      let insValues = [ hashPwdParam ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE"]
       usId <-  insertReturnInDbE h "users" "user_id" insNames insValues
       lift $ logDebug (hLog h) $ "DB return user_id" ++ show usId
       lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
@@ -218,8 +228,9 @@ answerEx h req = do
       checkKeyE keyParam (last keys)
       picId <- getPicId  h picUrlParam 
       day   <- lift $ getDay h
+      let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
-      let insValues = [pwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
+      let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
       admId <-  insertReturnInDbE h "users" "user_id" insNames insValues 
       lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
       lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
@@ -232,7 +243,7 @@ answerEx h req = do
       [usIdNum]               <- mapM tryReadNum [usIdParam]  
       isExistInDbE h  "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h "authors" "user_id" "user_id=?" [usIdParam] 
-      auId <-  insertReturnInDbE h "authors" "user_id" ["user_id","author_info"] [usIdParam,auInfoParam]
+      auId <-  insertReturnInDbE h "authors" "author_id" ["user_id","author_info"] [usIdParam,auInfoParam]
       lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
       lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
       okHelper h $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
@@ -1169,31 +1180,31 @@ checkFilterParam req param =
 
 chooseFilterArgs x param = case param of
   "created_at" -> do
-    tryReadDay x
+    _ <- tryReadDay x
     let table   = ""
     let where'  = "post_create_date = ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "created_at_lt" -> do
-    tryReadDay x
+    _ <- tryReadDay x
     let table   = ""
     let where'  = "post_create_date < ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "created_at_gt" -> do
-    tryReadDay x
+    _ <- tryReadDay x
     let table   = ""
     let where'  = "post_create_date > ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "category_id" -> do
-    tryReadNum x
+    _ <- tryReadNum x
     let table   = ""
     let where'  = "post_category_id = ?"
     let values  = ([],[x])
     return [FilterArg table where' values]
   "tag" -> do
-    tryReadNum x
+    _ <- tryReadNum x
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([x],[])
@@ -1377,15 +1388,18 @@ adminAuthE h req = do
   hideErr $ adminAuth pwdParam pwd admBool
 
 adminAuth pwdParam pwd admBool
-  | admBool && (pwd == pwdParam) = return True
+  | admBool && (pwd == hashPwdParam) = return True
   | admBool                      = throwE . SimpleError $ "INVALID pwd, admin = True "
-  | (pwd == pwdParam)            = throwE . SimpleError $ "valid pwd, user is NOT admin"
+  | (pwd == hashPwdParam)            = throwE . SimpleError $ "valid pwd, user is NOT admin"
   | otherwise                    = throwE . SimpleError $ "INVALID pwd, user is NOT admin"
+    where
+      hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
 
 userAuth pwdParam pwd 
-  | pwd == pwdParam = return ()
+  | pwd == hashPwdParam = return ()
   | otherwise       = throwE . SimpleError $ "INVALID password"
-
+    where
+      hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
 
 inCatResp [(x,y,z)] = CatResponse { cat_id = x , cat_name =  y, one_level_sub_cats = z , super_cat = "NULL"}
 inCatResp ((x,y,z):xs) = SubCatResponse { subCat_id = x , subCat_name =  y , one_level_sub_categories = z , super_category = inCatResp xs} 
@@ -1435,16 +1449,19 @@ unroll m todo = m `catchE` (\err -> case err of
       Left (DatabaseAndUnrollError str1) -> throwE (DatabaseAndUnrollError str1)
   _               -> throwE err)
 
+
 unrollDelTag1 h drTagIds m = unroll m $ do
   insertManyInDbE h "draftstags" ["draft_id","tag_id"] drTagIds
 
+unrollDelTag2 :: (MonadCatch m, MonadFail m) => Handle m -> [(Integer, Integer)] -> [(Integer, Integer)] -> ExceptT ReqError m a -> ExceptT ReqError m a
 unrollDelTag2 h drTagIds psTagIds m = unroll m $ do
   insertManyInDbE h "poststags"  ["post_id","tag_id"] psTagIds
   insertManyInDbE h "draftstagsss" ["draft_id","tag_id"] drTagIds
 
+preSelectE :: MonadCatch m => Handle m -> [Char] -> [String] -> String -> [Text] -> ExceptT ReqError m a -> ExceptT ReqError m [SelectType]
 preSelectE h table params where' values todo = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
   xs <- catchDbErr $ lift $ selectFromDb h table params where' values
   lift $ logInfo (hLog h) $ "Data received from DB"
-  todo  
+  _ <- todo  
   return xs 

@@ -40,6 +40,7 @@ dependencies:
 - hspec
 - containers
 - configurator
+- cryptonite
 
 library:
   source-dirs: src
