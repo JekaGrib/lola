@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8b0e44bafca1c2e6ba5928cad6ffda8155de86c276dda13d6f47cb760443cb6c
+-- hash: 15a39a7d9ab06782afcf2d02db1ff071263e6def8494ea982e8b7d54566852cb
 
 name:           lola
 version:        0.1.0.0
@@ -49,6 +49,7 @@ library
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , random
     , text
     , time
     , transformers
@@ -81,6 +82,7 @@ executable lola-exe
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , random
     , text
     , time
     , transformers
@@ -114,6 +116,7 @@ test-suite lola-test
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , random
     , text
     , time
     , transformers

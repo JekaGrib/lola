@@ -19,11 +19,26 @@ data UserResponse = UserResponse {
     } deriving (Eq,Show)
 
 instance ToJSON UserResponse where
-    toJSON (UserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
-        object ["user_id" .= user_id, "first_name" .= first_name, "last_name" .= last_name, "user_pic_id" .= user_pic_id, "user_pic_url" .= user_pic_url, "user_create_date" .= user_create_date]
-    toEncoding (UserResponse user_id first_name last_name user_pic_id user_pic_url user_create_date) =
-        pairs ("user_id" .= user_id <> "first_name" .= first_name <> "last_name" .= last_name <> "user_pic_id" .= user_pic_id <> "user_pic_url" .= user_pic_url <> "user_create_date" .= user_create_date)
+    toJSON (UserResponse a b c d e f ) =
+        object ["user_id" .= a, "first_name" .= b, "last_name" .= c, "user_pic_id" .= d, "user_pic_url" .= e, "user_create_date" .= f]
+    toEncoding (UserResponse a b c d e f) =
+        pairs ("user_id" .= a <> "first_name" .= b <> "last_name" .= c <> "user_pic_id" .= d <> "user_pic_url" .= e <> "user_create_date" .= f)
 
+data UserTokenResponse = UserTokenResponse {
+    tokenUTR :: Text
+    , user_idUTR      :: Integer
+    , first_nameUTR   :: Text
+    , last_nameUTR   :: Text
+    , user_pic_idUTR  :: Integer
+    , user_pic_urlUTR :: Text
+    , user_create_dateUTR :: Text
+    } deriving (Eq,Show)
+
+instance ToJSON UserTokenResponse where
+    toJSON (UserTokenResponse a b c d e f g) =
+        object ["token" .= a, "user_id" .= b, "first_name" .= c, "last_name" .= d, "user_pic_id" .= e, "user_pic_url" .= f, "user_create_date" .= g]
+    toEncoding (UserTokenResponse a b c d e f g) =
+        pairs ("token" .= a <> "user_id" .= b <> "first_name" .= c <> "last_name" .= d <> "user_pic_id" .= e <> "user_pic_url" .= f <> "user_create_date" .= g)
 
 data OkResponse = OkResponse {ok :: Bool} deriving (Eq,Show)
 

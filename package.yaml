@@ -41,6 +41,7 @@ dependencies:
 - containers
 - configurator
 - cryptonite
+- random
 
 library:
   source-dirs: src
