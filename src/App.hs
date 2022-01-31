@@ -58,7 +58,7 @@ data Handle m = Handle
     updateInDb        :: String -> String -> String -> [Text] -> m (),
     deleteFromDb      :: String -> String -> [Text] -> m (),
     isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
-    insertReturnInDb  :: String -> String -> [String] -> [Text] -> m [ReturnType],
+    insertReturnInDb  :: String -> String -> [String] -> [Text] -> m [Integer],
     insertManyInDb    :: String -> [String] -> [(Integer,Integer)] -> m (),
     httpAction        :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay            :: m String,
@@ -113,15 +113,7 @@ instance FromRow SelectType where
     <|> (OnlyTxt  <$> field)
     <|> (OnlyInt  <$> field) 
 
-data ReturnType =
-  OnlyIntReturn Integer
-  | UserToken {user_idUT :: Integer, token_key :: String}
-    deriving (Eq,Show)
-  
-instance FromRow ReturnType where
-  fromRow = 
-    (UserToken <$> field <*> field)
-    <|> (OnlyIntReturn  <$> field) 
+
 
 --(cDefUsId $ hConf h) = 1
 --defPicId = 1
@@ -187,6 +179,27 @@ answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> Except
 answerEx h req = do
    lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
    case pathInfo req of
+    ["logIn"] -> do
+      lift $ logInfo (hLog h) $ "Login command"
+      let paramsNames = ["user_id","password"]
+      [usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
+      [usIdNum]            <- mapM tryReadNum [usIdParam] 
+      lift $ logInfo (hLog h) $ "All logIn parameters parsed"
+      isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
+      Auth pwd admBool <- selectOneFromDbE h "users" ["password","admin"] "user_id=?" [usIdParam] 
+      case admBool of
+        False -> do
+          userAuth pwdParam pwd
+          tokenKey <- lift $ getTokenKey h
+          updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
+          let usToken = pack $ "stu." ++ show usIdNum ++ "." ++ tokenKey
+          okHelper h $ TokenResponse {tokenTR = usToken}          
+        True -> do 
+          adminAuth pwdParam pwd admBool
+          tokenKey <- lift $ getTokenKey h
+          updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
+          let usToken = pack $ "hij." ++ show usIdNum ++ "." ++ tokenKey
+          okHelper h $ TokenResponse {tokenTR = usToken}  
     ["createUser"] -> do
       lift $ logInfo (hLog h) $ "Create user command" 
       let paramsNames = ["password","first_name","last_name","user_pic_url"]
@@ -198,11 +211,10 @@ answerEx h req = do
       tokenKey <- lift $ getTokenKey h
       let insNames  = ["password"    ,"first_name","last_name","user_pic_id"    ,"user_create_date","admin","token_key"]
       let insValues = [ hashPwdParam ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE",pack tokenKey]
-      returnType <-  insertReturnInDbE h "users" "user_id" insNames insValues
-      usId <- fromRetInt returnType
+      usId <-  insertReturnInDbE h "users" "user_id" insNames insValues
       lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
       lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
-      let usToken = pack $ "abc." ++ show usId ++ "." ++ tokenKey
+      let usToken = pack $ "stu." ++ show usId ++ "." ++ tokenKey
       okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picId, user_pic_urlUTR = makeMyPicUrl picId, user_create_dateUTR = pack day}
     ["getUser", usId] -> do
       lift $ logInfo (hLog h) $ "Get user command"
@@ -248,13 +260,14 @@ answerEx h req = do
       picId <- getPicId  h picUrlParam 
       day   <- lift $ getDay h
       let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
-      let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin"]
-      let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE" ]
-      returnType <-  insertReturnInDbE h "users" "user_id" insNames insValues 
-      admId <- fromRetInt returnType
+      tokenKey <- lift $ getTokenKey h
+      let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin","token_key"]
+      let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE",pack tokenKey ]
+      admId <-  insertReturnInDbE h "users" "user_id" insNames insValues 
       lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
       lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
-      okHelper h $ UserResponse {user_id = admId, first_name = fNameParam, last_name = lNameParam, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack day }
+      let usToken = pack $ "hij." ++ show admId ++ "." ++ tokenKey
+      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picId, user_pic_urlUTR = makeMyPicUrl picId, user_create_dateUTR = pack day }
     ["createAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Create author command"
       adminAuthE h  req
@@ -263,8 +276,7 @@ answerEx h req = do
       [usIdNum]               <- mapM tryReadNum [usIdParam]  
       isExistInDbE h  "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h "authors" "user_id" "user_id=?" [usIdParam] 
-      returnType <-  insertReturnInDbE h "authors" "author_id" ["user_id","author_info"] [usIdParam,auInfoParam]
-      auId <- fromRetInt returnType
+      auId <-  insertReturnInDbE h "authors" "author_id" ["user_id","author_info"] [usIdParam,auInfoParam]
       lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
       lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
       okHelper h $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
@@ -307,8 +319,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["category_name"]
       [catNameParam] <- mapM (checkParam req) paramsNames
-      returnType <-  insertReturnInDbE h "categories" "category_id" ["category_name"] [catNameParam] 
-      catId <- fromRetInt returnType
+      catId <-  insertReturnInDbE h "categories" "category_id" ["category_name"] [catNameParam] 
       okHelper h $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] , super_cat = "NULL"}
     ["createSubCategory"]        -> do
       lift $ logInfo (hLog h) $ "Create sub category command"
@@ -317,8 +328,7 @@ answerEx h req = do
       [catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
       [superCatIdNum]                <- mapM tryReadNum [superCatIdParam] 
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
-      returnType <-  insertReturnInDbE h "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
-      catId <- fromRetInt returnType
+      catId <-  insertReturnInDbE h "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       allSuperCats <- findAllSuperCats h  catId
       okHelper h $ inCatResp allSuperCats
     ["getCategory", catId] -> do
@@ -360,8 +370,7 @@ answerEx h req = do
       adminAuthE h  req
       let paramsNames = ["tag_name"]
       [tagNameParam] <- mapM (checkParam req) paramsNames
-      returnType <-  insertReturnInDbE h "tags" "tag_id" ["tag_name"] [tagNameParam] 
-      tagId <- fromRetInt returnType
+      tagId <-  insertReturnInDbE h "tags" "tag_id" ["tag_name"] [tagNameParam] 
       okHelper h $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
       lift $ logInfo (hLog h) $ "Get tag command"
@@ -418,8 +427,7 @@ answerEx h req = do
       picsIds <- mapM (getPicId  h) picsUrls
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [pack . show $ auId,nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId]
-      returnType <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues          
-      draftId <- fromRetInt returnType
+      draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues          
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
@@ -450,8 +458,7 @@ answerEx h req = do
       allSuperCats <- findAllSuperCats h  postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
-      returnType <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues
-      draftId <- fromRetInt returnType
+      draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds) 
       okHelper h $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
@@ -579,8 +586,7 @@ answerEx h req = do
           day <- lift $ getDay h 
           let insNames  = ["author_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
           let insValues = [pack . show $ auId,draftName,pack day,pack . show $ draftCatId,draftTxt,pack . show $ mPicId]          
-          returnType <-  insertReturnInDbE h "posts" "post_id" insNames insValues          
-          postId <- fromRetInt returnType
+          postId <-  insertReturnInDbE h "posts" "post_id" insNames insValues          
           insertManyInDbE h "postspics" ["post_id","pic_id"] (zip (repeat postId) picsIds)
           insertManyInDbE h "poststags" ["post_id","tag_id"] (zip (repeat postId) (fmap tag_idT tagS))
           allSuperCats <- findAllSuperCats h  draftCatId 
@@ -647,8 +653,7 @@ answerEx h req = do
       pwd         <- fromSelTxt selectType1
       userAuth pwdParam pwd
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      returnType <- insertReturnInDbE h "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
-      commId <- fromRetInt returnType
+      commId <- insertReturnInDbE h "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,usIdParam] 
       okHelper h $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
       lift $ logInfo (hLog h) $ "Get comments command"
@@ -1100,12 +1105,12 @@ ifExistInDbThrowE h table checkName where' values = do
       return ()
 
 
-insertReturnInDb' :: Connection -> String -> String -> [String] -> [Text] -> IO [ReturnType]
+insertReturnInDb' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
 insertReturnInDb' conn table returnName insNames insValues = do
   xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
-  return xs 
+  return (fmap fromOnly xs) 
 
-insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m ReturnType
+insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnInDbE h table returnName insNames insValues =  do
   xs <- catchDbErr $ lift $ insertReturnInDb h table returnName insNames insValues
   case xs of
@@ -1165,8 +1170,7 @@ getPicId h url
     return picId
   |otherwise = do
     checkPicUrlGetPic h url
-    returnType <-  insertReturnInDbE h "pics" "pic_id" ["pic_url"] [url]
-    picId <- fromRetInt returnType
+    picId <-  insertReturnInDbE h "pics" "pic_id" ["pic_url"] [url]
     return picId
 
 
@@ -1386,11 +1390,7 @@ fromSelDraft x = throwE . DatabaseError $ "Bad select type. Couldn`t match expec
 fromSelPost x@(Post _ _ _ _ _ _ _ _ _) = return x
 fromSelPost x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Post\n with actual: " ++ show x
 
-fromRetInt (OnlyIntReturn x) = return x
-fromRetInt x = throwE . DatabaseError $ "Bad return type. Couldn`t match expected: OnlyIntReturn\n with actual: " ++ show x
 
-fromRetUserToken x@(UserToken _ _) = return x
-fromRetUserToken x = throwE . DatabaseError $ "Bad return type. Couldn`t match expected: UserToken\n with actual: " ++ show x
 
 
  {-`catch` (\e -> do

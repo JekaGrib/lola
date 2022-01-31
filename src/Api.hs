@@ -40,13 +40,21 @@ instance ToJSON UserTokenResponse where
     toEncoding (UserTokenResponse a b c d e f g) =
         pairs ("token" .= a <> "user_id" .= b <> "first_name" .= c <> "last_name" .= d <> "user_pic_id" .= e <> "user_pic_url" .= f <> "user_create_date" .= g)
 
+data TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq,Show)
+
+instance ToJSON TokenResponse where
+    toJSON (TokenResponse a) =
+        object ["token" .= a]
+    toEncoding (TokenResponse a) =
+        pairs ("token" .= a )
+
 data OkResponse = OkResponse {ok :: Bool} deriving (Eq,Show)
 
 instance ToJSON OkResponse where
-    toJSON (OkResponse ok) =
-        object ["ok" .= ok]
-    toEncoding (OkResponse ok) =
-        pairs ("ok" .= ok )
+    toJSON (OkResponse a) =
+        object ["ok" .= a]
+    toEncoding (OkResponse a) =
+        pairs ("ok" .= a )
 
 
 data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text} deriving (Eq,Show)
