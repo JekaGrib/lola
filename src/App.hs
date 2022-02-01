@@ -11,7 +11,8 @@
 
 module App where
           
-import           Api
+import           Api.Response
+import           Api.Request
 import           Logger
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11, Status, ResponseHeaders )
@@ -116,15 +117,6 @@ instance FromRow SelectType where
     <|> (OnlyInt    <$> field) 
 
 
-
---(cDefUsId $ hConf h) = 1
---defPicId = 1
---(cDefAuthId $ hConf h) = 1
---(cDefCatId $ hConf h) = 1
-
---commentNumberLimit = 20
---draftNumberLimit = 5
---postNumberLimit = 5
 
 
 getDay' :: IO String

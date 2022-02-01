@@ -1,7 +1,9 @@
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
+
 module Logger where
 
 import           Prelude          hiding (log)
-import           System.IO        (appendFile)
 
 
 
@@ -18,7 +20,6 @@ data Priority = DEBUG | INFO | WARNING | ERROR
 logger :: LogHandle IO -> String -> Priority -> String -> IO ()
 logger h logPath currP str  
     | currP >= configP = do
-        --putStr (show currP ++ ": " ++ str)
         appendFile logPath (show currP ++ ": " ++ str ++ "\n")
     | otherwise        = return ()
       where configP = cLogLevel (hLogConf h)
@@ -29,6 +30,5 @@ logInfo    h = log h INFO
 logWarning h = log h WARNING
 logError   h = log h ERROR
 
---handleLog = LogHandle (logger handleLog) (hLogConf handleLog)
 
 
