@@ -404,7 +404,7 @@ answerEx h req = do
       let delete2 = deleteFromDbE h "poststags" "tag_id=?" [tagIdParam] 
       selectTypeList2 <- unrollDelTag1 h drTagIds $ preSelectE h "poststags" ["post_id","tag_id"] "tag_id=?" [tagIdParam] delete2
       psTagIds <- unrollDelTag1 h drTagIds $ mapM fromSelTwoIds selectTypeList2
-      unrollDelTag2 h drTagIds psTagIds $ deleteFromDbE h "tagsstacks" "tag_id=?" [tagIdParam]
+      unrollDelTag2 h drTagIds psTagIds $ deleteFromDbE h "tags" "tag_id=?" [tagIdParam]
       okHelper h $ OkResponse {ok = True}
     ["createNewDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create new draft command"
@@ -691,7 +691,8 @@ answerEx h req = do
     ["req"] -> do
       lift $ logInfo (hLog h) $ "Test command"
       lift $ printh h $ req
-      okHelper h $ OkResponse {ok = True}  
+      okHelper h $ OkResponse {ok = True}
+    _ -> SecretError "Unknown response"  
       
 
 
