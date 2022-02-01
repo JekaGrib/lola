@@ -105,11 +105,10 @@ instance ToJSON CatResponse where
 
 
 data DraftRequest = DraftRequest {
-      user_id1      :: Integer
-    , password1   :: Text
+      tokenDR :: Text
     , draft_name    :: Text
     , draft_cat_id :: Integer
-    , draft_text1  :: Text
+    , draft_textDR  :: Text
     , draft_main_pic_url :: Text
     , draft_pics_urls :: [Text]
     , draft_tags_ids :: [Integer]
@@ -117,8 +116,7 @@ data DraftRequest = DraftRequest {
 
 instance FromJSON DraftRequest where
     parseJSON (Object v) = DraftRequest
-        <$> v .: "user_id"
-        <*> v .: "password"
+        <$> v .: "token"
         <*> v .: "draft_name"
         <*> v .: "draft_category_id"
         <*> v .: "draft_text"
@@ -127,10 +125,10 @@ instance FromJSON DraftRequest where
         <*> v .: "draft_tags_ids" 
 
 instance ToJSON DraftRequest where
-    toJSON (DraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids ) =
-        object ["user_id" .= user_id1, "password" .= password1, "draft_name" .= draft_name, "draft_category_id" .= draft_cat_id, "draft_text" .= draft_text1, "draft_main_pic_url" .= draft_main_pic_url, "draft_pics_urls" .= draft_pics_urls, "draft_tags_ids" .= draft_tags_ids]
-    toEncoding (DraftRequest user_id1 password1 draft_name draft_cat_id draft_text1 draft_main_pic_url draft_pics_urls draft_tags_ids) =
-        pairs ("user_id" .= user_id1 <> "password" .= password1 <> "draft_name" .= draft_name <> "draft_category_id" .= draft_cat_id <> "draft_text" .= draft_text1 <> "draft_main_pic_url" .= draft_main_pic_url <> "draft_pics_urls" .= draft_pics_urls <> "draft_tags_ids" .= draft_tags_ids)
+    toJSON (DraftRequest a b c d e f g ) =
+        object ["token" .= a, "draft_name" .= b, "draft_category_id" .= c, "draft_text" .= d, "draft_main_pic_url" .= e, "draft_pics_urls" .= f, "draft_tags_ids" .= g]
+    toEncoding (DraftRequest a b c d e f g) =
+        pairs ("token" .= a <> "draft_name" .= b <> "draft_category_id" .= c <> "draft_text" .= d <> "draft_main_pic_url" .= e <> "draft_pics_urls" .= f <> "draft_tags_ids" .= g)
 
 
 {-data PicUrl = PicUrl {
