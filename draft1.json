@@ -1,15 +1,9 @@
 {
-    "token": "502.26c515598d405fd16829738128a57910ed804872.stu.18915a382a259bed3bccfff0f9238a30ada9b689",
+    "token": "501.8a129590d9549c928db524e21b8327900349ca36.hij.23aa49ca2b9709e949d076f677913c7c73cdc1f2",
     "draft_name": "rock",
     "draft_category_id": 3,
     "draft_text": "heyhey",
-    "draft_main_pic_url": "https://cdn.pixabay.com/photo/2019/09/24/16/32/chameleon-4501712_960_720.jpg",
+    "draft_main_pic_id": 501,
     "draft_tags_ids" : [ 1, 2, 4 ],
-    "draft_pics_urls": [
-        "https://cdn.pixabay.com/photo/2019/12/26/10/44/horse-4720178_960_720.jpg" ,
-        "https://cdn.pixabay.com/photo/2020/08/27/19/03/zebra-5522697_960_720.jpg" ,
-        "https://cdn.pixabay.com/photo/2019/12/17/17/09/woman-4702060_960_720.jpg" ,
-        "https://libreshot.com/wp-content/uploads/2020/10/leaf-texture_D71_5430-free-image-508x339.jpg" ,
-        "https://cdn.pixabay.com/photo/2020/09/02/18/03/girl-5539094_960_720.jpg"
-    ]
+    "draft_pics_ids": [ 5,4,3]
 }

@@ -49,7 +49,6 @@ import           Crypto.Hash                    (hash,Digest)
 import Crypto.Hash.Algorithms (SHA1)
 import System.Random (getStdGen,newStdGen,randomRs)
 
-
 data Handle m = Handle 
   { hConf             :: Config,
     hLog              :: LogHandle m,
@@ -64,7 +63,8 @@ data Handle m = Handle
     getDay            :: m String,
     getBody           :: Request -> m BSL.ByteString,
     printh            :: Request -> m (),
-    getTokenKey       :: m String
+    getTokenKey       :: m String,
+    insertByteaInDb   :: String -> String -> [String] -> ByteString -> m [Integer]
     }
 
 data Config = Config 
@@ -84,6 +84,7 @@ data SelectType =
   OnlyInt {fromOnlyInt :: Integer} 
   | OnlyTxt  {fromOnlyTxt :: Text} 
   | OnlyDay  {fromOnlyDay :: Day}
+  | OnlyBinary (Binary ByteString)
   | TwoIds   {id_1 :: Integer, id_2 :: Integer} 
   | Auth     {pwdAu :: Text, admBoolAu :: Bool}
   | Cat      {cat_nameC :: Text, super_cat_idC :: Integer}
@@ -99,19 +100,20 @@ data SelectType =
   
 instance FromRow SelectType where
   fromRow = 
-    (Post         <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (Draft    <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (PostInfo <$> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (User     <$> field <*> field <*> field <*> field)
-    <|> (Comment  <$> field <*> field <*> field)
-    <|> (Author   <$> field <*> field <*> field)
-    <|> (Tag      <$> field <*> field)
-    <|> (Cat      <$> field <*> field)
-    <|> (Auth     <$> field <*> field)
-    <|> (TwoIds   <$> field <*> field)
-    <|> (OnlyDay  <$> field)
-    <|> (OnlyTxt  <$> field)
-    <|> (OnlyInt  <$> field) 
+    (Post           <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
+    <|> (Draft      <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
+    <|> (PostInfo   <$> field <*> field <*> field <*> field <*> field <*> field)
+    <|> (User       <$> field <*> field <*> field <*> field)
+    <|> (Comment    <$> field <*> field <*> field)
+    <|> (Author     <$> field <*> field <*> field)
+    <|> (Tag        <$> field <*> field)
+    <|> (Cat        <$> field <*> field)
+    <|> (Auth       <$> field <*> field)
+    <|> (TwoIds     <$> field <*> field)
+    <|> (OnlyBinary <$> field)
+    <|> (OnlyDay    <$> field)
+    <|> (OnlyTxt    <$> field)
+    <|> (OnlyInt    <$> field) 
 
 
 
@@ -141,7 +143,7 @@ application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseRece
 application config handleLog req send = do
   let connDB = cConnDB config
   (conn,_) <- tryConnect connDB
-  let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print getTokenKey'
+  let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print getTokenKey' (insertByteaInDb' conn)
   logDebug (hLog h) "Connect to DB"
   ansE <- runExceptT $ logOnErr h $ answerEx h req
   let resInfo = fromE ansE 
@@ -180,8 +182,8 @@ getTokenKey' = do
 
 answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 answerEx h req = do
-   lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
-   case pathInfo req of
+  lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
+  case pathInfo req of
     ["logIn"] -> do
       lift $ logInfo (hLog h) $ "Login command"
       let paramsNames = ["user_id","password"]
@@ -205,20 +207,20 @@ answerEx h req = do
           okHelper h $ TokenResponse {tokenTR = usToken}  
     ["createUser"] -> do
       lift $ logInfo (hLog h) $ "Create user command" 
-      let paramsNames = ["password","first_name","last_name","user_pic_url"]
-      [pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      let paramsNames = ["password","first_name","last_name","user_pic_id"]
+      [pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
+      [picIdNum]   <- mapM tryReadNum [picIdParam]
       lift $ logInfo (hLog h) $ "All parameters parsed"
-      picId <- getPicId  h picUrlParam
       day <- lift $ getDay h
       let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
       tokenKey <- lift $ getTokenKey h
-      let insNames  = ["password"    ,"first_name","last_name","user_pic_id"    ,"user_create_date","admin","token_key"]
-      let insValues = [ hashPwdParam ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"FALSE",pack tokenKey]
+      let insNames  = ["password"    ,"first_name","last_name","user_pic_id"  ,"user_create_date","admin","token_key"]
+      let insValues = [ hashPwdParam ,fNameParam  ,lNameParam ,picIdParam   ,pack day          ,"FALSE",pack tokenKey]
       usId <-  insertReturnInDbE h "users" "user_id" insNames insValues
       lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
       lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
       let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picId, user_pic_urlUTR = makeMyPicUrl picId, user_create_dateUTR = pack day}
+      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day}
     ["getUser", usId] -> do
       lift $ logInfo (hLog h) $ "Get user command"
       usIdNum <- tryReadNum usId
@@ -254,23 +256,23 @@ answerEx h req = do
       okHelper h $ OkResponse {ok = True}
     ["createAdmin"]        -> do
       lift $ logInfo (hLog h) $ "Create admin command"
-      let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_url"]
-      [keyParam,pwdParam,fNameParam,lNameParam,picUrlParam] <- mapM (checkParam req) paramsNames
+      let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_id"]
+      [keyParam,pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
+      [picIdNum]   <- mapM tryReadNum [picIdParam]
       selectTypeList <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
       keys           <- mapM fromSelTxt selectTypeList
       checkEmptyList keys
       checkKeyE keyParam (last keys)
-      picId <- getPicId  h picUrlParam 
       day   <- lift $ getDay h
       let hashPwdParam = pack . strSha1 . unpack $ pwdParam
       tokenKey <- lift $ getTokenKey h
       let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin","token_key"]
-      let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,pack (show picId),pack day          ,"TRUE",pack tokenKey ]
+      let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,picIdParam,pack day          ,"TRUE",pack tokenKey ]
       admId <-  insertReturnInDbE h "users" "user_id" insNames insValues 
       lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
       lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
       let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picId, user_pic_urlUTR = makeMyPicUrl picId, user_create_dateUTR = pack day }
+      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day }
     ["createAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Create author command"
       tokenAdminAuth h  req
@@ -414,16 +416,14 @@ answerEx h req = do
       let nameParam    = draft_name   body
       let catIdParam   = draft_cat_id body
       let txtParam     = draft_textDR  body
-      let mPicUrlParam = draft_main_pic_url body
+      let picId        = draft_main_pic_id body
       let tagsIds      = nub . draft_tags_ids $ body
-      let picsUrls     = draft_pics_urls $ body
+      let picsIds      = draft_pics_ids $ body
       (usIdNum,_) <- checkUserTokenParam h tokenParam
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
       isUserAuthorE h  usIdNum 
       Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
-      picId <- getPicId  h mPicUrlParam
-      picsIds <- mapM (getPicId  h) picsUrls
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [pack . show $ auId,nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId]
       draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues          
@@ -468,7 +468,7 @@ answerEx h req = do
       isDraftAuthor h  draftIdParam usIdNum
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      selectType <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]        
+      selectType <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]         
       Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- fromSelDraft selectType
       selectTypeList <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam]
       picsIds        <- mapM fromSelInt selectTypeList
@@ -510,9 +510,9 @@ answerEx h req = do
       let nameParam    = draft_name   body
       let catIdParam   = draft_cat_id body
       let txtParam     = draft_textDR  body
-      let mPicUrlParam = draft_main_pic_url body
+      let picId        = draft_main_pic_id body
       let tagsIds      = nub . draft_tags_ids $ body
-      let picsUrls     = draft_pics_urls $ body
+      let picsIds      = draft_pics_ids $ body
       (usIdNum,_) <- checkUserTokenParam h tokenParam
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftId] 
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
@@ -522,8 +522,6 @@ answerEx h req = do
       Author auId auInfo usId <- fromSelAuthor selectType2
       selectType3 <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
       postId     <- fromSelInt selectType3
-      picId <- getPicId  h mPicUrlParam
-      picsIds <- mapM (getPicId  h) picsUrls
       deleteDraftsPicsTags h [draftIdNum]
       updateInDbE h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftId]
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
@@ -671,18 +669,27 @@ answerEx h req = do
           isCommOrPostAuthor h commIdParam (pack . show $ postId ) usIdNum 
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
           okHelper h $ OkResponse {ok = True}      
+    ["browsePicture"] -> do
+      lift $ logInfo (hLog h) $ "browsePicture command"
+      (usIdNum,_) <- tokenUserAuth h req 
+      let paramsNames = ["pic_url"]
+      [picUrlParam] <- mapM (checkParam req) paramsNames
+      lbs <- checkPicUrlGetPic h picUrlParam
+      let sbs = BSL.toStrict lbs
+      picId <- insertByteaInDbE h "pics" "pic_id" ["pic"] sbs
+      okHelper h $ PicIdUrl { pic_id = picId, pic_url2 = makeMyPicUrl picId }
     ["picture",picId]  -> do
       lift $ logInfo (hLog h) $ "Picture command"
       picIdNum <- tryReadNum picId 
       isExistInDbE h "pics" "pic_id" "pic_id=?" [picId] 
-      selectType1 <- selectOneFromDbE h "pics" ["pic_url"] "pic_id=?" [picId] 
-      picUrl         <- fromSelTxt selectType1          
-      res <- getPicFromUrlE h picUrl
+      selectType1 <- selectOneFromDbE h "pics" ["pic"] "pic_id=?" [picId] 
+      bs          <- fromSelBin selectType1          
+      let lbs = BSL.fromStrict bs
       lift $ logInfo (hLog h) $ "Sending picture"
       return $ ResponseInfo 
         status200 
         [("Content-Type", "image/jpeg")] 
-        (lazyByteString $ HT.getResponseBody res)
+        (lazyByteString $ lbs)
     ["test",usId] -> do
       lift $ logInfo (hLog h) $ "Test command"
       usIdNum <- tryReadNum usId
@@ -692,7 +699,7 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Test command"
       lift $ printh h $ req
       okHelper h $ OkResponse {ok = True}
-    _ -> SecretError "Unknown response"  
+    _ -> throwE $ SecretError "Unknown response"  
       
 
 
@@ -701,8 +708,8 @@ getPicFromUrlE h picUrl = do
   case isMyUrl picUrl of
     True -> throwE $ SimpleError $ "Invalid url"
     _    -> do
-      res <- checkPicUrlGetPic h picUrl
-      return res
+      lbs <- checkPicUrlGetPic h picUrl
+      return lbs
 
 
 isCommOrPostAuthor h commIdParam postIdParam usIdNum = do
@@ -1077,6 +1084,21 @@ ifExistInDbThrowE h table checkName where' values = do
       return ()
 
 
+insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO [Integer]
+insertByteaInDb' conn table returnName insNames bs = do
+  xs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs] 
+  return (fmap fromOnly xs) 
+
+insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE h table returnName insNames bs =  do
+  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
+  case xs of
+    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    [x] -> do 
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
 insertReturnInDb' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
 insertReturnInDb' conn table returnName insNames insValues = do
   xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
@@ -1126,13 +1148,16 @@ readUrlEnd h url urlEnd = do
     True  -> return picIdNum 
     False -> throwE $ SimpleError $ "Invalid end of picture url:" ++ unpack url
 
-checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m (HT.Response BSL.ByteString)
+checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic h url = do
   res <- (lift $ (httpAction h) . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HT.HttpException))) )
-  let bs = HT.getResponseBody res
-  case decodeImage $ BSL.toStrict bs of
-    Right _ -> return res
+  let lbs = HT.getResponseBody res
+  let sbs = BSL.toStrict lbs
+  case decodeImage sbs of
+    Right _ -> return lbs
     Left _  -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+
+
 
 
 getPicId :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Text -> ExceptT ReqError m Integer
@@ -1341,6 +1366,9 @@ fromSelTxt (OnlyTxt x) = return x
 fromSelTxt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyTxt\n with actual: " ++ show x
 fromSelDay (OnlyDay x) = return x
 fromSelDay x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyDay\n with actual: " ++ show x
+fromSelBin (OnlyBinary (Binary bs)) = return bs
+fromSelBin x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyBinary\n with actual: " ++ show x
+
 fromSelTwoIds x@(TwoIds a b) = return (a,b)
 fromSelTwoIds x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: TwoIds\n with actual: " ++ show x
 fromSelAuth x@(Auth _ _) = return x
@@ -1396,8 +1424,7 @@ checkAdminTokenParam h tokenParam =
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        selectType <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam]
-        tokenKey <- fromSelTxt selectType
+        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("hij" ++ (unpack tokenKey)) == ys
           then do
@@ -1422,8 +1449,7 @@ checkUserTokenParam h tokenParam =
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        selectType <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam]
-        tokenKey <- fromSelTxt selectType
+        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("stu" ++ (unpack tokenKey)) == ys 
           then do
@@ -1433,8 +1459,7 @@ checkUserTokenParam h tokenParam =
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        selectType <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam]
-        tokenKey <- fromSelTxt selectType
+        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("hij" ++ (unpack tokenKey)) == ys
           then do
