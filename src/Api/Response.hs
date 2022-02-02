@@ -7,7 +7,8 @@ module Api.Response where
 
 
 import           Data.Aeson                     (ToJSON(toJSON,toEncoding),object,pairs,(.=))
-import           Data.Text                      ( unpack, Text )
+import           Data.Text                      (  Text )
+
 
 data UserResponse = UserResponse {
       user_id      :: Integer
@@ -105,21 +106,21 @@ instance ToJSON CatResponse where
 
 
 
-data PostId = PostInteger Integer | PostText Text 
+data PostIdOrNull = PostIdExist Integer | PostIdNull 
   deriving Eq
 
-instance Show PostId where
-  show (PostInteger a) = show a
-  show (PostText a) = unpack a
+instance Show PostIdOrNull where
+  show (PostIdExist a) = show a
+  show (PostIdNull) = "NULL"
 
-instance ToJSON PostId where
-  toJSON (PostInteger a) = toJSON a
-  toJSON (PostText a) = toJSON a
+instance ToJSON PostIdOrNull where
+  toJSON (PostIdExist a) = toJSON a
+  toJSON (PostIdNull) = toJSON ("NULL" :: Text)
   
 
 data DraftResponse = DraftResponse {
       draft_id2      :: Integer
-    , post_id2      :: PostId
+    , post_id2      :: PostIdOrNull
     , author2   :: AuthorResponse
     , draft_name2    :: Text
     , draft_cat2 :: CatResponse

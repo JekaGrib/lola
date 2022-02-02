@@ -14,6 +14,7 @@ module App where
 import           Api.Response
 import           Api.Request
 import           Logger
+import           Types
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11, Status, ResponseHeaders )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
@@ -52,9 +53,9 @@ import System.Random (getStdGen,newStdGen,randomRs)
 
 data Handle m = Handle 
   { hConf             :: Config,
-    hLog              :: LogHandle m,
-    selectFromDb      :: String -> [String] -> String -> [Text] -> m [SelectType],
-    selectLimitFromDb :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [SelectType],
+    hLog              :: LogHandle m ,
+    selectFromDb      :: forall a. (Select a) => String -> [String] -> String -> [Text] -> m [a],
+    selectLimitFromDb :: forall a. (Select a) => String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [a],
     updateInDb        :: String -> String -> String -> [Text] -> m (),
     deleteFromDb      :: String -> String -> [Text] -> m (),
     isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
@@ -71,7 +72,7 @@ data Handle m = Handle
 data Config = Config 
   { cConnDB      :: ConnDB,    
     cDefPicId    :: Integer,
-    cDefUsId     :: Integer,
+    cDefUsId     :: UserId,
     cDefAuthId   :: Integer,
     cDefCatId    :: Integer,
     cCommLimit   :: Integer,
@@ -81,40 +82,7 @@ data Config = Config
 
 data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
 
-data SelectType = 
-  OnlyInt {fromOnlyInt :: Integer} 
-  | OnlyTxt  {fromOnlyTxt :: Text} 
-  | OnlyDay  {fromOnlyDay :: Day}
-  | OnlyBinary (Binary ByteString)
-  | TwoIds   {id_1 :: Integer, id_2 :: Integer} 
-  | Auth     {pwdAu :: Text, admBoolAu :: Bool}
-  | Cat      {cat_nameC :: Text, super_cat_idC :: Integer}
-  | Tag      {tag_idT :: Integer, tag_nameT :: Text}
-  | Author   {author_idA :: Integer, author_infoA :: Text, user_idA :: Integer}
-  | Comment  {comment_idC :: Integer, user_idC :: Integer, comment_textC :: Text}
-  | User     {f_nameU :: Text, l_nameU :: Text, pic_idU :: Integer, user_create_dateU :: Day}
-  | PostInfo {author_idPI :: Integer, author_infoPI :: Text, post_namePI :: Text, post_cat_idPI :: Integer, post_textPI :: Text, post_pic_idPI :: Integer}
-  | Draft    {draft_idD :: Integer, author_infoD :: Text, post_idD :: Integer, draft_nameD :: Text, draft_cat_idD :: Integer, draft_textD :: Text, draft_pic_idD :: Integer}
-  | Post     {post_idP :: Integer, author_idP :: Integer, author_infoP :: Text, user_idP :: Integer, post_nameP :: Text, post_create_dateU :: Day, post_cat_idP :: Integer, post_textP :: Text, post_pic_idP :: Integer}
-    deriving (Eq,Show)
-    
-  
-instance FromRow SelectType where
-  fromRow = 
-    (Post           <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (Draft      <$> field <*> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (PostInfo   <$> field <*> field <*> field <*> field <*> field <*> field)
-    <|> (User       <$> field <*> field <*> field <*> field)
-    <|> (Comment    <$> field <*> field <*> field)
-    <|> (Author     <$> field <*> field <*> field)
-    <|> (Tag        <$> field <*> field)
-    <|> (Cat        <$> field <*> field)
-    <|> (Auth       <$> field <*> field)
-    <|> (TwoIds     <$> field <*> field)
-    <|> (OnlyBinary <$> field)
-    <|> (OnlyDay    <$> field)
-    <|> (OnlyTxt    <$> field)
-    <|> (OnlyInt    <$> field) 
+
 
 
 
@@ -126,7 +94,7 @@ getDay' = do
   return day
 
 
-
+logOnErr :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr h m = m `catchE` (\e -> do
   lift $ logWarning (hLog h) $ show e
   throwE e)
@@ -137,8 +105,8 @@ application config handleLog req send = do
   (conn,_) <- tryConnect connDB
   let h = Handle config handleLog (selectFromDb' conn) (selectLimitFromDb' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturnInDb' conn) (insertManyInDb' conn) HT.httpLBS getDay' strictRequestBody print getTokenKey' (insertByteaInDb' conn)
   logDebug (hLog h) "Connect to DB"
-  ansE <- runExceptT $ logOnErr h $ answerEx h req
-  let resInfo = fromE ansE 
+  respE <- runExceptT $ logOnErr h $ chooseRespEx h req
+  let resInfo = fromE respE 
   logDebug (hLog h) $ "Output response: " ++ (show . toLazyByteString . resBuilder $ resInfo)
   send ( responseBuilderFromInfo resInfo )
 
@@ -146,7 +114,7 @@ data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHea
 responseBuilderFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
-fromE ansE = case ansE of
+fromE respE = case respE of
   Right a                  -> a
   Left (SimpleError str)   -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
                                 (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
@@ -155,7 +123,8 @@ fromE ansE = case ansE of
   Left (DatabaseAndUnrollError str) -> ResponseInfo status200 [] "Internal server error"
   
 
-okHelper h x = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ x)
+okHelper :: (Monad m, MonadCatch m, MonadFail m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
+okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
 sha1 :: ByteString -> Digest SHA1
 sha1 = hash
@@ -172,8 +141,8 @@ getTokenKey' = do
   newStdGen
   return . take 6 $ randomRs ('a','z') gen
 
-answerEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
-answerEx h req = do
+chooseRespEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Request -> ExceptT ReqError m ResponseInfo
+chooseRespEx h req = do
   lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
   case pathInfo req of
     ["logIn"] -> do
@@ -190,13 +159,13 @@ answerEx h req = do
           tokenKey <- lift $ getTokenKey h
           updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
           let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-          okHelper h $ TokenResponse {tokenTR = usToken}          
+          okHelper $ TokenResponse {tokenTR = usToken}          
         True -> do 
           userAuth pwdParam pwd
           tokenKey <- lift $ getTokenKey h
           updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
           let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-          okHelper h $ TokenResponse {tokenTR = usToken}  
+          okHelper $ TokenResponse {tokenTR = usToken}  
     ["createUser"] -> do
       lift $ logInfo (hLog h) $ "Create user command" 
       let paramsNames = ["password","first_name","last_name","user_pic_id"]
@@ -212,16 +181,15 @@ answerEx h req = do
       lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
       lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
       let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day}
+      okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day}
     ["getUser", usId] -> do
       lift $ logInfo (hLog h) $ "Get user command"
       usIdNum <- tryReadNum usId
       lift $ logInfo (hLog h) $ "All parameters parsed"
       let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
       isExistInDbE h "users" "user_id" "user_id=?" [usId] 
-      selectType <- selectOneFromDbE h "users" selectParams "user_id=?" [usId]
-      User fName lName picId usCreateDate <- fromSelUser selectType
-      okHelper h $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
+      User fName lName picId usCreateDate <- selectOneFromDbE h "users" selectParams "user_id=?" [usId]
+      okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
     ["deleteUser"] -> do
       lift $ logInfo (hLog h) $ "Delete user command"
       tokenAdminAuth h  req
@@ -234,25 +202,24 @@ answerEx h req = do
       check <- isUserAuthorBool h usIdNum 
       case check of
         True -> do
-          selectType <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]
-          authorId   <- fromSelInt selectType
-          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),pack . show $ authorId]
-          selectTypeList <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
-          draftsIds      <- mapM fromSelInt selectTypeList
-          deleteAllAboutDrafts h draftsIds
+          Only authorId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam]
+          updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),pack . show $ (authorId :: Integer)]
+          onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
+          let draftsIds = fmap fromOnly onlyDraftsIds
+          deleteAllAboutDrafts h $ draftsIds
           deleteFromDbE h "authors" "author_id=?" [pack . show $ authorId]
           return () 
         False -> return () 
       deleteFromDbE h "users" "user_id=?" [usIdParam]
       lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " deleted"
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     ["createAdmin"]        -> do
       lift $ logInfo (hLog h) $ "Create admin command"
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_id"]
       [keyParam,pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
       [picIdNum]   <- mapM tryReadNum [picIdParam]
-      selectTypeList <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
-      keys           <- mapM fromSelTxt selectTypeList
+      onlyKeys <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
+      let keys = fmap fromOnly onlyKeys
       checkEmptyList keys
       checkKeyE keyParam (last keys)
       day   <- lift $ getDay h
@@ -264,7 +231,7 @@ answerEx h req = do
       lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
       lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
       let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      okHelper h $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day }
+      okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day }
     ["createAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Create author command"
       tokenAdminAuth h  req
@@ -276,7 +243,7 @@ answerEx h req = do
       auId <-  insertReturnInDbE h "authors" "author_id" ["user_id","author_info"] [usIdParam,auInfoParam]
       lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
       lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
-      okHelper h $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
+      okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
     ["getAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Get author command"
       tokenAdminAuth h  req
@@ -284,9 +251,8 @@ answerEx h req = do
       [auIdParam] <- mapM (checkParam req) paramsNames
       [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
-      selectType <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "author_id=?" [auIdParam] 
-      Author auId auInfo usId <- fromSelAuth selectType
-      okHelper h $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
+      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "author_id=?" [auIdParam] 
+      okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Update author command"
       tokenAdminAuth h  req
@@ -297,7 +263,7 @@ answerEx h req = do
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       checkRelationUsAu h usIdParam auIdParam
       updateInDbE h "authors" "author_info=?,user_id=?" "author_id=?" [auInfoParam,usIdParam,auIdParam]
-      okHelper h $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
+      okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
     ["deleteAuthor"]   -> do
       lift $ logInfo (hLog h) $ "Delete author command"
       tokenAdminAuth h  req
@@ -306,18 +272,18 @@ answerEx h req = do
       [auIdNum]   <- mapM tryReadNum [auIdParam]
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       updateInDbE h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
-      selectTypeList <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
-      draftsIds      <- mapM fromSelInt selectTypeList 
+      onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
+      let draftsIds = fmap fromOnly onlyDraftsIds
       deleteAllAboutDrafts h  draftsIds
       deleteFromDbE h "authors" "author_id=?" [auIdParam]
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     ["createCategory"]        -> do
       lift $ logInfo (hLog h) $ "Create category command"
       tokenAdminAuth h  req
       let paramsNames = ["category_name"]
       [catNameParam] <- mapM (checkParam req) paramsNames
       catId <-  insertReturnInDbE h "categories" "category_id" ["category_name"] [catNameParam] 
-      okHelper h $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] , super_cat = "NULL"}
+      okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] , super_cat = "NULL"}
     ["createSubCategory"]        -> do
       lift $ logInfo (hLog h) $ "Create sub category command"
       tokenAdminAuth h  req
@@ -327,13 +293,13 @@ answerEx h req = do
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
       catId <-  insertReturnInDbE h "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       allSuperCats <- findAllSuperCats h  catId
-      okHelper h $ inCatResp allSuperCats
+      okHelper $ inCatResp allSuperCats
     ["getCategory", catId] -> do
       lift $ logInfo (hLog h) $ "Get category command"
       catIdNum <- tryReadNum catId
       isExistInDbE h "categories" "category_id" "category_id=?" [catId] 
       allSuperCats <- findAllSuperCats h  catIdNum
-      okHelper h $ inCatResp allSuperCats
+      okHelper $ inCatResp allSuperCats
     ["updateCategory"] -> do
       lift $ logInfo (hLog h) $ "Update category command"
       tokenAdminAuth h  req
@@ -345,7 +311,7 @@ answerEx h req = do
       checkRelationCats h  catIdNum superCatIdNum
       updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
       allSuperCats <- findAllSuperCats h  catIdNum
-      okHelper h $ inCatResp allSuperCats 
+      okHelper $ inCatResp allSuperCats 
     ["deleteCategory"] -> do
       lift $ logInfo (hLog h) $ "Delete category command"
       tokenAdminAuth h  req
@@ -361,21 +327,20 @@ answerEx h req = do
       updateInDbE h "drafts" "draft_category_id=?" where'' values
       let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
       deleteFromDbE h "categories" where''' (fmap (pack . show) allSubCats)
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     ["createTag"]  -> do
       lift $ logInfo (hLog h) $ "Create tag command"
       tokenAdminAuth h  req
       let paramsNames = ["tag_name"]
       [tagNameParam] <- mapM (checkParam req) paramsNames
       tagId <-  insertReturnInDbE h "tags" "tag_id" ["tag_name"] [tagNameParam] 
-      okHelper h $ TagResponse tagId tagNameParam
+      okHelper $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
       lift $ logInfo (hLog h) $ "Get tag command"
       tagIdNum <- tryReadNum tagId
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagId] 
-      selectType <- selectOneFromDbE h "tags" ["tag_name"] "tag_id=?" [tagId]
-      tagName    <- fromSelTxt selectType
-      okHelper h $ TagResponse tagIdNum tagName
+      Only tagName <- selectOneFromDbE h "tags" ["tag_name"] "tag_id=?" [tagId]
+      okHelper $ TagResponse tagIdNum tagName
     ["updateTag"]        -> do
       lift $ logInfo (hLog h) $ "Update tag command"
       tokenAdminAuth h  req
@@ -384,7 +349,7 @@ answerEx h req = do
       [tagIdNum]                <- mapM tryReadNum [tagIdParam]
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam] 
       updateInDbE h "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
-      okHelper h $ TagResponse tagIdNum tagNameParam
+      okHelper $ TagResponse tagIdNum tagNameParam
     ["deleteTag"]        -> do
       lift $ logInfo (hLog h) $ "Delete tag command"
       tokenAdminAuth h  req
@@ -393,13 +358,11 @@ answerEx h req = do
       [tagIdNum]              <- mapM tryReadNum [tagIdParam]
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam]
       let delete1 = deleteFromDbE h "draftstags" "tag_id=?" [tagIdParam] 
-      selectTypeList1 <- preSelectE h "draftstags" ["draft_id","tag_id"] "tag_id=?" [tagIdParam] delete1 
-      drTagIds <- mapM fromSelTwoIds selectTypeList1
+      drTagIds <- preSelectE h "draftstags" ["draft_id","tag_id"] "tag_id=?" [tagIdParam] delete1 
       let delete2 = deleteFromDbE h "poststags" "tag_id=?" [tagIdParam] 
-      selectTypeList2 <- unrollDelTag1 h drTagIds $ preSelectE h "poststags" ["post_id","tag_id"] "tag_id=?" [tagIdParam] delete2
-      psTagIds <- unrollDelTag1 h drTagIds $ mapM fromSelTwoIds selectTypeList2
+      psTagIds <- unrollDelTag1 h drTagIds $ preSelectE h "poststags" ["post_id","tag_id"] "tag_id=?" [tagIdParam] delete2
       unrollDelTag2 h drTagIds psTagIds $ deleteFromDbE h "tags" "tag_id=?" [tagIdParam]
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     ["createNewDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create new draft command"
       json <- lift $ getBody h req
@@ -422,10 +385,9 @@ answerEx h req = do
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      selectTypeList <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
-      tagS           <- mapM fromSelTag selectTypeList
+      tagS <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
       allSuperCats <- findAllSuperCats h  catIdParam  
-      okHelper h $ DraftResponse { draft_id2 = draftId, post_id2 = PostText "NULL" , author2 = AuthorResponse auId auInfo usId, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = AuthorResponse auId auInfo usId, draft_name2 = nameParam , draft_cat2 =  inCatResp allSuperCats , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["createPostsDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create post`s draft command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -437,11 +399,10 @@ answerEx h req = do
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       let params = ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
       PostInfo auId auInfo postName postCatId postTxt mPicId <- selectOneFromDbE h table params "post_id=?" [postIdParam]
-      isPostAuthorE h  postIdParam usIdNum          
-      selectTypeList <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
-      picsIds        <- mapM fromSelInt selectTypeList
-      selectTypeList <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
-      tagS           <- mapM fromSelTag selectTypeList
+      isPostAuthor h  postIdParam usIdNum          
+      onlyPicsIds <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
+      let picsIds = fmap fromOnly onlyPicsIds
+      tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
       let tagsIds = fmap tag_idT tagS
       allSuperCats <- findAllSuperCats h  postCatId
       let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
@@ -449,7 +410,7 @@ answerEx h req = do
       draftId <-  insertReturnInDbE h "drafts" "draft_id" insNames insValues
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds) 
-      okHelper h $ DraftResponse {draft_id2 = draftId, post_id2 = PostInteger postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDraft"]  -> do
       lift $ logInfo (hLog h) $ "Get draft command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -460,14 +421,12 @@ answerEx h req = do
       isDraftAuthor h  draftIdParam usIdNum
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      selectType <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]         
-      Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- fromSelDraft selectType
-      selectTypeList <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam]
-      picsIds        <- mapM fromSelInt selectTypeList
-      selectTypeList <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
-      tagS           <- mapM fromSelTag selectTypeList
+      Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]         
+      onlyPicsIds <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam]
+      let picsIds = fmap fromOnly onlyPicsIds
+      tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
       allSuperCats <- findAllSuperCats h  draftCatId
-      okHelper h $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp allSuperCats, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDrafts"]  -> do
       lift $ logInfo (hLog h) $ "Get drafts command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -480,17 +439,15 @@ answerEx h req = do
       let extractParams = ["drafts.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let where' = "drafts.author_id = ?"
       let values = [pack . show $ auId]
-      selectTypeList <- selectListLimitFromDbE h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
-      drafts         <- mapM fromSelDraft selectTypeList
+      drafts <- selectListLimitFromDbE h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
       let alldraftIdsText = fmap (pack . show . draft_idD) drafts
       let allCatIdsNum = fmap draft_cat_idD drafts
       manyAllSuperCats <- mapM (findAllSuperCats h ) allCatIdsNum
-      selectTypeList   <- mapM (selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
-      manyDraftPicsIds <- (mapM . mapM) fromSelInt selectTypeList
-      selectTypeList <- mapM (selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
-      tagSMany       <- (mapM . mapM) fromSelTag selectTypeList
+      manyOnlyDraftPicsIds   <- mapM (selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
+      let manyDraftPicsIds = (fmap . fmap) fromOnly manyOnlyDraftPicsIds
+      tagSMany <- mapM (selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
       let allParams = zip4 drafts manyAllSuperCats manyDraftPicsIds tagSMany
-      okHelper h $ DraftsResponse 
+      okHelper $ DraftsResponse 
         { page9 = pageNum
         , drafts9 = fmap (\(( Draft draftId auInfo postId draftName draftCat draftText draftMainPicId ),cats,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 =  inCatResp cats, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
     ["updateDraft",draftId]  -> do
@@ -510,19 +467,16 @@ answerEx h req = do
       isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
       mapM (isExistInDbE h "tags" "tag_id" "tag_id=?" ) $ fmap ( (:[]) . pack . show) tagsIds
       isUserAuthorE h  usIdNum  
-      selectType2 <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
-      Author auId auInfo usId <- fromSelAuthor selectType2
-      selectType3 <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
-      postId     <- fromSelInt selectType3
+      Author auId auInfo usId <- selectOneFromDbE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
+      Only postId <- selectOneFromDbE h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftId] 
       deleteDraftsPicsTags h [draftIdNum]
       updateInDbE h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftId]
       insertManyInDbE h "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
       insertManyInDbE h "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
       let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-      selectTypeList <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
-      tagS           <- mapM fromSelTag selectTypeList
+      tagS <- selectListFromDbE h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
       allSuperCats <- findAllSuperCats h  catIdParam  
-      okHelper h $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+      okHelper $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = nameParam, draft_cat2 =  inCatResp allSuperCats, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["deleteDraft"]  -> do
       lift $ logInfo (hLog h) $ "Delete draft command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -533,7 +487,7 @@ answerEx h req = do
       isUserAuthorE h  usIdNum  
       isDraftAuthor h  draftIdParam usIdNum
       deleteAllAboutDrafts h  [draftIdNum]
-      okHelper h $ OkResponse { ok = True }
+      okHelper $ OkResponse { ok = True }
     ["publishDraft"]  -> do
       lift $ logInfo (hLog h) $ "Publish draft command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -545,14 +499,12 @@ answerEx h req = do
       isDraftAuthor h  draftIdParam usIdNum
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
-      selectType2 <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]
-      Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- fromSelDraft selectType2
+      Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- selectOneFromDbE h table params "draft_id=?" [draftIdParam]
       case draftPostId of
         0 -> do    
-          selectTypeList1 <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          picsIds         <- mapM fromSelInt selectTypeList1
-          selectTypeList2 <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
-          tagS            <- mapM fromSelTag selectTypeList2
+          onlyPicsIds <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          let picsIds = fmap fromOnly onlyPicsIds
+          tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
           day <- lift $ getDay h 
           let insNames  = ["author_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
           let insValues = [pack . show $ auId,draftName,pack day,pack . show $ draftCatId,draftTxt,pack . show $ mPicId]          
@@ -560,32 +512,28 @@ answerEx h req = do
           insertManyInDbE h "postspics" ["post_id","pic_id"] (zip (repeat postId) picsIds)
           insertManyInDbE h "poststags" ["post_id","tag_id"] (zip (repeat postId) (fmap tag_idT tagS))
           allSuperCats <- findAllSuperCats h  draftCatId 
-          okHelper h $ PostResponse {post_id = postId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
+          okHelper $ PostResponse {post_id = postId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
         _ -> do       
-          selectTypeList1 <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-          picsIds         <- mapM fromSelInt selectTypeList1
-          selectTypeList2 <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
-          tagS            <- mapM fromSelTag selectTypeList2
+          onlyPicsIds <- selectListFromDbE h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
+          let picsIds = fmap fromOnly onlyPicsIds
+          tagS <- selectListFromDbE h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam] 
           updateInDbE h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [draftName,pack . show $ draftCatId,draftTxt,pack . show $ mPicId,pack . show $ draftPostId]
           deletePostsPicsTags h  [draftPostId]
           insertManyInDbE h "postspics" ["post_id","pic_id"] (zip (repeat draftPostId) picsIds)
           insertManyInDbE h "poststags" ["post_id","tag_id"] (zip (repeat draftPostId) (fmap tag_idT tagS))
           allSuperCats <- findAllSuperCats h  draftCatId
-          selectType3 <- selectOneFromDbE h "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
-          day         <- fromSelDay selectType3
-          okHelper h $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
+          Only day <- selectOneFromDbE h "posts" ["post_create_date"] "post_id=?" [pack . show $ draftPostId]    
+          okHelper $ PostResponse {post_id = draftPostId, author4 = AuthorResponse auId auInfo usIdNum, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = inCatResp allSuperCats, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = makeMyPicUrl mPicId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPost",postId]  -> do
       lift $ logInfo (hLog h) $ "Get post command"
       postIdNum <- tryReadNum postId
       isExistInDbE h "posts" "post_id" "post_id=?" [postId]
-      selectType <- selectOneFromDbE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
-      Post pId auId auInfo usId pName pDate pCatId pText picId <- fromSelPost selectType
-      selectTypeList1 <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postId] 
-      picsIds         <- mapM fromSelInt selectTypeList1
-      selectTypeList2 <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
-      tagS            <- mapM fromSelTag selectTypeList2
+      Post pId auId auInfo usId pName pDate pCatId pText picId <- selectOneFromDbE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" [postId] 
+      onlyPicsIds <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postId] 
+      let picsIds = fmap fromOnly onlyPicsIds
+      tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postId] 
       allSuperCats <- findAllSuperCats h  pCatId
-      okHelper h $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
+      okHelper $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp allSuperCats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
     ["getPosts", page] -> do
       lift $ logInfo (hLog h) $ "Get posts command"
       pageNum <- tryReadNum page
@@ -599,12 +547,11 @@ answerEx h req = do
       let postIdsText = fmap (pack . show . post_idP) params
       let postCatsIds = fmap post_cat_idP params 
       manySuperCats <- mapM (findAllSuperCats h ) postCatsIds
-      selectTypeList1 <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
-      manyPostPicsIds <- (mapM . mapM) fromSelInt selectTypeList1
-      selectTypeList2 <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
-      tagSMany        <- (mapM . mapM) fromSelTag selectTypeList2
+      manyOnlyPostPicsIds <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
+      let manyPostPicsIds = (fmap . fmap) fromOnly manyOnlyPostPicsIds
+      tagSMany <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
       let allParams = zip4 params manySuperCats manyPostPicsIds tagSMany
-      okHelper h $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate pCat pText picId),cats,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
+      okHelper $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate pCat pText picId),cats,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = inCatResp cats, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
     ["deletePost"]  -> do
       lift $ logInfo (hLog h) $ "Delete post command"
       tokenAdminAuth h  req
@@ -612,7 +559,7 @@ answerEx h req = do
       [postIdParam] <- mapM (checkParam req) paramsNames
       [postIdNum]   <- mapM tryReadNum [postIdParam] 
       deleteAllAboutPost h postIdNum
-      okHelper h $ OkResponse { ok = True }
+      okHelper $ OkResponse { ok = True }
     ["createComment"]  -> do
       lift $ logInfo (hLog h) $ "Create comment command"
       (usIdNum,_) <- tokenUserAuth h req
@@ -621,16 +568,15 @@ answerEx h req = do
       [postIdNum]                       <- mapM tryReadNum [postIdParam] 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
       commId <- insertReturnInDbE h "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,(pack . show $ usIdNum)] 
-      okHelper h $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
+      okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
       lift $ logInfo (hLog h) $ "Get comments command"
       let paramsNames = ["post_id","page"]
       [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
       [postIdNum,pageNum]     <- mapM tryReadNum [postIdParam,pageParam] 
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-      selectTypeList <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
-      comms <- mapM fromSelComment selectTypeList
-      okHelper h $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
+      comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
+      okHelper $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       lift $ logInfo (hLog h) $ "Update comment command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -639,8 +585,8 @@ answerEx h req = do
       [commIdNum]                       <- mapM tryReadNum [commIdParam] 
       isCommAuthor h  commIdParam usIdNum
       updateInDbE h "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
-      OnlyInt postId <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam] 
-      okHelper h $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
+      Only postId <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam] 
+      okHelper $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
     ["deleteComment"]  -> do
       lift $ logInfo (hLog h) $ "Delete comment command"
       (usIdNum,accessMode) <- tokenUserAuth h req 
@@ -651,16 +597,15 @@ answerEx h req = do
           [commIdParam] <- mapM (checkParam req) paramsNames
           [commIdNum]   <- mapM tryReadNum [commIdParam]
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
-          okHelper h $ OkResponse { ok = True }
+          okHelper $ OkResponse { ok = True }
         UserMode -> do
           let paramsNames = ["comment_id"]
           [commIdParam] <- mapM (checkParam req) paramsNames
           [commIdNum]              <- mapM tryReadNum [commIdParam]
-          selectType2 <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
-          postId      <- fromSelInt selectType2          
-          isCommOrPostAuthor h commIdParam (pack . show $ postId ) usIdNum 
+          Only postId <- selectOneFromDbE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+          isCommOrPostAuthor h commIdNum postId usIdNum 
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
-          okHelper h $ OkResponse {ok = True}      
+          okHelper $ OkResponse {ok = True}      
     ["browsePicture"] -> do
       lift $ logInfo (hLog h) $ "browsePicture command"
       (usIdNum,_) <- tokenUserAuth h req 
@@ -669,13 +614,12 @@ answerEx h req = do
       lbs <- checkPicUrlGetPic h picUrlParam
       let sbs = BSL.toStrict lbs
       picId <- insertByteaInDbE h "pics" "pic_id" ["pic"] sbs
-      okHelper h $ PicIdUrl { pic_id = picId, pic_url2 = makeMyPicUrl picId }
+      okHelper $ PicIdUrl { pic_id = picId, pic_url2 = makeMyPicUrl picId }
     ["picture",picId]  -> do
       lift $ logInfo (hLog h) $ "Picture command"
       picIdNum <- tryReadNum picId 
       isExistInDbE h "pics" "pic_id" "pic_id=?" [picId] 
-      selectType1 <- selectOneFromDbE h "pics" ["pic"] "pic_id=?" [picId] 
-      bs          <- fromSelBin selectType1          
+      Only (Binary bs) <- selectOneFromDbE h "pics" ["pic"] "pic_id=?" [picId] 
       let lbs = BSL.fromStrict bs
       lift $ logInfo (hLog h) $ "Sending picture"
       return $ ResponseInfo 
@@ -686,71 +630,63 @@ answerEx h req = do
       lift $ logInfo (hLog h) $ "Test command"
       usIdNum <- tryReadNum usId
       isExistInDbE h "pics" "pic_id" "pic_id=?" [usId]
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     ["req"] -> do
       lift $ logInfo (hLog h) $ "Test command"
       lift $ printh h $ req
-      okHelper h $ OkResponse {ok = True}
+      okHelper $ OkResponse {ok = True}
     _ -> throwE $ SecretError "Unknown response"  
       
 
 
-getPicFromUrlE h picUrl = do
-  lift $ logInfo (hLog h) $ "Getting picture from internet. Url:" ++ unpack picUrl
-  case isMyUrl picUrl of
-    True -> throwE $ SimpleError $ "Invalid url"
-    _    -> do
-      lbs <- checkPicUrlGetPic h picUrl
-      return lbs
+isCommOrPostAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
+isCommOrPostAuthor h commIdNum postId usIdNum = do
+  let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
+  Only usPostId <- selectOneFromDbE h table ["user_id"] "post_id=?" [pack . show $ postId] 
+  Only usComId <- selectOneFromDbE h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
+  case usPostId == usIdNum || usComId == usIdNum of
+    True -> return ()
+    False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
 
 
-isCommOrPostAuthor h commIdParam postIdParam usIdNum = do
-  isCommAuthor h commIdParam usIdNum
-    `catchE` (catchFoo h postIdParam usIdNum)
-
-catchFoo h postIdParam usIdNum (SimpleError str) = withExceptT 
-  (\(SimpleError str') -> SimpleError $ str' ++ " AND " ++ str) $ do
-    isPostAuthorE h  postIdParam usIdNum
-    return ()
-catchFoo _ _ _ err = throwE err
-
-
-accessMode req = case fmap (isExistParam req) ["user_id","admin_id"] of
-  [True,_] -> UserMode
-  [_,True] -> AdminMode
-  _        -> UserMode
-
-
+isCommAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isCommAuthor h  commIdParam usIdNum = do
-  OnlyInt usId <- selectOneFromDbE h "comments" ["user_id"] "comment_id=?" [commIdParam]  
+  Only usId <- selectOneFromDbE h "comments" ["user_id"] "comment_id=?" [commIdParam]  
   case usId == usIdNum of
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ unpack commIdParam
 
+hideErr :: (Monad m, MonadCatch m, MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideErr m = m `catchE` (\e -> throwE $ toSecret e)
 
+toSecret :: ReqError -> ReqError
 toSecret (SimpleError str) = SecretError str
 toSecret (SecretError str) = SecretError str
 
+inCommResp :: Comment -> CommentIdTextUserResponse
 inCommResp (Comment id usId txt) = CommentIdTextUserResponse id txt usId     
 
-isNULL 0      = PostText    "NULL" 
-isNULL postId = PostInteger postId
+isNULL :: PostId -> PostIdOrNull
+isNULL 0      = PostIdNull
+isNULL postId = PostIdExist postId
 
+isDraftAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h  draftIdParam usIdNum = do
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
-  OnlyInt usDraftId <- selectOneFromDbE h table ["user_id"] "draft_id=?" [draftIdParam]  
+  Only usDraftId <- selectOneFromDbE h table ["user_id"] "draft_id=?" [draftIdParam]  
   case usDraftId == usIdNum of
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of draft_id: " ++ unpack draftIdParam
 
-isPostAuthorE h  postIdParam usIdNum = do
+isPostAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
+isPostAuthor h  postIdParam usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  OnlyInt usPostId <- selectOneFromDbE h table ["user_id"] "post_id=?" [postIdParam]  
-  case (usPostId :: Integer) == usIdNum of
+  Only usPostId <- selectOneFromDbE h table ["user_id"] "post_id=?" [postIdParam]  
+  case usPostId  == usIdNum of
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of post_id: " ++ unpack postIdParam
 
+inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
 
 makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
@@ -774,28 +710,6 @@ checkDraftReqJson json = do
         throwE $ SimpleError $ "Can`t parse request body"
       Nothing -> throwE $ SimpleError $ "Invalid request body"
 
-{-checkTagArrVal val = do
-  case val of
-    Array arr -> case V.toList arr of
-      [] -> return ()
-      xs@((Object obj) : objs) -> mapM_ checkTagObj xs
-      _ -> throwE $ SimpleError $ "Can`t parse  \"draft_tags_ids\"  parameters"
-
-checkTagObj (Object obj) = case toList obj of
-  [("tag_id",Number _)] -> return ()
-  _                     -> throwE $ SimpleError $ "Can`t parse  \"draft_tags_ids\"  parameter"
-
-checkPicArrVal val = do
-  case val of
-    Array arr -> case V.toList arr of
-      [] -> return ()
-      xs@((Object obj) : objs) -> mapM_ checkPicObj xs
-      _ -> throwE $ SimpleError $ "Can`t parse  \"draft_pics_urls\"  parameters"
-
-checkPicObj (Object obj) = case toList obj of
-  [("pic_url",String _)] -> return ()
-  _                      -> throwE $ SimpleError $ "Can`t parse  \"draft_pics_urls\"  parameter"
--}
 
 isExistInObj obj param = do
   case lookup param . toList $ obj of
@@ -836,7 +750,7 @@ checkRelationCats h  catIdNum superCatIdNum
       then throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
       else return ()
 
-findAllSubCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Integer -> ExceptT ReqError m [Integer]
+findAllSubCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Integer -> ExceptT ReqError m [Integer]
 findAllSubCats h  catId = do
   catsIds <- findOneLevelSubCats h catId 
   case catsIds of
@@ -845,11 +759,12 @@ findAllSubCats h  catId = do
       subCatsIds <- mapM (findAllSubCats h ) catsIds
       return $ catId : (Prelude.concat  subCatsIds)
 
+findOneLevelSubCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Integer -> ExceptT ReqError m [Integer]
 findOneLevelSubCats h catId = do
     catsIds <- selectListFromDbE h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
-    return $ fmap fromOnlyInt catsIds
+    return (fmap fromOnly catsIds)
     
-findAllSuperCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> Integer -> ExceptT ReqError m [(Integer,Text,[Integer])]
+findAllSuperCats :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Integer -> ExceptT ReqError m [(Integer,Text,[Integer])]
 findAllSuperCats h  catId = do
   Cat catName superCatId <- selectOneFromDbE h "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
   subCatsIds <- findOneLevelSubCats h catId
@@ -859,7 +774,7 @@ findAllSuperCats h  catId = do
       xs <- findAllSuperCats h  superCatId
       return $ ((catId,catName,subCatsIds) : xs) 
 
-deleteAllAboutDrafts :: (Monad m, MonadCatch m) => Handle m -> [Integer] -> ExceptT ReqError m ()
+deleteAllAboutDrafts :: (Monad m, MonadCatch m) => Handle m  -> [Integer] -> ExceptT ReqError m ()
 deleteAllAboutDrafts h [] = return ()
 deleteAllAboutDrafts h draftsIds = do
   let values = fmap (pack . show) draftsIds
@@ -868,7 +783,7 @@ deleteAllAboutDrafts h draftsIds = do
   deleteFromDbE h "drafts" where' values
   return ()
 
-deleteDraftsPicsTags :: (Monad m, MonadCatch m) => Handle m -> [Integer] -> ExceptT ReqError m ()
+deleteDraftsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [Integer] -> ExceptT ReqError m ()
 deleteDraftsPicsTags h [] = return ()
 deleteDraftsPicsTags h draftsIds = do
   let values = fmap (pack . show) draftsIds
@@ -877,18 +792,17 @@ deleteDraftsPicsTags h draftsIds = do
   deleteFromDbE h "draftstags" where' values
   return ()
 
-deleteAllAboutPost :: (Monad m, MonadCatch m) => Handle m -> Integer -> ExceptT ReqError m ()
+deleteAllAboutPost :: (Monad m, MonadCatch m) => Handle m  -> Integer -> ExceptT ReqError m ()
 deleteAllAboutPost h postId = do
   let postIdTxt = pack . show $ postId
   deletePostsPicsTags h [postId]
   deleteFromDbE h "comments" "post_id=?" [postIdTxt]
-  draftsIdsSel <- selectListFromDbE h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
-  let draftsIds = fmap fromOnlyInt draftsIdsSel
-  deleteAllAboutDrafts h draftsIds
+  draftsIds <- selectListFromDbE h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
+  deleteAllAboutDrafts h $ fmap fromOnly draftsIds
   deleteFromDbE h "posts" "post_id=?" [postIdTxt]
   return ()
 
-deletePostsPicsTags :: (Monad m, MonadCatch m) => Handle m -> [Integer] -> ExceptT ReqError m ()
+deletePostsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [Integer] -> ExceptT ReqError m ()
 deletePostsPicsTags h [] = return ()
 deletePostsPicsTags h postsIds = do
   let values = fmap (pack . show) postsIds
@@ -901,9 +815,10 @@ isUserAuthorBool h usIdParam = do
   lift $ logDebug (hLog h) $ "Checking in DB is user author"  
   catchDbErr $ lift $ isExistInDb h "authors" "user_id" "user_id=?" [pack . show $ usIdParam]
 
+isUserAuthorE :: (Monad m, MonadCatch m) => Handle m -> Integer -> ExceptT ReqError m Integer
 isUserAuthorE h  usIdParam = do
   lift $ logDebug (hLog h) $ "Checking in DB is user author"  
-  OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [pack . show $ usIdParam]
+  Only auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [pack . show $ usIdParam]
   return auId
 
     
@@ -912,8 +827,8 @@ checkRelationUsAu h usIdParam auIdParam = do
   check <- catchDbErr $ lift $ isExistInDb h "authors" "user_id" "user_id=?" [usIdParam] 
   case check of
     True -> do
-      OnlyInt auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam] 
-      case auId == (read . unpack $ auIdParam) of
+      Only auId <- selectOneFromDbE h "authors" ["author_id"] "user_id=?" [usIdParam] 
+      case (auId :: Integer) == (read . unpack $ auIdParam) of
         True  -> return ()
         False -> throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
     False -> return ()  
@@ -979,12 +894,12 @@ toInsRetQ table returnName insNames =
 toInsManyQ table insNames =
   fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) "
 
-selectFromDb' :: Connection -> String -> [String] -> String -> [Text] -> IO [SelectType]
+selectFromDb' :: (Select a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
 selectFromDb' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return xs
 
-selectOneFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> [String] -> String -> [Text] -> ExceptT ReqError m SelectType
+selectOneFromDbE :: (Monad m, MonadCatch m, Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m b
 selectOneFromDbE h table params where' values = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
   xs <- catchDbErr $ lift $ selectFromDb h table params where' values
@@ -995,7 +910,7 @@ selectOneFromDbE h table params where' values = do
       return x
     _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
-selectListFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [SelectType]
+selectListFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [b]
 selectListFromDbE h table params where' values = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
   xs <- catchDbErr $ lift $ selectFromDb h table params where' values
@@ -1003,7 +918,7 @@ selectListFromDbE h table params where' values = do
   return xs 
 
 
-selectLimitFromDb' :: Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [SelectType]
+selectLimitFromDb' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimitFromDb' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
   let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
   let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
@@ -1027,7 +942,7 @@ selectLimitFromDb' conn defTable defOrderBy page limitNumber params defWhere def
       return (table,where',orderBy,values)
   -}
 
-selectListLimitFromDbE :: (Monad m, MonadCatch m) => Handle m -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [SelectType]
+selectListLimitFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [b]
 selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
   lift $ logDebug (hLog h) $ "Select data from DB."
   xs <- catchDbErr $ lift $ selectLimitFromDb h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
@@ -1055,7 +970,7 @@ isExistInDb' conn table checkName where' values = do
   [Only check]  <- query conn (toExQ table checkName where') values
   return check
 
-isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 isExistInDbE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -1065,7 +980,7 @@ isExistInDbE h table checkName where' values = do
       return ()
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
   
-ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 ifExistInDbThrowE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -1081,7 +996,7 @@ insertByteaInDb' conn table returnName insNames bs = do
   xs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs] 
   return (fmap fromOnly xs) 
 
-insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
 insertByteaInDbE h table returnName insNames bs =  do
   xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
   case xs of
@@ -1096,7 +1011,7 @@ insertReturnInDb' conn table returnName insNames insValues = do
   xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
   return (fmap fromOnly xs) 
 
-insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnInDbE h table returnName insNames insValues =  do
   xs <- catchDbErr $ lift $ insertReturnInDb h table returnName insNames insValues
   case xs of
@@ -1112,11 +1027,11 @@ insertManyInDb' conn table insNames insValues = do
   executeMany conn ( toInsManyQ table insNames ) insValues
   return ()
 
-insertManyInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
+insertManyInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
 insertManyInDbE h table insNames insValues = catchDbErr $ do
   lift $ insertManyInDb h table insNames insValues
 
-
+fromTwoIdsToPair (TwoIds a b) = (a,b)
 
 
 isMyUrl url
@@ -1132,7 +1047,7 @@ checkMyPicUrl url = do
     Just urlEnd -> return urlEnd
     Nothing     -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url 
 
-readUrlEnd :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Text -> Text -> ExceptT ReqError m Integer
+readUrlEnd :: (Monad m,MonadCatch m,MonadFail m) => Handle m  -> Text -> Text -> ExceptT ReqError m Integer
 readUrlEnd h url urlEnd = do
   picIdNum <- tryReadNum urlEnd 
   check    <- catchDbErr $ lift $ isExistInDb h "pics" "pic_id" "pic_id=?" [(pack . show $ picIdNum)] 
@@ -1140,7 +1055,7 @@ readUrlEnd h url urlEnd = do
     True  -> return picIdNum 
     False -> throwE $ SimpleError $ "Invalid end of picture url:" ++ unpack url
 
-checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
+checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic h url = do
   res <- (lift $ (httpAction h) . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HT.HttpException))) )
   let lbs = HT.getResponseBody res
@@ -1152,7 +1067,7 @@ checkPicUrlGetPic h url = do
 
 
 
-getPicId :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Text -> ExceptT ReqError m Integer
+getPicId :: (Monad m,MonadCatch m,MonadFail m) => Handle m  -> Text -> ExceptT ReqError m Integer
 getPicId h url 
   |isMyUrl url = do
     picId <- (checkMyPicUrl url >>= \urlEnd -> readUrlEnd h url urlEnd)
@@ -1330,8 +1245,7 @@ isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
 data ReqError = SecretError String | SimpleError String | DatabaseError String | DatabaseAndUnrollError String
   deriving (Eq,Show)
 
-{-data DbException = SqlError | FormatError| QueryError | ResultError deriving Show
-instance Exception DbException-}
+
 
 cathSqlErr m = m `catch` (\e -> do
   throwE . DatabaseError $ show (e :: SqlError) )
@@ -1352,45 +1266,9 @@ catchIOErr m = m `catch` (\e -> do
 
 catchDbErr m = catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
 
-fromSelInt (OnlyInt x) = return x
-fromSelInt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyInt\n with actual: " ++ show x
-fromSelTxt (OnlyTxt x) = return x
-fromSelTxt x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyTxt\n with actual: " ++ show x
-fromSelDay (OnlyDay x) = return x
-fromSelDay x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyDay\n with actual: " ++ show x
-fromSelBin (OnlyBinary (Binary bs)) = return bs
-fromSelBin x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: OnlyBinary\n with actual: " ++ show x
-
-fromSelTwoIds x@(TwoIds a b) = return (a,b)
-fromSelTwoIds x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: TwoIds\n with actual: " ++ show x
-fromSelAuth x@(Auth _ _) = return x
-fromSelAuth x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Auth\n with actual: " ++ show x
-fromSelCat x@(Cat _ _) = return x
-fromSelCat x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Cat (category)\n with actual: " ++ show x
-fromSelTag x@(Tag _ _) = return x
-fromSelTag x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Tag\n with actual: " ++ show x
-fromSelAuthor x@(Author _ _ _) = return x
-fromSelAuthor x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Author\n with actual: " ++ show x
-fromSelComment x@(Comment _ _ _) = return x
-fromSelComment x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Comment\n with actual: " ++ show x
-fromSelUser x@(User _ _ _ _) = return x
-fromSelUser x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: User\n with actual: " ++ show x
-fromSelPostInfo x@(PostInfo _ _ _ _ _ _) = return x
-fromSelPostInfo x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: PostInfo\n with actual: " ++ show x
-fromSelDraft x@(Draft _ _ _ _ _ _ _) = return x
-fromSelDraft x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Draft\n with actual: " ++ show x
-fromSelPost x@(Post _ _ _ _ _ _ _ _ _) = return x
-fromSelPost x = throwE . DatabaseError $ "Bad select type. Couldn`t match expected: Post\n with actual: " ++ show x
 
 
 
-
- {-`catch` (\e -> do
-      throwE . DatabaseError $ show (e :: E.PatternMatchFail) )
-
-instance Monoid ReqError where
-  mempty = SimpleError mempty
-  mappend ( SimpleError a ) ( SimpleError b ) = SimpleError (a `mappend` b)-}
 
 
 isExistParamE :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe Text)
@@ -1416,7 +1294,7 @@ checkAdminTokenParam h tokenParam =
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
+        Only tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("hij" ++ (unpack tokenKey)) == ys
           then do
@@ -1441,7 +1319,7 @@ checkUserTokenParam h tokenParam =
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
+        Only tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("stu" ++ (unpack tokenKey)) == ys 
           then do
@@ -1451,7 +1329,7 @@ checkUserTokenParam h tokenParam =
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
         isExistInDbE h "users" "user_id" "user_id=?" [pack usIdParam] 
-        tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam] >>= fromSelTxt
+        Only tokenKey <- selectOneFromDbE h "users" ["token_key"] "user_id=?" [pack usIdParam]
         if strSha1 (unpack tokenKey) == tokenKeyParam 
              && strSha1 ("hij" ++ (unpack tokenKey)) == ys
           then do
@@ -1461,22 +1339,7 @@ checkUserTokenParam h tokenParam =
       _ -> throwE . SimpleError $ "INVALID token"
     _        -> throwE . SimpleError $ "INVALID token"
 
-adminAuthE h req = do
-  let authParams  = ["admin_id","password"]
-  [admIdParam,pwdParam] <- hideErr $ mapM (checkParam req) authParams
-  [admIdNum]            <- hideErr $ mapM tryReadNum [admIdParam]
-  lift $ logInfo (hLog h) $ "All authorize parameters parsed"
-  hideErr $ isExistInDbE h "users" "user_id" "user_id=?" [admIdParam] 
-  Auth pwd admBool <- hideErr $ selectOneFromDbE h "users" ["password","admin"] "user_id=?" [admIdParam] 
-  hideErr $ adminAuth pwdParam pwd admBool
 
-adminAuth pwdParam pwd admBool
-  | admBool && (pwd == hashPwdParam) = return True
-  | admBool                      = throwE . SimpleError $ "INVALID pwd, admin = True "
-  | (pwd == hashPwdParam)            = throwE . SimpleError $ "valid pwd, user is NOT admin"
-  | otherwise                    = throwE . SimpleError $ "INVALID pwd, user is NOT admin"
-    where
-      hashPwdParam = pack . strSha1 . unpack $ pwdParam
 
 
 userAuth pwdParam pwd 
@@ -1535,14 +1398,14 @@ unroll m todo = m `catchE` (\err -> case err of
 
 
 unrollDelTag1 h drTagIds m = unroll m $ do
-  insertManyInDbE h "draftstags" ["draft_id","tag_id"] drTagIds
+  insertManyInDbE h "draftstags" ["draft_id","tag_id"] $ fmap fromTwoIdsToPair drTagIds
 
-unrollDelTag2 :: (MonadCatch m, MonadFail m) => Handle m -> [(Integer, Integer)] -> [(Integer, Integer)] -> ExceptT ReqError m a -> ExceptT ReqError m a
+unrollDelTag2 :: (MonadCatch m, MonadFail m) => Handle m  -> [TwoIds] -> [TwoIds] -> ExceptT ReqError m a -> ExceptT ReqError m a
 unrollDelTag2 h drTagIds psTagIds m = unroll m $ do
-  insertManyInDbE h "poststags"  ["post_id","tag_id"] psTagIds
-  insertManyInDbE h "draftstagsss" ["draft_id","tag_id"] drTagIds
+  insertManyInDbE h "poststags"  ["post_id","tag_id"] $ fmap fromTwoIdsToPair psTagIds
+  insertManyInDbE h "draftstagsss" ["draft_id","tag_id"] $ fmap fromTwoIdsToPair drTagIds
 
-preSelectE :: MonadCatch m => Handle m -> [Char] -> [String] -> String -> [Text] -> ExceptT ReqError m a -> ExceptT ReqError m [SelectType]
+preSelectE :: (MonadCatch m,Select b) => Handle m   -> [Char] -> [String] -> String -> [Text] -> ExceptT ReqError m a -> ExceptT ReqError m [b]
 preSelectE h table params where' values todo = do
   lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
   xs <- catchDbErr $ lift $ selectFromDb h table params where' values
