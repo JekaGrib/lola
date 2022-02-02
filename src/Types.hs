@@ -14,8 +14,22 @@ import           Data.Time.Calendar             ( Day)
 
 
 type UserId = Integer
+type AuthorId = Integer
 type PostId = Integer
+type DraftId = Integer
 type CommentId = Integer
+type PictureId = Integer
+type CategoryId = Integer
+
+type Table = String
+type Param = String
+type ReturnParam = Param
+type CheckParam = Param
+type Where = String
+type Set = String
+type OrderBy = String
+type Page = Integer
+type Limit = Integer
 
 class (Show a,FromRow a) => Select a
 
