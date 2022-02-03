@@ -15,6 +15,10 @@ import           Api.Response
 import           Api.Request
 import           Logger
 import           Types
+import           Oops
+import           LimitArg
+import ToQuery
+import CheckJsonReq  
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11, Status, ResponseHeaders )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
@@ -60,13 +64,13 @@ data Handle m = Handle
     deleteFromDb      :: String -> String -> [Text] -> m (),
     isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
     insertReturn  :: String -> String -> [String] -> [Text] -> m [Integer],
+    insertByteaInDb   :: String -> String -> [String] -> ByteString -> m [Integer],
     insertMany    :: String -> [String] -> [(Integer,Integer)] -> m (),
     httpAction        :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay            :: m String,
     getBody           :: Request -> m BSL.ByteString,
     printh            :: Request -> m (),
-    getTokenKey       :: m String,
-    insertByteaInDb   :: String -> String -> [String] -> ByteString -> m [Integer]
+    getTokenKey       :: m String
     }
 
 data Config = Config 
@@ -86,26 +90,13 @@ data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, 
 
 
 
-
-getDay' :: IO String
-getDay' = do
-  time    <- getZonedTime
-  let day = showGregorian . localDay . zonedTimeToLocalTime $ time
-  return day
-
-
-logOnErr :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
-logOnErr h m = m `catchE` (\e -> do
-  lift $ logWarning (hLog h) $ show e
-  throwE e)
-
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
   let connDB = cConnDB config
   (conn,_) <- tryConnect connDB
-  let h = Handle config handleLog (select' conn) (selectLimit' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturn' conn) (insertMany' conn) HT.httpLBS getDay' strictRequestBody print getTokenKey' (insertByteaInDb' conn)
+  let h = Handle config handleLog (select' conn) (selectLimit' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturn' conn) (insertByteaInDb' conn) (insertMany' conn) HT.httpLBS getDay' strictRequestBody print getTokenKey' 
   logDebug (hLog h) "Connect to DB"
-  respE <- runExceptT $ logOnErr h $ chooseRespEx h req
+  respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req
   let resInfo = fromE respE 
   logDebug (hLog h) $ "Output response: " ++ (show . toLazyByteString . resBuilder $ resInfo)
   send ( responseBuilderFromInfo resInfo )
@@ -126,20 +117,8 @@ fromE respE = case respE of
 okHelper :: (Monad m, MonadCatch m, MonadFail m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
-sha1 :: ByteString -> Digest SHA1
-sha1 = hash
 
-strSha1 :: String -> String
-strSha1 = show . sha1 . fromString
 
-txtSha1 :: Text -> Text
-txtSha1 = pack . strSha1 . unpack
-
-getTokenKey' :: IO String
-getTokenKey' = do
-  gen <- getStdGen
-  newStdGen
-  return . take 6 $ randomRs ('a','z') gen
 
 chooseRespEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx h req = do
@@ -154,13 +133,13 @@ chooseRespEx h req = do
       Auth pwd admBool <- selectOneIfExistE h "users" ["password","admin"] "user_id=?" usIdParam 
       case admBool of
         False -> do
-          userAuth pwdParam pwd
+          checkPwd pwdParam pwd
           tokenKey <- lift $ getTokenKey h
           updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
           let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
           okHelper $ TokenResponse {tokenTR = usToken}          
         True -> do 
-          userAuth pwdParam pwd
+          checkPwd pwdParam pwd
           tokenKey <- lift $ getTokenKey h
           updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
           let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
@@ -528,7 +507,7 @@ chooseRespEx h req = do
       lift $ logInfo (hLog h) $ "Get posts command"
       pageNum <- tryReadNum page
       let extractParams = ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
-      (filterArgs,sortArgs) <- chooseArgs req 
+      LimitArg filterArgs sortArgs <- chooseArgs req 
       let defTable = "posts JOIN authors ON authors.author_id = posts.author_id"
       let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
       let defWhere = "true"
@@ -628,7 +607,20 @@ chooseRespEx h req = do
       okHelper $ OkResponse {ok = True}
     _ -> throwE $ SecretError "Unknown response"  
       
+checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
+checkParam req param = case lookup param $ queryToQueryText $ queryString req of
+    Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
+    Just (Just x)  -> case lookup param . delete (param,Just x) $ queryToQueryText $ queryString req of
+      Nothing -> return x
+      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack param
+    Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
+    Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
+tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
+tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
+tryReadNum xs = case reads . unpack $ xs of
+  [(a,"")] -> return a
+  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"  
 
 isCommOrPostAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor h commIdNum postId usIdNum = do
@@ -647,19 +639,6 @@ isCommAuthorIfExist h  commIdParam usIdNum = do
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ unpack commIdParam
 
-hideErr :: (Monad m, MonadCatch m, MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideErr m = m `catchE` (\e -> throwE $ toSecret e)
-
-toSecret :: ReqError -> ReqError
-toSecret (SimpleError str) = SecretError str
-toSecret (SecretError str) = SecretError str
-
-inCommResp :: Comment -> CommentIdTextUserResponse
-inCommResp (Comment id usId txt) = CommentIdTextUserResponse id txt usId     
-
-isNULL :: PostId -> PostIdOrNull
-isNULL 0      = PostIdNull
-isNULL postId = PostIdExist postId
 
 isDraftAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h  draftIdParam usIdNum = do
@@ -677,69 +656,24 @@ isPostAuthor h  postIdParam usIdNum = do
     True -> return ()
     False -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of post_id: " ++ unpack postIdParam
 
-inTagResp :: Tag -> TagResponse
-inTagResp (Tag tagId tagName) = TagResponse tagId tagName
-
-makeMyPicUrl :: PictureId -> Text
-makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
-
-inPicIdUrl :: PictureId -> PicIdUrl
-inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
-
-checkDraftReqJson :: (Monad m, MonadCatch m,MonadFail m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
-checkDraftReqJson json = do 
-  case (decode json :: Maybe DraftRequest) of
-    Just body -> return body
-    Nothing   -> case (decode json :: Maybe Object) of
-      Just obj -> do
-        let numParams = ["user_id","draft_category_id"]
-        let textParams = ["password","draft_name","draft_text","draft_main_pic_url"]
-        let arrayParams = ["draft_tags_ids","draft_pics_urls"]
-        let params = numParams ++ textParams ++ arrayParams
-        [usIdVal,catIdVal,pwdVal,nameVal,txtVal,mainPicUrlVal,tagsIdsVal,picsUrlsVal] <- mapM (isExistInObj obj) params
-        mapM checkNumVal [usIdVal,catIdVal]
-        mapM checkStrVal [pwdVal,nameVal,txtVal,mainPicUrlVal]
-        checkNumArrVal tagsIdsVal
-        checkStrArrVal picsUrlsVal
-        throwE $ SimpleError $ "Can`t parse request body"
-      Nothing -> throwE $ SimpleError $ "Invalid request body"
-
-
-isExistInObj :: (Monad m, MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
-isExistInObj obj param = do
-  case lookup param . toList $ obj of
-    Just val -> return val
-    Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack param
-
-checkNumVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumVal val = do
-  case val of
-    Number _ -> return ()
-    _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val
-
-checkStrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkStrVal val = do
-  case val of
-    String _ -> return ()
-    _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val
-
-checkNumArrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumArrVal values = do
-  case values of
-    Array arr -> case V.toList arr of
-      [] -> return ()
-      ((Number _) : vals) -> return ()
-      _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values
-    _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values
-
-checkStrArrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkStrArrVal values = do
-  case values of
-    Array arr -> case V.toList arr of
-      [] -> return ()
-      ((String _) : vals) -> return ()
-      _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values
-    _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values
+isUserAuthorE :: (Monad m, MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
+isUserAuthorE h  usIdNum = do
+  lift $ logDebug (hLog h) $ "Checking in DB is user author"  
+  maybeAu <- selectMaybeOneE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
+  case maybeAu of
+    Nothing -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " isn`t author"
+    Just author -> return author
+    
+isntUserOtherAuthor :: (Monad m, MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
+isntUserOtherAuthor h usIdNum auIdNum = do
+  let usIdParam = pack . show $ usIdNum
+  let auIdParam = pack . show $ auIdNum
+  maybeAuId <- selectMaybeOneE h "authors" ["author_id"] "user_id=?" [usIdParam]
+  case maybeAuId of
+    Just (Only auId) -> if auId == auIdNum 
+      then return ()
+      else throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
+    Nothing -> return ()
 
 checkRelationCats :: (Monad m, MonadCatch m) => Handle m -> CategoryId -> CategoryId -> ExceptT ReqError m ()
 checkRelationCats h  catIdNum superCatIdNum 
@@ -749,6 +683,15 @@ checkRelationCats h  catIdNum superCatIdNum
     if superCatIdNum `elem` allSubCats
       then throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
       else return ()
+
+checkKeyE :: (Monad m) => Text -> Text -> ExceptT ReqError m Bool
+checkKeyE keyParam key 
+  | keyParam == key = return True
+  | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
+
+checkEmptyList :: (Monad m) => [Text] -> ExceptT ReqError m ()
+checkEmptyList [] = throwE $ SimpleError "DatabaseError.Empty output"
+checkEmptyList _  = return ()
 
 findAllSubCats :: (Monad m, MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m [Integer]
 findAllSubCats h  catId = do
@@ -762,8 +705,7 @@ findAllSubCats h  catId = do
 findOneLevelSubCats :: (Monad m, MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m [Integer]
 findOneLevelSubCats h catId = do
     catsIds <- selectListFromDbE h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
-    return (fmap fromOnly catsIds)
-    
+    return (fmap fromOnly catsIds)   
 
 makeCatResp :: (Monad m, MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h catId = do
@@ -811,110 +753,9 @@ deletePostsPicsTags h postsIds = do
   deleteFromDbE h "postspics" where' values
   deleteFromDbE h "poststags" where' values
   return ()
-
-
-
-isUserAuthorE :: (Monad m, MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
-isUserAuthorE h  usIdNum = do
-  lift $ logDebug (hLog h) $ "Checking in DB is user author"  
-  maybeAu <- selectMaybeOneE h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
-  case maybeAu of
-    Nothing -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " isn`t author"
-    Just author -> return author
-
-    
-isntUserOtherAuthor :: (Monad m, MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
-isntUserOtherAuthor h usIdNum auIdNum = do
-  let usIdParam = pack . show $ usIdNum
-  let auIdParam = pack . show $ auIdNum
-  maybeAuId <- selectMaybeOneE h "authors" ["author_id"] "user_id=?" [usIdParam]
-  case maybeAuId of
-    Just (Only auId) -> if auId == auIdNum 
-      then return ()
-      else throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
-    Nothing -> return ()
-
   
 
-checkKeyE :: (Monad m) => Text -> Text -> ExceptT ReqError m Bool
-checkKeyE keyParam key 
-  | keyParam == key = return True
-  | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
 
-checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
-checkParam req param = case lookup param $ queryToQueryText $ queryString req of
-    Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
-    Just (Just x)  -> case lookup param . delete (param,Just x) $ queryToQueryText $ queryString req of
-      Nothing -> return x
-      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack param
-    Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
-    Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
-
-checkEmptyList :: (Monad m) => [Text] -> ExceptT ReqError m ()
-checkEmptyList [] = throwE $ SimpleError "DatabaseError.Empty output"
-checkEmptyList _  = return ()
-
-tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNum xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"
-
-tryReadDay :: (Monad m) => Text -> ExceptT ReqError m Day
-tryReadDay "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadDay xs = case filter ((/=) ' ') . unpack $ xs of
-  [] -> throwE $ SimpleError $ "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
-  x@(a:b:c:d:'-':e:f:'-':g:h:[]) -> do
-    year  <- tryReadNum (pack (a:b:c:d:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
-    month <- tryReadNum (pack (e:f:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
-    when (month `notElem` [1..12]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Month must be a number from 1 to 12. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    day   <- tryReadNum (pack (g:h:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
-    when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Day of month must be a number from 1 to 31. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    case fromGregorianValid year (fromInteger month) (fromInteger day) of
-      Just x -> return x
-      Nothing -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Invalid day, month, year combination. Date must have format (yyyy-mm-dd). Example: 2020-12-12"     
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
-
-
-tryReadNumArray :: (Monad m) => Text -> ExceptT ReqError m [Integer]
-tryReadNumArray "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNumArray xs = case reads . unpack $ xs of
-  [([],"")] -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be NOT empty array of numbers. Example: [3,45,24,7] "
-  [(a,"")]  -> return a
-  _         -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be array of numbers. Example: [3,45,24,7] "
-
-toSelQ :: Table -> [Param] -> Where -> Query
-toSelQ table params where' = 
-  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where'
-
-toSelLimQ :: Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
-toSelLimQ table orderBy page limitNumber params where' = 
-  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)
-
-toUpdQ :: Table -> Set -> Where -> Query
-toUpdQ table set where' = 
-  fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' 
-
-toDelQ :: Table -> Where -> Query
-toDelQ table where' =
-  fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where'
-
-toExQ :: Table -> CheckParam -> Where -> Query
-toExQ table checkName where' =
-  fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")"
-
-toInsRetQ :: Table -> ReturnParam -> [Param] -> Query
-toInsRetQ table returnName insNames =
-  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) RETURNING " ++ returnName
-
-toInsManyQ :: Table -> [Param] -> Query
-toInsManyQ table insNames =
-  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) "
-
-select' :: (Select a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
-select' conn table params where' values = do
-  xs <- query conn (toSelQ table params where') values
-  return xs
 
 selectOneE :: (Monad m, MonadCatch m, Select b) => Handle m -> Table -> [Param] -> Where -> [Text] -> ExceptT ReqError m b
 selectOneE h table params where' values = do
@@ -959,29 +800,8 @@ selectListFromDbE h table params where' values = do
   return xs 
 
 
-selectLimit' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
-selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
-  let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
-  let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
-  let orderBy = intercalate ","     $ fmap orderBySort sortArgs ++ [defOrderBy]
-  let values  = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
-  xs <- query conn (toSelLimQ table orderBy page limitNumber params where') values
-  return xs
 
-  {-if isDateASC $ sortArgs
-    then do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs)  
-      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date ASC, post_id ASC"]
-      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
-      return (table,where',orderBy,values)
-    else do
-      let table     = intercalate " " $ ["posts JOIN authors ON authors.author_id = posts.author_id"] ++ (fmap tableFil filterArgs) ++ (fmap tableSort sortArgs) 
-      let where'    = intercalate " AND " $ (fmap whereFil filterArgs) ++ ["true"]
-      let orderBy   = intercalate "," $ (fmap orderBySort sortArgs) ++ ["post_create_date DESC, post_id DESC"]
-      let values    = (Prelude.concat . fmap fst . fmap valuesFil $ filterArgs) ++  (Prelude.concat . fmap snd . fmap valuesFil $ filterArgs)
-      return (table,where',orderBy,values)
-  -}
+
 
 selectListLimitFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [b]
 selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
@@ -990,26 +810,18 @@ selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere de
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs
 
-updateInDb' :: Connection -> String -> String -> String -> [Text] -> IO ()
-updateInDb' conn table set where' values = do
-  execute conn (toUpdQ table set where') values
-  return ()
 
+updateInDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h table set where' values = catchDbErr $ do
   lift $ updateInDb h table set where' values
 
-deleteFromDb' :: Connection -> String -> String -> [Text] -> IO ()
-deleteFromDb' conn table where' values = do
-  execute conn (toDelQ table where') values
-  return ()   
+   
 
+deleteFromDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
 deleteFromDbE h table where' values = catchDbErr $ do
   lift $ deleteFromDb h table where' values   
 
-isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
-isExistInDb' conn table checkName where' values = do
-  [Only check]  <- query conn (toExQ table checkName where') values
-  return check
+
 
 isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 isExistInDbE h table checkName where' values = do
@@ -1032,25 +844,11 @@ ifExistInDbThrowE h table checkName where' values = do
       return ()
 
 
-insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO [Integer]
-insertByteaInDb' conn table returnName insNames bs = do
-  xs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs] 
-  return (fmap fromOnly xs) 
+ 
 
-insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
-insertByteaInDbE h table returnName insNames bs =  do
-  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
-insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
-insertReturn' conn table returnName insNames insValues = do
-  xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
-  return (fmap fromOnly xs) 
+
+ 
 
 insertReturnE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnE h table returnName insNames insValues =  do
@@ -1062,11 +860,17 @@ insertReturnE h table returnName insNames insValues =  do
       return x
     _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
+insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE h table returnName insNames bs =  do
+  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
+  case xs of
+    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    [x] -> do 
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
-insertMany' :: Connection -> String -> [String] -> [(Integer,Integer)] -> IO ()
-insertMany' conn table insNames insValues = do
-  executeMany conn ( toInsManyQ table insNames ) insValues
-  return ()
+
 
 insertManyE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
 insertManyE h table insNames insValues = catchDbErr $ do
@@ -1074,7 +878,63 @@ insertManyE h table insNames insValues = catchDbErr $ do
 
 fromTwoIdsToPair (TwoIds a b) = (a,b)
 
+-- IO methods functions:
 
+getDay' :: IO String
+getDay' = do
+  time    <- getZonedTime
+  let day = showGregorian . localDay . zonedTimeToLocalTime $ time
+  return day
+
+select' :: (Select a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
+select' conn table params where' values = do
+  xs <- query conn (toSelQ table params where') values
+  return xs
+
+selectLimit' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
+selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
+  let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
+  let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
+  let orderBy = intercalate ","     $ fmap orderBySort sortArgs ++ [defOrderBy]
+  let values  = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
+  xs <- query conn (toSelLimQ table orderBy page limitNumber params where') values
+  return xs
+
+updateInDb' :: Connection -> String -> String -> String -> [Text] -> IO ()
+updateInDb' conn table set where' values = do
+  execute conn (toUpdQ table set where') values
+  return ()
+
+deleteFromDb' :: Connection -> Table -> Where -> [Text] -> IO ()
+deleteFromDb' conn table where' values = do
+  execute conn (toDelQ table where') values
+  return ()
+
+isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
+isExistInDb' conn table checkName where' values = do
+  [Only check]  <- query conn (toExQ table checkName where') values
+  return check
+
+insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
+insertReturn' conn table returnName insNames insValues = do
+  xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
+  return (fmap fromOnly xs)
+
+insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO [Integer]
+insertByteaInDb' conn table returnName insNames bs = do
+  xs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs] 
+  return (fmap fromOnly xs)
+
+insertMany' :: Connection -> String -> [String] -> [(Integer,Integer)] -> IO ()
+insertMany' conn table insNames insValues = do
+  executeMany conn ( toInsManyQ table insNames ) insValues
+  return ()
+
+getTokenKey' :: IO String
+getTokenKey' = do
+  gen <- getStdGen
+  newStdGen
+  return . take 6 $ randomRs ('a','z') gen
 
 
 checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
@@ -1089,209 +949,9 @@ checkPicUrlGetPic h url = do
 
 
 
-chooseArgs req = do
-  let filterDateList   = ["created_at","created_at_lt","created_at_gt"] 
-  let filterTagList    = ["tag","tags_in","tags_all"] 
-  let filterInList     = ["name_in","text_in","everywhere_in"] 
-  let filterParamsList = filterDateList ++ ["category_id","author_name"] ++ filterTagList ++ filterInList 
-  let sortList         = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] 
-  mapM_ (checkComb req) [filterDateList,filterTagList,filterInList]
-  manyFilterArgs <- mapM (checkFilterParam req) $ filterParamsList
-  let filterArgs = Prelude.concat manyFilterArgs
-  manySortArgs <- mapM (checkSortParam req) $ sortList
-  let sortArgs = Prelude.concat manySortArgs
-  return (filterArgs,sortArgs)
-
-data FilterArg = FilterArg {tableFil  :: String, whereFil    :: String, valuesFil :: ([Text],[Text])}
-data SortArg   = SortArg   {tableSort :: String, orderBySort :: String, sortDate  :: SortDate}
-
-data SortDate = DateASC | DateDESC 
- deriving (Eq,Show,Read)
-
-defDateSort = DateDESC 
-isDateASC xs = foldr (\(SortArg _ _ c) cont -> if c == DateASC then True else cont) False xs
-
-
-checkComb req list = case fmap (isExistParam req) list of
-     (True:True:_)   -> throwE $ SimpleError $ "Invalid combination of filter parameters" 
-     (_:True:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
-     (True:_:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
-     _               -> return ()
-
-checkFilterParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [FilterArg]
-checkFilterParam req param =
-  case isExistParam req param of
-    False -> return []
-    True  -> case parseParam req param of
-      Just txt -> chooseFilterArgs txt param
-      _ ->  throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
-
-chooseFilterArgs x param = case param of
-  "created_at" -> do
-    _ <- tryReadDay x
-    let table   = ""
-    let where'  = "post_create_date = ?"
-    let values  = ([],[x])
-    return [FilterArg table where' values]
-  "created_at_lt" -> do
-    _ <- tryReadDay x
-    let table   = ""
-    let where'  = "post_create_date < ?"
-    let values  = ([],[x])
-    return [FilterArg table where' values]
-  "created_at_gt" -> do
-    _ <- tryReadDay x
-    let table   = ""
-    let where'  = "post_create_date > ?"
-    let values  = ([],[x])
-    return [FilterArg table where' values]
-  "category_id" -> do
-    _ <- tryReadNum x
-    let table   = ""
-    let where'  = "post_category_id = ?"
-    let values  = ([],[x])
-    return [FilterArg table where' values]
-  "tag" -> do
-    _ <- tryReadNum x
-    let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where'  = "true"
-    let values  = ([x],[])
-    return [FilterArg table where' values]
-  "tags_in" -> do
-    xs <- tryReadNumArray x
-    let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . show $ xs) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where'  = "true"
-    let values  = ([],[])
-    return [FilterArg table where' values]
-  "tags_all" -> do
-    xs <- tryReadNumArray x
-    let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where'  = "tags_id @> ARRAY" ++ show xs ++ "::bigint[]"
-    let values  = ([],[])
-    return [FilterArg table where' values]
-  "name_in" -> do 
-    let table   = ""
-    let where'  = "post_name ILIKE ?"
-    let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
-    return [FilterArg table where' values]
-  "text_in" -> do
-    let table   = ""
-    let where'  = "post_text ILIKE ?"
-    let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
-    return [FilterArg table where' values]
-  "everywhere_in" -> do
-    let table   = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
-    let where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
-    let values  = ([Data.Text.concat ["%",escape x,"%"]],replicate 4 $ Data.Text.concat ["%",escape x,"%"])
-    return [FilterArg table where' values]
-  "author_name" -> do
-    let table   = "JOIN users AS us ON authors.user_id=us.user_id"
-    let where'  = "us.first_name = ?"
-    let values  = ([],[x])
-    return [FilterArg table where' values]     
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
-
-escape xs = pack $ concatMap escapeChar (unpack xs)
-escapeChar '\\' =  "\\\\" 
-escapeChar '%' =  "\\%" 
-escapeChar '_' =  "\\_" 
-escapeChar a =  [a] 
-
-checkSortParam :: (Monad m) => Request -> Text -> ExceptT ReqError m [SortArg] 
-checkSortParam req param = case isExistParam req param of
-  False -> return []
-  True  -> do
-    case parseParam req param of
-      Just txt -> chooseSortArgs txt param
-      _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
-
-chooseSortArgs "DESC" param = case param of
-  "sort_by_pics_number" -> do
-    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-    let orderBy = "count_pics DESC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_category" -> do
-    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-    let orderBy = "category_name DESC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_author" -> do
-    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-    let orderBy = "u.first_name DESC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_date" -> do
-    let joinTable = ""
-    let orderBy = "true"
-    return [SortArg joinTable orderBy DateDESC]
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
-chooseSortArgs "ASC" param = case param of
-  "sort_by_pics_number" -> do
-    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-    let orderBy = "count_pics ASC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_category" -> do
-    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-    let orderBy = "category_name ASC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_author" -> do
-    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-    let orderBy = "u.first_name ASC"
-    return [SortArg joinTable orderBy defDateSort]
-  "sort_by_date" -> do 
-    let joinTable = ""
-    let orderBy = "true"
-    return [SortArg joinTable orderBy DateASC]
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
-chooseSortArgs txt param  
-  | Data.Text.toUpper txt == "ASC"  = chooseSortArgs "ASC"  param
-  | Data.Text.toUpper txt == "DESC" = chooseSortArgs "DESC" param
-  | otherwise                       = throwE $ SimpleError $ "Invalid sort value: " ++ unpack txt ++ ". It should be only 'ASC' or 'DESC'"
-
-
-                                                                          
-
-isExistParam req txt = case lookup txt $ queryToQueryText $ queryString req of
-  Just _  -> True
-  Nothing -> False
-
-data ReqError = SecretError String | SimpleError String | DatabaseError String | DatabaseAndUnrollError String
-  deriving (Eq,Show)
 
 
 
-cathSqlErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: SqlError) )
-
-cathFormatErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: FormatError) )
-
-cathQueryErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: QueryError) )
-
-cathResultErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: ResultError) )
-
-catchIOErr m = m `catch` (\e -> do
-  throwE . DatabaseError $ show (e :: E.IOException) )
-
-
-
-catchDbErr m = catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
-
-
-
-
-
-
-isExistParamE :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe Text)
-isExistParamE req param = case lookup param $ queryToQueryText $ queryString req of
-  Just x  -> return x
-  Nothing -> throwE $ SimpleError $ "Can't find param" ++ unpack param
-
-parseParam req txt = fromJust . lookup txt $ queryToQueryText $ queryString req
-
-parseParamE req param = case fromJust . lookup param $ queryToQueryText $ queryString req of
-  Just x  -> Right x
-  Nothing -> Left $ SimpleError $ "Can't parse param" ++ unpack param
 
 tokenAdminAuth h req = do
   let authParams  = ["token"]
@@ -1358,12 +1018,12 @@ checkUserTokenParam h tokenParam =
 
 
 
-
-userAuth pwdParam pwd 
+checkPwd :: (Monad m) => Text -> Text -> ExceptT ReqError m ()
+checkPwd pwdParam pwd 
   | pwd == hashPwdParam = return ()
   | otherwise       = throwE . SimpleError $ "INVALID password"
     where
-      hashPwdParam = pack . strSha1 . unpack $ pwdParam
+      hashPwdParam = txtSha1 pwdParam
 
       
 
@@ -1427,3 +1087,29 @@ preSelectE h table params where' values todo = do
   lift $ logInfo (hLog h) $ "Data received from DB"
   _ <- todo  
   return xs 
+
+
+sha1 :: ByteString -> Digest SHA1
+sha1 = hash
+
+strSha1 :: String -> String
+strSha1 = show . sha1 . fromString
+
+txtSha1 :: Text -> Text
+txtSha1 = pack . strSha1 . unpack
+
+inCommResp :: Comment -> CommentIdTextUserResponse
+inCommResp (Comment id usId txt) = CommentIdTextUserResponse id txt usId     
+
+isNULL :: PostId -> PostIdOrNull
+isNULL 0      = PostIdNull
+isNULL postId = PostIdExist postId
+
+inTagResp :: Tag -> TagResponse
+inTagResp (Tag tagId tagName) = TagResponse tagId tagName
+
+makeMyPicUrl :: PictureId -> Text
+makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
+
+inPicIdUrl :: PictureId -> PicIdUrl
+inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
