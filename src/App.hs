@@ -17,8 +17,9 @@ import           Logger
 import           Types
 import           Oops
 import           LimitArg
-import ToQuery
-import CheckJsonReq  
+import ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
+import CheckJsonReq (checkDraftReqJson)
+import ConnectDB  (tryConnect,ConnDB(..))
 import           Network.Wai
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11, Status, ResponseHeaders )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
@@ -84,10 +85,10 @@ data Config = Config
     cPostsLimit  :: Integer
     }
 
-data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
+data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
-
-
+responseBuilderFromInfo :: ResponseInfo -> Response
+responseBuilderFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
@@ -101,8 +102,6 @@ application config handleLog req send = do
   logDebug (hLog h) $ "Output response: " ++ (show . toLazyByteString . resBuilder $ resInfo)
   send ( responseBuilderFromInfo resInfo )
 
-data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
-responseBuilderFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE respE = case respE of
@@ -116,8 +115,6 @@ fromE respE = case respE of
 
 okHelper :: (Monad m, MonadCatch m, MonadFail m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
-
-
 
 
 chooseRespEx :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> Request -> ExceptT ReqError m ResponseInfo
@@ -606,7 +603,74 @@ chooseRespEx h req = do
       lift $ printh h $ req
       okHelper $ OkResponse {ok = True}
     _ -> throwE $ SecretError "Unknown response"  
-      
+
+type UserAccessMode = (UserId,AccessMode)
+data AccessMode = UserMode | AdminMode
+
+tokenAdminAuth :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m ()
+tokenAdminAuth h req = do
+  let authParams  = ["token"]
+  [tokenParam] <- hideErr $ mapM (checkParam req) authParams
+  lift $ logInfo (hLog h) $ "Token parsed"
+  hideErr $ checkAdminTokenParam h tokenParam
+
+checkAdminTokenParam :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
+checkAdminTokenParam h tokenParam =
+  case break (== '.') . unpack $ tokenParam of
+    (usIdParam, _:xs) -> case break (== '.') xs of
+      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
+        usIdNum <- tryReadNum (pack usIdParam)
+        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        case maybeTokenKey of
+          Just (Only tokenKey) ->  
+            if strSha1 (unpack tokenKey) == tokenKeyParam 
+                 && strSha1 ("hij" ++ (unpack tokenKey)) == ys
+              then do
+                lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode. Admin_id: " ++ show usIdNum
+                return $ ()
+              else throwE . SimpleError $ "INVALID token"
+          Nothing -> throwE . SimpleError $ "INVALID token"
+      _ -> throwE . SimpleError $ "INVALID token"
+    _        -> throwE . SimpleError $ "INVALID token"
+
+tokenUserAuth :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
+tokenUserAuth h req = do
+  let authParams  = ["token"]
+  [tokenParam] <- mapM (checkParam req) authParams
+  lift $ logInfo (hLog h) $ "Token parsed"
+  checkUserTokenParam h tokenParam
+
+checkUserTokenParam :: (Monad m,MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode    
+checkUserTokenParam h tokenParam =
+  case break (== '.') . unpack $ tokenParam of
+    (usIdParam, _:xs) -> case break (== '.') xs of
+      (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
+        usIdNum <- tryReadNum (pack usIdParam)
+        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        case maybeTokenKey of
+          Just (Only tokenKey) ->  
+            if strSha1 (unpack tokenKey) == tokenKeyParam 
+                 && strSha1 ("stu" ++ (unpack tokenKey)) == ys 
+              then do
+                lift $ logInfo (hLog h) $ "Token valid, user in UserAccessMode"
+                return $ (usIdNum, UserMode)
+              else throwE . SimpleError $ "INVALID token"
+          Nothing -> throwE . SimpleError $ "INVALID token"
+      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
+        usIdNum <- tryReadNum (pack usIdParam)
+        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        case maybeTokenKey of
+          Just (Only tokenKey) ->  
+            if strSha1 (unpack tokenKey) == tokenKeyParam 
+                 && strSha1 ("hij" ++ (unpack tokenKey)) == ys
+              then do
+                lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode"
+                return $ (usIdNum, AdminMode)
+              else throwE . SimpleError $ "INVALID token"
+          Nothing -> throwE . SimpleError $ "INVALID token"  
+      _ -> throwE . SimpleError $ "INVALID token"
+    _        -> throwE . SimpleError $ "INVALID token"
+
 checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
 checkParam req param = case lookup param $ queryToQueryText $ queryString req of
     Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
@@ -620,7 +684,146 @@ tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
 tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
 tryReadNum xs = case reads . unpack $ xs of
   [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"  
+  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"
+
+
+selectOneE :: (Monad m, MonadCatch m, Select b) => Handle m -> Table -> [Param] -> Where -> [Text] -> ExceptT ReqError m b
+selectOneE h table params where' values = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
+  xs <- catchDbErr $ lift $ select h table params where' values
+  case xs of
+    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    [x] -> do
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
+selectOneIfExistE :: (Monad m, MonadCatch m, Select b) => Handle m -> Table -> [Param] -> Where -> Text -> ExceptT ReqError m b
+selectOneIfExistE h table params where' value = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
+  xs <- catchDbErr $ lift $ select h table params where' [value]
+  case xs of
+    []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
+    [x] -> do
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
+selectMaybeOneE :: (Monad m, MonadCatch m, Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m (Maybe b)
+selectMaybeOneE h table params where' values = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
+  xs <- catchDbErr $ lift $ select h table params where' values
+  case xs of
+    []           -> do
+      lift $ logInfo (hLog h) $ "Received empty data from DB"
+      return Nothing
+    [x] -> do
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return (Just x)
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
+selectListFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [b]
+selectListFromDbE h table params where' values = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
+  xs <- catchDbErr $ lift $ select h table params where' values
+  lift $ logInfo (hLog h) $ "Data received from DB"
+  return xs 
+
+selectListLimitFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [b]
+selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
+  lift $ logDebug (hLog h) $ "Select data from DB."
+  xs <- catchDbErr $ lift $ selectLimit h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
+  lift $ logInfo (hLog h) $ "Data received from DB"
+  return xs
+
+updateInDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE h table set where' values = catchDbErr $ do
+  lift $ updateInDb h table set where' values
+
+deleteFromDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
+deleteFromDbE h table where' values = catchDbErr $ do
+  lift $ deleteFromDb h table where' values   
+
+isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE h table checkName where' values = do
+  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
+  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
+  case check of
+    True -> do
+      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") exist"
+      return ()
+    False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+  
+ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+ifExistInDbThrowE h table checkName where' values = do
+  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
+  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
+  case check of
+    True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
+    False -> do
+      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
+      return ()
+
+insertReturnE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE h table returnName insNames insValues =  do
+  xs <- catchDbErr $ lift $ insertReturn h table returnName insNames insValues
+  case xs of
+    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    [x] -> do 
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
+insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE h table returnName insNames bs =  do
+  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
+  case xs of
+    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    [x] -> do 
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+
+insertManyE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
+insertManyE h table insNames insValues = catchDbErr $ do
+  lift $ insertMany h table insNames insValues
+
+deleteAllAboutDrafts :: (Monad m, MonadCatch m) => Handle m  -> [DraftId] -> ExceptT ReqError m ()
+deleteAllAboutDrafts h [] = return ()
+deleteAllAboutDrafts h draftsIds = do
+  let values = fmap (pack . show) draftsIds
+  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
+  deleteDraftsPicsTags h draftsIds
+  deleteFromDbE h "drafts" where' values
+  return ()
+
+deleteDraftsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [DraftId] -> ExceptT ReqError m ()
+deleteDraftsPicsTags h [] = return ()
+deleteDraftsPicsTags h draftsIds = do
+  let values = fmap (pack . show) draftsIds
+  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
+  deleteFromDbE h "draftspics" where' values
+  deleteFromDbE h "draftstags" where' values
+  return ()
+
+deleteAllAboutPost :: (Monad m, MonadCatch m) => Handle m  -> PostId -> ExceptT ReqError m ()
+deleteAllAboutPost h postId = do
+  let postIdTxt = pack . show $ postId
+  deletePostsPicsTags h [postId]
+  deleteFromDbE h "comments" "post_id=?" [postIdTxt]
+  onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
+  deleteAllAboutDrafts h $ fmap fromOnly onlyDraftsIds
+  deleteFromDbE h "posts" "post_id=?" [postIdTxt]
+  return ()
+
+deletePostsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [PostId] -> ExceptT ReqError m ()
+deletePostsPicsTags h [] = return ()
+deletePostsPicsTags h postsIds = do
+  let values = fmap (pack . show) postsIds
+  let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
+  deleteFromDbE h "postspics" where' values
+  deleteFromDbE h "poststags" where' values
+  return ()  
 
 isCommOrPostAuthor :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor h commIdNum postId usIdNum = do
@@ -684,9 +887,25 @@ checkRelationCats h  catIdNum superCatIdNum
       then throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
       else return ()
 
-checkKeyE :: (Monad m) => Text -> Text -> ExceptT ReqError m Bool
+checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
+checkPicUrlGetPic h url = do
+  res <- (lift $ (httpAction h) . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HT.HttpException))) )
+  let lbs = HT.getResponseBody res
+  let sbs = BSL.toStrict lbs
+  case decodeImage sbs of
+    Right _ -> return lbs
+    Left _  -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+
+checkPwd :: (Monad m) => Text -> Text -> ExceptT ReqError m ()
+checkPwd pwdParam pwd 
+  | pwd == hashPwdParam = return ()
+  | otherwise       = throwE . SimpleError $ "INVALID password"
+    where
+      hashPwdParam = txtSha1 pwdParam
+
+checkKeyE :: (Monad m) => Text -> Text -> ExceptT ReqError m ()
 checkKeyE keyParam key 
-  | keyParam == key = return True
+  | keyParam == key = return ()
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"
 
 checkEmptyList :: (Monad m) => [Text] -> ExceptT ReqError m ()
@@ -717,166 +936,7 @@ makeCatResp h catId = do
       superCatResp <- makeCatResp h superCatId
       return $ SubCatResponse { subCat_id = catId , subCat_name = catName, one_level_sub_categories = subCatsIds , super_category = superCatResp}
 
-deleteAllAboutDrafts :: (Monad m, MonadCatch m) => Handle m  -> [DraftId] -> ExceptT ReqError m ()
-deleteAllAboutDrafts h [] = return ()
-deleteAllAboutDrafts h draftsIds = do
-  let values = fmap (pack . show) draftsIds
-  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  deleteDraftsPicsTags h draftsIds
-  deleteFromDbE h "drafts" where' values
-  return ()
 
-deleteDraftsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [DraftId] -> ExceptT ReqError m ()
-deleteDraftsPicsTags h [] = return ()
-deleteDraftsPicsTags h draftsIds = do
-  let values = fmap (pack . show) draftsIds
-  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  deleteFromDbE h "draftspics" where' values
-  deleteFromDbE h "draftstags" where' values
-  return ()
-
-deleteAllAboutPost :: (Monad m, MonadCatch m) => Handle m  -> PostId -> ExceptT ReqError m ()
-deleteAllAboutPost h postId = do
-  let postIdTxt = pack . show $ postId
-  deletePostsPicsTags h [postId]
-  deleteFromDbE h "comments" "post_id=?" [postIdTxt]
-  onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
-  deleteAllAboutDrafts h $ fmap fromOnly onlyDraftsIds
-  deleteFromDbE h "posts" "post_id=?" [postIdTxt]
-  return ()
-
-deletePostsPicsTags :: (Monad m, MonadCatch m) => Handle m  -> [PostId] -> ExceptT ReqError m ()
-deletePostsPicsTags h [] = return ()
-deletePostsPicsTags h postsIds = do
-  let values = fmap (pack . show) postsIds
-  let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
-  deleteFromDbE h "postspics" where' values
-  deleteFromDbE h "poststags" where' values
-  return ()
-  
-
-
-
-selectOneE :: (Monad m, MonadCatch m, Select b) => Handle m -> Table -> [Param] -> Where -> [Text] -> ExceptT ReqError m b
-selectOneE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' values
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-selectOneIfExistE :: (Monad m, MonadCatch m, Select b) => Handle m -> Table -> [Param] -> Where -> Text -> ExceptT ReqError m b
-selectOneIfExistE h table params where' value = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' [value]
-  case xs of
-    []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
-    [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-selectMaybeOneE :: (Monad m, MonadCatch m, Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m (Maybe b)
-selectMaybeOneE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' values
-  case xs of
-    []           -> do
-      lift $ logInfo (hLog h) $ "Received empty data from DB"
-      return Nothing
-    [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return (Just x)
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-selectListFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [b]
-selectListFromDbE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
-  xs <- catchDbErr $ lift $ select h table params where' values
-  lift $ logInfo (hLog h) $ "Data received from DB"
-  return xs 
-
-
-
-
-
-selectListLimitFromDbE :: (Monad m, MonadCatch m,Select b) => Handle m  -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [b]
-selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
-  lift $ logDebug (hLog h) $ "Select data from DB."
-  xs <- catchDbErr $ lift $ selectLimit h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
-  lift $ logInfo (hLog h) $ "Data received from DB"
-  return xs
-
-
-updateInDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
-updateInDbE h table set where' values = catchDbErr $ do
-  lift $ updateInDb h table set where' values
-
-   
-
-deleteFromDbE :: (Monad m, MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
-deleteFromDbE h table where' values = catchDbErr $ do
-  lift $ deleteFromDb h table where' values   
-
-
-
-isExistInDbE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-isExistInDbE h table checkName where' values = do
-  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
-  case check of
-    True -> do
-      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") exist"
-      return ()
-    False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
-  
-ifExistInDbThrowE :: (Monad m, MonadCatch m,MonadFail m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-ifExistInDbThrowE h table checkName where' values = do
-  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
-  case check of
-    True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
-    False -> do
-      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
-      return ()
-
-
- 
-
-
-
- 
-
-insertReturnE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
-insertReturnE h table returnName insNames insValues =  do
-  xs <- catchDbErr $ lift $ insertReturn h table returnName insNames insValues
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-insertByteaInDbE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
-insertByteaInDbE h table returnName insNames bs =  do
-  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-
-
-insertManyE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
-insertManyE h table insNames insValues = catchDbErr $ do
-  lift $ insertMany h table insNames insValues
-
-fromTwoIdsToPair (TwoIds a b) = (a,b)
 
 -- IO methods functions:
 
@@ -936,129 +996,9 @@ getTokenKey' = do
   newStdGen
   return . take 6 $ randomRs ('a','z') gen
 
-
-checkPicUrlGetPic :: (Monad m,MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
-checkPicUrlGetPic h url = do
-  res <- (lift $ (httpAction h) . fromString . unpack $ url) `catch` ( (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ (show (e :: HT.HttpException))) )
-  let lbs = HT.getResponseBody res
-  let sbs = BSL.toStrict lbs
-  case decodeImage sbs of
-    Right _ -> return lbs
-    Left _  -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
-
-
-
-
-
-
-
-
-tokenAdminAuth h req = do
-  let authParams  = ["token"]
-  [tokenParam] <- hideErr $ mapM (checkParam req) authParams
-  lift $ logInfo (hLog h) $ "Token parsed"
-  hideErr $ checkAdminTokenParam h tokenParam
-  
-checkAdminTokenParam h tokenParam =
-  case break (== '.') . unpack $ tokenParam of
-    (usIdParam, _:xs) -> case break (== '.') xs of
-      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
-          Just (Only tokenKey) ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("hij" ++ (unpack tokenKey)) == ys
-              then do
-                lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode"
-                return $ (usIdNum, AdminMode)
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"
-      _ -> throwE . SimpleError $ "INVALID token"
-    _        -> throwE . SimpleError $ "INVALID token"
-
-type UserAccessMode = (Integer,AccessMode)
-data AccessMode = UserMode | AdminMode
-
-tokenUserAuth h req = do
-  let authParams  = ["token"]
-  [tokenParam] <- mapM (checkParam req) authParams
-  lift $ logInfo (hLog h) $ "Token parsed"
-  checkUserTokenParam h tokenParam
-  
-checkUserTokenParam h tokenParam =
-  case break (== '.') . unpack $ tokenParam of
-    (usIdParam, _:xs) -> case break (== '.') xs of
-      (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
-          Just (Only tokenKey) ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("stu" ++ (unpack tokenKey)) == ys 
-              then do
-                lift $ logInfo (hLog h) $ "Token valid, user in UserAccessMode"
-                return $ (usIdNum, UserMode)
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"
-      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
-          Just (Only tokenKey) ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("hij" ++ (unpack tokenKey)) == ys
-              then do
-                lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode"
-                return $ (usIdNum, AdminMode)
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"  
-      _ -> throwE . SimpleError $ "INVALID token"
-    _        -> throwE . SimpleError $ "INVALID token"
-
-
-
-checkPwd :: (Monad m) => Text -> Text -> ExceptT ReqError m ()
-checkPwd pwdParam pwd 
-  | pwd == hashPwdParam = return ()
-  | otherwise       = throwE . SimpleError $ "INVALID password"
-    where
-      hashPwdParam = txtSha1 pwdParam
-
       
 
-tryConnect :: ConnDB -> IO (Connection, ConnDB)
-tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
-  let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
-  (do 
-    conn <- connectPostgreSQL (fromString str) 
-    return (conn,connDB)) `catch` (\e -> do
-      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ (show (e :: E.IOException))
-      connDB2 <- getConnDBParams
-      tryConnect connDB2)
 
-getConnDBParams :: IO ConnDB
-getConnDBParams = do
-  hostDB          <- inputString  "DataBase.host"
-  portDB          <- inputInteger "DataBase.port"
-  userDB          <- inputString  "DataBase.user"
-  dbName          <- inputString  "DataBase.dbname"
-  pwdDB           <- inputString  "DataBase.password"
-  return (ConnDB hostDB portDB userDB dbName pwdDB)
-
-inputInteger :: String -> IO Integer
-inputInteger valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName
-  input <- getLine
-  case reads input of
-    [(a,"")] -> return a
-    _        -> inputInteger valueName
-
-inputString :: String -> IO String
-inputString valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
-  input <- getLine
-  return input
 
 unroll :: (Monad m, MonadCatch m,MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m b -> ExceptT ReqError m a
 unroll m todo = m `catchE` (\err -> case err of
@@ -1072,6 +1012,7 @@ unroll m todo = m `catchE` (\err -> case err of
   _               -> throwE err)
 
 
+unrollDelTag1 :: (MonadCatch m, MonadFail m) => Handle m -> [TwoIds] -> ExceptT ReqError m a -> ExceptT ReqError m a
 unrollDelTag1 h drTagIds m = unroll m $ do
   insertManyE h "draftstags" ["draft_id","tag_id"] $ fmap fromTwoIdsToPair drTagIds
 
@@ -1088,6 +1029,8 @@ preSelectE h table params where' values todo = do
   _ <- todo  
   return xs 
 
+
+-- clear functions:
 
 sha1 :: ByteString -> Digest SHA1
 sha1 = hash
@@ -1113,3 +1056,6 @@ makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
 
 inPicIdUrl :: PictureId -> PicIdUrl
 inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
+
+fromTwoIdsToPair :: TwoIds -> (Integer,Integer)
+fromTwoIdsToPair (TwoIds a b) = (a,b)

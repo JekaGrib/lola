@@ -11,6 +11,7 @@ module Main where
 
 import           App
 import           Logger
+import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
 import           Data.Text                      ( Text, pack, unpack, intercalate )
 import           Network.Wai.Handler.Warp       ( run )
 import           Database.PostgreSQL.Simple

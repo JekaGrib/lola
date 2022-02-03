@@ -5,7 +5,7 @@
 
 
 
-module CheckJsonReq where
+module CheckJsonReq (checkDraftReqJson) where
           
 import           Api.Request (DraftRequest)
 import           Oops

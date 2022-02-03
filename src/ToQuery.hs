@@ -1,15 +1,10 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
---{-# LANGUAGE FlexibleInstances #-}
---{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 
 
 
 
-module ToQuery where
+module ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ) where
           
 
 import           Types
@@ -18,10 +13,6 @@ import           Database.PostgreSQL.Simple (Query)
 
 import           Data.String                    ( fromString )
 import           Data.List                      ( intercalate )
-
-
-
-
 
 
 

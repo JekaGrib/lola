@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d8f8233f27a1bfa9075df4f123479839cfc0fe3b837317e7f46ff7ddf0826f3e
+-- hash: ed506203804667717dcafec7dc20e63d88b31eaa4a23d9069de76166b6dc0998
 
 name:           lola
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Api.Response
       App
       CheckJsonReq
+      ConnectDB
       LimitArg
       Logger
       Oops

@@ -4,7 +4,7 @@
 
 
 
-module Oops where
+module Oops (ReqError(..),logOnErr,hideErr,catchDbErr) where
 
 import Logger (LogHandle(..), logWarning)
 import qualified Control.Exception              as E
