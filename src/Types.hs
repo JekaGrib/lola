@@ -12,14 +12,17 @@ import           Data.Text                      ( Text)
 import           Data.Time.Calendar             ( Day)
 
 
+type Id = Integer
+type UserId = Id
+type AuthorId = Id
+type PostId = Id
+type DraftId = Id
+type CommentId = Id
+type PictureId = Id
+type CategoryId = Id
 
-type UserId = Integer
-type AuthorId = Integer
-type PostId = Integer
-type DraftId = Integer
-type CommentId = Integer
-type PictureId = Integer
-type CategoryId = Integer
+type QueryParamKey = Text
+
 
 type Table = String
 type Param = String
@@ -30,6 +33,7 @@ type Set = String
 type OrderBy = String
 type Page = Integer
 type Limit = Integer
+
 
 class (Show a,FromRow a) => Select a
 

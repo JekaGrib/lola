@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ed506203804667717dcafec7dc20e63d88b31eaa4a23d9069de76166b6dc0998
+-- hash: c8d7386624175baaa2e2a3de875eb99bb8c3919478d707168e0907d42fe71523
 
 name:           lola
 version:        0.1.0.0
@@ -35,6 +35,7 @@ library
       LimitArg
       Logger
       Oops
+      ParseQueryStr
       ToQuery
       Types
   other-modules:

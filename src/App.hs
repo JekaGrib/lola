@@ -17,6 +17,7 @@ import           Logger
 import           Types
 import           Oops
 import           LimitArg
+import ParseQueryStr hiding (tryReadNum)
 import ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
 import ConnectDB  (tryConnect,ConnDB(..))
@@ -124,9 +125,8 @@ chooseRespEx h req = do
   case pathInfo req of
     ["logIn"] -> do
       lift $ logInfo (hLog h) $ "Login command"
-      let paramsNames = ["user_id","password"]
-      [usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      usIdNum              <- tryReadNum usIdParam 
+      LogIn usIdNum pwdParam <- parseQuery req
+      let usIdParam = numToTxt usIdNum
       lift $ logInfo (hLog h) $ "All logIn parameters parsed"
       Auth pwd admBool <- selectOneIfExistE h "users" ["password","admin"] "user_id=?" usIdParam 
       case admBool of
@@ -144,9 +144,8 @@ chooseRespEx h req = do
           okHelper $ TokenResponse {tokenTR = usToken}  
     ["createUser"] -> do
       lift $ logInfo (hLog h) $ "Create user command" 
-      let paramsNames = ["password","first_name","last_name","user_pic_id"]
-      [pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
-      picIdNum   <- tryReadNum picIdParam
+      CreateUser pwdParam fNameParam lNameParam picIdNum <- parseQuery req
+      let picIdParam = numToTxt picIdNum
       lift $ logInfo (hLog h) $ "All parameters parsed"
       day <- lift $ getDay h
       let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
@@ -168,9 +167,8 @@ chooseRespEx h req = do
     ["deleteUser"] -> do
       lift $ logInfo (hLog h) $ "Delete user command"
       tokenAdminAuth h  req
-      let paramsNames = ["user_id"]
-      [usIdParam] <- mapM (checkParam req) paramsNames
-      usIdNum   <- tryReadNum usIdParam
+      DeleteUser usIdNum <- parseQuery req
+      let usIdParam = pack . show $ usIdNum
       lift $ logInfo (hLog h) $ "All parameters parsed"
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ (cDefUsId $ hConf h),usIdParam]
@@ -190,9 +188,8 @@ chooseRespEx h req = do
       okHelper $ OkResponse {ok = True}
     ["createAdmin"]        -> do
       lift $ logInfo (hLog h) $ "Create admin command"
-      let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_id"]
-      [keyParam,pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
-      picIdNum   <- tryReadNum picIdParam
+      CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum <- parseQuery req 
+      let picIdParam = numToTxt picIdNum
       onlyKeys <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
       let keys = fmap fromOnly onlyKeys
       checkEmptyList keys
@@ -210,9 +207,8 @@ chooseRespEx h req = do
     ["createAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Create author command"
       tokenAdminAuth h  req
-      let paramsNames = ["user_id","author_info"]
-      [usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames  
-      [usIdNum]               <- mapM tryReadNum [usIdParam]  
+      CreateAuthor usIdNum auInfoParam <- parseQuery req  
+      let usIdParam = numToTxt usIdNum
       isExistInDbE h  "users" "user_id"  "user_id=?" [usIdParam] 
       ifExistInDbThrowE h "authors" "user_id" "user_id=?" [usIdParam] 
       auId <- insertReturnE h "authors" "author_id" ["user_id","author_info"] [usIdParam,auInfoParam]
@@ -222,17 +218,16 @@ chooseRespEx h req = do
     ["getAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Get author command"
       tokenAdminAuth h  req
-      let paramsNames = ["author_id"]
-      [auIdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum]   <- mapM tryReadNum [auIdParam]
+      GetAuthor auIdNum <- parseQuery req
+      let auIdParam = numToTxt auIdNum
       Author auId auInfo usId <- selectOneIfExistE h "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
       okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
     ["updateAuthor"]        -> do
       lift $ logInfo (hLog h) $ "Update author command"
       tokenAdminAuth h  req
-      let paramsNames = ["author_id","user_id","author_info"]
-      [auIdParam,usIdParam,auInfoParam] <- mapM (checkParam req) paramsNames
-      [auIdNum,usIdNum]                 <- mapM tryReadNum [auIdParam,usIdParam]
+      UpdateAuthor auIdNum usIdNum auInfoParam <- parseQuery req
+      let usIdParam = numToTxt usIdNum
+      let auIdParam = numToTxt auIdNum
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       isntUserOtherAuthor h usIdNum auIdNum
@@ -241,9 +236,8 @@ chooseRespEx h req = do
     ["deleteAuthor"]   -> do
       lift $ logInfo (hLog h) $ "Delete author command"
       tokenAdminAuth h  req
-      let paramsNames = ["author_id"]
-      [auIdParam] <- mapM (checkParam req) paramsNames
-      [auIdNum]   <- mapM tryReadNum [auIdParam]
+      DeleteAuthor auIdNum <- parseQuery req
+      let auIdParam = numToTxt auIdNum
       isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
       let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
       onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
@@ -255,16 +249,14 @@ chooseRespEx h req = do
     ["createCategory"]        -> do
       lift $ logInfo (hLog h) $ "Create category command"
       tokenAdminAuth h  req
-      let paramsNames = ["category_name"]
-      [catNameParam] <- mapM (checkParam req) paramsNames
+      CreateCategory catNameParam <- parseQuery req
       catId <-  insertReturnE h "categories" "category_id" ["category_name"] [catNameParam] 
       okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] , super_cat = "NULL"}
     ["createSubCategory"]        -> do
       lift $ logInfo (hLog h) $ "Create sub category command"
-      tokenAdminAuth h  req
-      let paramsNames = ["category_name","super_category_id"]
-      [catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
-      [superCatIdNum]                <- mapM tryReadNum [superCatIdParam] 
+      tokenAdminAuth h  req 
+      CreateSubCategory catNameParam superCatIdNum <- parseQuery req
+      let superCatIdParam = numToTxt superCatIdNum
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
       catId <-  insertReturnE h "categories" "category_id" ["category_name","super_category_id"] [catNameParam,superCatIdParam] 
       catResp <- makeCatResp h  catId
@@ -277,10 +269,10 @@ chooseRespEx h req = do
       okHelper catResp
     ["updateCategory"] -> do
       lift $ logInfo (hLog h) $ "Update category command"
-      tokenAdminAuth h  req
-      let paramsNames = ["category_id","category_name","super_category_id"]
-      [catIdParam,catNameParam,superCatIdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum,superCatIdNum]                  <- mapM tryReadNum [catIdParam,superCatIdParam]     
+      tokenAdminAuth h  req    
+      UpdateCategory catIdNum catNameParam superCatIdNum <- parseQuery req
+      let catIdParam = numToTxt catIdNum
+      let superCatIdParam = numToTxt superCatIdNum
       isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]      
       isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
       checkRelationCats h  catIdNum superCatIdNum
@@ -290,9 +282,8 @@ chooseRespEx h req = do
     ["deleteCategory"] -> do
       lift $ logInfo (hLog h) $ "Delete category command"
       tokenAdminAuth h  req
-      let paramsNames = ["category_id"]
-      [catIdParam] <- mapM (checkParam req) paramsNames
-      [catIdNum]              <- mapM tryReadNum [catIdParam] 
+      DeleteCategory catIdNum <- parseQuery req
+      let catIdParam = numToTxt catIdNum
       isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam] 
       allSubCats <- findAllSubCats h  catIdNum
       let values = fmap (pack . show) ((cDefCatId $ hConf h):allSubCats)
@@ -307,8 +298,7 @@ chooseRespEx h req = do
     ["createTag"]  -> do
       lift $ logInfo (hLog h) $ "Create tag command"
       tokenAdminAuth h  req
-      let paramsNames = ["tag_name"]
-      [tagNameParam] <- mapM (checkParam req) paramsNames
+      CreateTag tagNameParam <- parseQuery req
       tagId <-  insertReturnE h "tags" "tag_id" ["tag_name"] [tagNameParam] 
       okHelper $ TagResponse tagId tagNameParam
     ["getTag",tagId]  -> do
@@ -319,18 +309,16 @@ chooseRespEx h req = do
     ["updateTag"]        -> do
       lift $ logInfo (hLog h) $ "Update tag command"
       tokenAdminAuth h  req
-      let paramsNames = ["tag_id","tag_name"]
-      [tagIdParam,tagNameParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum]                <- mapM tryReadNum [tagIdParam]
+      UpdateTag tagIdNum tagNameParam <- parseQuery req
+      let tagIdParam = numToTxt tagIdNum
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam] 
       updateInDbE h "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
       okHelper $ TagResponse tagIdNum tagNameParam
     ["deleteTag"]        -> do
       lift $ logInfo (hLog h) $ "Delete tag command"
       tokenAdminAuth h  req
-      let paramsNames = ["tag_id"]
-      [tagIdParam] <- mapM (checkParam req) paramsNames
-      [tagIdNum]              <- mapM tryReadNum [tagIdParam]
+      DeleteTag tagIdNum <- parseQuery req
+      let tagIdParam = numToTxt tagIdNum
       isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam]
       let deleteDrTg = deleteFromDb h "draftstags" "tag_id=?" [tagIdParam] 
       let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [tagIdParam] 
@@ -367,9 +355,8 @@ chooseRespEx h req = do
     ["createPostsDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create post`s draft command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["post_id"]
-      [postIdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum]              <- mapM tryReadNum [postIdParam] 
+      CreatePostsDraft postIdNum <- parseQuery req
+      let postIdParam = numToTxt postIdNum
       isUserAuthorE h  usIdNum 
       let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       let params = ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
@@ -389,9 +376,8 @@ chooseRespEx h req = do
     ["getDraft"]  -> do
       lift $ logInfo (hLog h) $ "Get draft command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["draft_id"]
-      [draftIdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum]              <- mapM tryReadNum [draftIdParam] 
+      GetDraft draftIdNum <- parseQuery req
+      let draftIdParam = numToTxt draftIdNum
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       Draft drId auInfo postId draftName draftCatId draftTxt mPicId <- selectOneIfExistE h table params "draft_id=?" draftIdParam         
@@ -404,10 +390,8 @@ chooseRespEx h req = do
       okHelper $ DraftResponse { draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["getDrafts"]  -> do
       lift $ logInfo (hLog h) $ "Get drafts command"
-      (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["page"]
-      [pageParam] <- mapM (checkParam req) paramsNames
-      [pageNum]              <- mapM tryReadNum [pageParam] 
+      (usIdNum,_) <- tokenUserAuth h req  
+      GetDrafts pageNum <- parseQuery req
       Author auId _ _ <- isUserAuthorE h  usIdNum  
       let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
       let orderBy = "draft_id DESC"
@@ -455,9 +439,8 @@ chooseRespEx h req = do
     ["deleteDraft"]  -> do
       lift $ logInfo (hLog h) $ "Delete draft command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["draft_id"]
-      [draftIdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum]              <- mapM tryReadNum [draftIdParam] 
+      DeleteDraft draftIdNum <- parseQuery req
+      let draftIdParam = numToTxt draftIdNum
       isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam] 
       isUserAuthorE h  usIdNum  
       isDraftAuthor h  draftIdParam usIdNum
@@ -466,9 +449,8 @@ chooseRespEx h req = do
     ["publishDraft"]  -> do
       lift $ logInfo (hLog h) $ "Publish draft command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["draft_id"]
-      [draftIdParam] <- mapM (checkParam req) paramsNames
-      [draftIdNum]              <- mapM tryReadNum [draftIdParam]       
+      PublishDraft draftIdNum <- parseQuery req
+      let draftIdParam = numToTxt draftIdNum       
       let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       let params = ["d.draft_id","author_info","COALESCE (post_id, '0') AS post_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- selectOneIfExistE h table params "draft_id=?" draftIdParam
@@ -529,35 +511,31 @@ chooseRespEx h req = do
     ["deletePost"]  -> do
       lift $ logInfo (hLog h) $ "Delete post command"
       tokenAdminAuth h  req
-      let paramsNames = ["post_id"]
-      [postIdParam] <- mapM (checkParam req) paramsNames
-      [postIdNum]   <- mapM tryReadNum [postIdParam]
+      DeletePost postIdNum <- parseQuery req
+      let postIdParam = numToTxt postIdNum
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
       withTransactionDBE h $ deleteAllAboutPost h postIdNum
       okHelper $ OkResponse { ok = True }
     ["createComment"]  -> do
       lift $ logInfo (hLog h) $ "Create comment command"
       (usIdNum,_) <- tokenUserAuth h req
-      let paramsNames = ["post_id","comment_text"]
-      [postIdParam,txtParam] <- mapM (checkParam req) paramsNames
-      [postIdNum]                       <- mapM tryReadNum [postIdParam] 
+      CreateComment postIdNum txtParam <- parseQuery req
+      let postIdParam = numToTxt postIdNum
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
       commId <- insertReturnE h "comments" "comment_id" ["comment_text","post_id","user_id"] [txtParam,postIdParam,(pack . show $ usIdNum)] 
       okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
     ["getComments"] -> do
       lift $ logInfo (hLog h) $ "Get comments command"
-      let paramsNames = ["post_id","page"]
-      [postIdParam,pageParam] <- mapM (checkParam req) paramsNames
-      [postIdNum,pageNum]     <- mapM tryReadNum [postIdParam,pageParam] 
+      GetComments postIdNum pageNum <- parseQuery req
+      let postIdParam = numToTxt postIdNum
       isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
       comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
       okHelper $ CommentsResponse {page = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
     ["updateComment"]  -> do
       lift $ logInfo (hLog h) $ "Update comment command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["comment_id","comment_text"]
-      [commIdParam,txtParam] <- mapM (checkParam req) paramsNames
-      [commIdNum]                       <- mapM tryReadNum [commIdParam] 
+      UpdateComment commIdNum txtParam <- parseQuery req
+      let commIdParam = numToTxt commIdNum 
       isCommAuthorIfExist h  commIdParam usIdNum
       updateInDbE h "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
       Only postId <- selectOneE h "comments" ["post_id"] "comment_id=?" [commIdParam] 
@@ -565,19 +543,14 @@ chooseRespEx h req = do
     ["deleteComment"]  -> do
       lift $ logInfo (hLog h) $ "Delete comment command"
       (usIdNum,accessMode) <- tokenUserAuth h req 
+      DeleteComment commIdNum <- parseQuery req
+      let commIdParam = numToTxt commIdNum
+      isExistInDbE h "comments" "comment_id" "comment_id=?" [commIdParam] 
       case accessMode of
         AdminMode -> do
-          let paramsNames = ["comment_id"]
-          [commIdParam] <- mapM (checkParam req) paramsNames
-          [commIdNum]   <- mapM tryReadNum [commIdParam]
-          isExistInDbE h "comments" "comment_id" "comment_id=?" [commIdParam] 
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
           okHelper $ OkResponse { ok = True }
         UserMode -> do
-          let paramsNames = ["comment_id"]
-          [commIdParam] <- mapM (checkParam req) paramsNames
-          [commIdNum]              <- mapM tryReadNum [commIdParam]
-          isExistInDbE h "comments" "comment_id" "comment_id=?" [commIdParam] 
           Only postId <- selectOneE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
           isCommOrPostAuthor h commIdNum postId usIdNum 
           deleteFromDbE h "comments" "comment_id=?" [commIdParam]
@@ -585,8 +558,7 @@ chooseRespEx h req = do
     ["browsePicture"] -> do
       lift $ logInfo (hLog h) $ "browsePicture command"
       (usIdNum,_) <- tokenUserAuth h req 
-      let paramsNames = ["pic_url"]
-      [picUrlParam] <- mapM (checkParam req) paramsNames
+      BrowsePicture picUrlParam <- parseQuery req
       lbs <- checkPicUrlGetPic h picUrlParam
       let sbs = BSL.toStrict lbs
       picId <- insertByteaInDbE h "pics" "pic_id" ["pic"] sbs
@@ -617,8 +589,7 @@ data AccessMode = UserMode | AdminMode
 
 tokenAdminAuth :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m ()
 tokenAdminAuth h req = do
-  let authParams  = ["token"]
-  [tokenParam] <- hideErr $ mapM (checkParam req) authParams
+  Token tokenParam <- parseQuery req
   lift $ logInfo (hLog h) $ "Token parsed"
   hideErr $ checkAdminTokenParam h tokenParam
 
@@ -643,8 +614,7 @@ checkAdminTokenParam h tokenParam =
 
 tokenUserAuth :: (Monad m,MonadCatch m,MonadFail m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
 tokenUserAuth h req = do
-  let authParams  = ["token"]
-  [tokenParam] <- mapM (checkParam req) authParams
+  Token tokenParam <- parseQuery req
   lift $ logInfo (hLog h) $ "Token parsed"
   checkUserTokenParam h tokenParam
 
@@ -679,14 +649,6 @@ checkUserTokenParam h tokenParam =
       _ -> throwE . SimpleError $ "INVALID token"
     _        -> throwE . SimpleError $ "INVALID token"
 
-checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
-checkParam req param = case lookup param $ queryToQueryText $ queryString req of
-    Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param ++ ". Empty input."
-    Just (Just x)  -> case lookup param . delete (param,Just x) $ queryToQueryText $ queryString req of
-      Nothing -> return x
-      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack param
-    Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack param
-    Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack param
 
 tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
 tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
@@ -1040,3 +1002,6 @@ inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
 
 fromTwoIdsToPair :: TwoIds -> (Integer,Integer)
 fromTwoIdsToPair (TwoIds a b) = (a,b)
+
+numToTxt :: Id -> Text
+numToTxt = pack . show
