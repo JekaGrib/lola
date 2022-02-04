@@ -72,7 +72,7 @@ data Handle m = Handle
     getBody           :: Request -> m BSL.ByteString,
     printh            :: Request -> m (),
     getTokenKey       :: m String,
-    withTransactionDB :: m () -> m ()
+    withTransactionDB :: forall a. m a -> m a
     }
 
 data Config = Config 
@@ -126,7 +126,7 @@ chooseRespEx h req = do
       lift $ logInfo (hLog h) $ "Login command"
       let paramsNames = ["user_id","password"]
       [usIdParam,pwdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum]            <- mapM tryReadNum [usIdParam] 
+      usIdNum              <- tryReadNum usIdParam 
       lift $ logInfo (hLog h) $ "All logIn parameters parsed"
       Auth pwd admBool <- selectOneIfExistE h "users" ["password","admin"] "user_id=?" usIdParam 
       case admBool of
@@ -146,7 +146,7 @@ chooseRespEx h req = do
       lift $ logInfo (hLog h) $ "Create user command" 
       let paramsNames = ["password","first_name","last_name","user_pic_id"]
       [pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
-      [picIdNum]   <- mapM tryReadNum [picIdParam]
+      picIdNum   <- tryReadNum picIdParam
       lift $ logInfo (hLog h) $ "All parameters parsed"
       day <- lift $ getDay h
       let hashPwdParam = pack . strSha1 . fromString . unpack $ pwdParam
@@ -170,7 +170,7 @@ chooseRespEx h req = do
       tokenAdminAuth h  req
       let paramsNames = ["user_id"]
       [usIdParam] <- mapM (checkParam req) paramsNames
-      [usIdNum]   <- mapM tryReadNum [usIdParam]
+      usIdNum   <- tryReadNum usIdParam
       lift $ logInfo (hLog h) $ "All parameters parsed"
       isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
       let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ (cDefUsId $ hConf h),usIdParam]
@@ -192,7 +192,7 @@ chooseRespEx h req = do
       lift $ logInfo (hLog h) $ "Create admin command"
       let paramsNames = ["create_admin_key","password","first_name","last_name","user_pic_id"]
       [keyParam,pwdParam,fNameParam,lNameParam,picIdParam] <- mapM (checkParam req) paramsNames
-      [picIdNum]   <- mapM tryReadNum [picIdParam]
+      picIdNum   <- tryReadNum picIdParam
       onlyKeys <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
       let keys = fmap fromOnly onlyKeys
       checkEmptyList keys
@@ -357,10 +357,12 @@ chooseRespEx h req = do
       catResp <- makeCatResp h  catIdParam
       let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
       let insValues = [pack . show $ auId,nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId]
-      draftId <-  insertReturnE h "drafts" "draft_id" insNames insValues          
-      withTransactionDBE h $ do   
+      draftId <- withTransactionDBE h $ do  
+        draftIds <-  insertReturn h "drafts" "draft_id" insNames insValues           
+        draftId <- checkSingleOutPut draftIds
         insertMany h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
-        insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds) 
+        insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
+        return draftId  
       okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = AuthorResponse auId auInfo usId, draft_name2 = nameParam , draft_cat2 = catResp , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
     ["createPostsDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create post`s draft command"
@@ -794,7 +796,7 @@ insertManyE :: (Monad m, MonadCatch m, MonadFail m) => Handle m  -> String -> [S
 insertManyE h table insNames insValues = catchDbErr $ do
   lift $ insertMany h table insNames insValues
 
-withTransactionDBE :: (Monad m, MonadCatch m) => Handle m  -> m () -> ExceptT ReqError m ()
+withTransactionDBE :: (Monad m, MonadCatch m) => Handle m  -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchDbErr . lift . withTransactionDB h
 
 deleteAllAboutDrafts :: (Monad m, MonadCatch m) => Handle m  -> [DraftId] -> m ()
@@ -942,7 +944,11 @@ makeCatResp h catId = do
       superCatResp <- makeCatResp h superCatId
       return $ SubCatResponse { subCat_id = catId , subCat_name = catName, one_level_sub_categories = subCatsIds , super_category = superCatResp}
 
-
+checkSingleOutPut :: (Monad m, MonadCatch m) => [a] -> m a
+checkSingleOutPut xs = case xs of
+  [] -> throwM UnexpectedEmptyDbOutPutException
+  (x:[]) -> return x
+  _ -> throwM UnexpectedMultipleDbOutPutException
 
 -- IO methods functions:
 

@@ -4,19 +4,24 @@
 
 
 
-module Oops (ReqError(..),logOnErr,hideErr,catchDbErr) where
+module Oops (ReqError(..),logOnErr,hideErr,catchDbErr,UnexpectedDbOutPutException(..)) where
 
 import Logger (LogHandle(..), logWarning)
 import qualified Control.Exception              as E
 import           Database.PostgreSQL.Simple (SqlError,FormatError,QueryError,ResultError)
 import           Control.Monad.Trans.Except (ExceptT,catchE,throwE)
-import           Control.Monad.Catch            ( catch, MonadCatch)
+import           Control.Monad.Catch            ( catch, MonadCatch,Exception)
 import           Control.Monad.Trans            ( lift )
 
 
 data ReqError = SecretError String | SimpleError String | DatabaseError String | DatabaseAndUnrollError String
   deriving (Eq,Show)
 
+data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
+  deriving (Eq,Show)
+  
+
+instance Exception UnexpectedDbOutPutException
 
 logOnErr :: (Monad m, MonadCatch m,MonadFail m) => LogHandle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr logH m = m `catchE` (\e -> do
@@ -29,9 +34,9 @@ hideErr m = m `catchE` (\e -> throwE $ toSecret e)
 
 
 catchDbErr ::  (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-catchDbErr m = catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
+catchDbErr m = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
 
-cathSqlErr,cathFormatErr,cathQueryErr,cathResultErr, catchIOErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+cathSqlErr,cathFormatErr,cathQueryErr,cathResultErr, catchIOErr, catchDbOutputErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 cathSqlErr m = m `catch` (\e -> do
   throwE . DatabaseError $ show (e :: SqlError) )
 
@@ -47,6 +52,8 @@ cathResultErr m = m `catch` (\e -> do
 catchIOErr m = m `catch` (\e -> do
   throwE . DatabaseError $ show (e :: E.IOException) )
 
+catchDbOutputErr m = m `catch` (\e -> do
+  throwE . DatabaseError $ show (e :: UnexpectedDbOutPutException) )
 
 toSecret :: ReqError -> ReqError
 toSecret (SimpleError str) = SecretError str
