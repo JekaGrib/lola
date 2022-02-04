@@ -34,9 +34,6 @@ pullConfig = do
     `E.catch` (\e -> putStrLn (show (e :: E.IOException  )) >> return C.empty)
     
 
-{-defaultPictureUrl :: Text
-defaultPictureUrl = "https://cdn.pixabay.com/photo/2020/01/14/09/20/anonym-4764566_960_720.jpg"
--}
 
 
 getTime :: IO String
