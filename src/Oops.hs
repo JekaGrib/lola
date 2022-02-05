@@ -30,29 +30,29 @@ logOnErr logH m = m `catchE` (\e -> do
 
 
 hideErr :: (Monad m, MonadCatch m, MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideErr m = m `catchE` (\e -> throwE $ toSecret e)
+hideErr m = m `catchE` (throwE . toSecret)
 
 
 catchDbErr ::  (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-catchDbErr m = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr $ m 
+catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr  
 
 cathSqlErr,cathFormatErr,cathQueryErr,cathResultErr, catchIOErr, catchDbOutputErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-cathSqlErr m = m `catch` (\e -> do
+cathSqlErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: SqlError) )
 
-cathFormatErr m = m `catch` (\e -> do
+cathFormatErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: FormatError) )
 
-cathQueryErr m = m `catch` (\e -> do
+cathQueryErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: QueryError) )
 
-cathResultErr m = m `catch` (\e -> do
+cathResultErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: ResultError) )
 
-catchIOErr m = m `catch` (\e -> do
+catchIOErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: E.IOException) )
 
-catchDbOutputErr m = m `catch` (\e -> do
+catchDbOutputErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: UnexpectedDbOutPutException) )
 
 toSecret :: ReqError -> ReqError

@@ -11,7 +11,7 @@ data LogHandle m = LogHandle
    { hLogConf :: LogConfig,
      log      :: Priority -> String -> m ()}
 
-data LogConfig = LogConfig
+newtype LogConfig = LogConfig
   { cLogLevel :: Priority }
 
 data Priority = DEBUG | INFO | WARNING | ERROR 
@@ -19,7 +19,7 @@ data Priority = DEBUG | INFO | WARNING | ERROR
 
 logger :: LogHandle IO -> String -> Priority -> String -> IO ()
 logger h logPath currP str  
-    | currP >= configP = do
+    | currP >= configP = 
         appendFile logPath (show currP ++ ": " ++ str ++ "\n")
     | otherwise        = return ()
       where configP = cLogLevel (hLogConf h)

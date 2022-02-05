@@ -18,7 +18,7 @@ import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
 
 checkDraftReqJson :: (Monad m, MonadCatch m,MonadFail m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
-checkDraftReqJson json = do 
+checkDraftReqJson json =  
   case (decode json :: Maybe DraftRequest) of
     Just body -> return body
     Nothing   -> case (decode json :: Maybe Object) of
@@ -28,36 +28,36 @@ checkDraftReqJson json = do
         let arrayParams = ["draft_tags_ids","draft_pics_ids"]
         let params = numParams ++ textParams ++ arrayParams
         [catIdVal,picIdVal,tokenVal,nameVal,txtVal,tagsIdsVal,picsIdsVal] <- mapM (isExistInObj obj) params
-        _ <- mapM checkNumVal [catIdVal,picIdVal]
-        _ <- mapM checkStrVal [tokenVal,nameVal,txtVal]
-        _ <- mapM checkNumArrVal [tagsIdsVal,picsIdsVal]
-        throwE $ SimpleError $ "Can`t parse request body"
-      Nothing -> throwE $ SimpleError $ "Invalid request body"
+        mapM_ checkNumVal [catIdVal,picIdVal]
+        mapM_ checkStrVal [tokenVal,nameVal,txtVal]
+        mapM_ checkNumArrVal [tagsIdsVal,picsIdsVal]
+        throwE $ SimpleError  "Can`t parse request body"
+      Nothing -> throwE $ SimpleError  "Invalid request body"
 
 
 isExistInObj :: (Monad m, MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
-isExistInObj obj param = do
+isExistInObj obj param = 
   case lookup param . toList $ obj of
     Just val -> return val
     Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack param
 
 checkNumVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumVal val = do
+checkNumVal val = 
   case val of
     Number _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be number"
 
 checkStrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkStrVal val = do
+checkStrVal val = 
   case val of
     String _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be text"
 
 checkNumArrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumArrVal values = do
+checkNumArrVal values = 
   case values of
     Array arr -> case V.toList arr of
       [] -> return ()
-      ((Number _) : _) -> return ()
+      (Number _ : _) -> return ()
       _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"
     _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"

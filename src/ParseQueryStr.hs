@@ -14,10 +14,7 @@ import           Data.Text                      ( unpack, Text )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Network.Wai (Request(..))
---import           Data.Time.Calendar             ( Day)
 import           Network.HTTP.Types.URI         ( queryToQueryText )
---import           Control.Monad (when)
---import           Data.Time.Calendar             ( fromGregorianValid )
 import           Data.List                      ( delete )
 
 
@@ -207,7 +204,7 @@ instance ParseQueryStr BrowsePicture where
     <$>  parseTxtParam req "pic_url"
 
 parseTxtParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
-parseTxtParam req paramKey = checkParam req paramKey
+parseTxtParam   = checkParam  
 
 parseNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
 parseNumParam req paramKey = do

@@ -12,11 +12,10 @@ import           Data.Text                      ( pack, unpack, Text, concat, to
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE,catchE)
 import           Network.Wai (Request(..))
-import           Data.Time.Calendar             ( Day)
+import           Data.Time.Calendar             ( Day, fromGregorianValid)
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Control.Monad (when)
 import Data.Foldable (toList)
-import           Data.Time.Calendar             ( fromGregorianValid )
 
 
 
@@ -32,7 +31,7 @@ defDateSort :: SortDate
 defDateSort = DateDESC 
 
 isDateASC :: [SortArg] -> Bool
-isDateASC xs = foldr (\(SortArg _ _ c) cont -> if c == DateASC then True else cont) False xs
+isDateASC = foldr (\(SortArg _ _ c) cont -> (c == DateASC) || cont) False 
 
 chooseArgs :: (Monad m) => Request -> ExceptT ReqError m LimitArg
 chooseArgs req = do
@@ -42,17 +41,17 @@ chooseArgs req = do
   let filterParamsList = filterDateList ++ ["category_id","author_name"] ++ filterTagList ++ filterInList 
   let sortList         = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] 
   mapM_ (checkComb req) [filterDateList,filterTagList,filterInList]
-  maybeFilterArgs <- mapM (chooseFilterArgsPreCheck req) $ filterParamsList
+  maybeFilterArgs <- mapM (chooseFilterArgsPreCheck req) filterParamsList
   let filterArgs = concatMap toList maybeFilterArgs
-  maybeSortArgs <- mapM (chooseSortArgsPreCheck req) $ sortList
+  maybeSortArgs <- mapM (chooseSortArgsPreCheck req) sortList
   let sortArgs = concatMap toList maybeSortArgs
   return $ LimitArg filterArgs sortArgs
 
 checkComb :: (Monad m) => Request -> [Text] -> ExceptT ReqError m ()
 checkComb req list = case fmap (isExistParam req) list of
-     (True:True:_)   -> throwE $ SimpleError $ "Invalid combination of filter parameters" 
-     (_:True:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
-     (True:_:True:_) -> throwE $ SimpleError $ "Invalid combination of filter parameters"
+     (True:True:_)   -> throwE $ SimpleError "Invalid combination of filter parameters" 
+     (_:True:True:_) -> throwE $ SimpleError "Invalid combination of filter parameters"
+     (True:_:True:_) -> throwE $ SimpleError "Invalid combination of filter parameters"
      _               -> return ()
 
 chooseFilterArgsPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe FilterArg)
@@ -197,13 +196,13 @@ tryReadNumArray xs = case reads . unpack $ xs of
 
 tryReadDay :: (Monad m) => Text -> ExceptT ReqError m Day
 tryReadDay "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadDay xs = case filter ((/=) ' ') . unpack $ xs of
-  [] -> throwE $ SimpleError $ "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
-  (a:b:c:d:'-':e:f:'-':g:h:[]) -> do
-    year  <- tryReadNum (pack (a:b:c:d:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
-    month <- tryReadNum (pack (e:f:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+tryReadDay xs = case filter (' ' /=) . unpack $ xs of
+  [] -> throwE $ SimpleError "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+  [a, b, c, d, '-', e, f, '-', g, h] -> do
+    year  <- tryReadNum (pack [a, b, c, d]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    month <- tryReadNum (pack [e, f]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
     when (month `notElem` [1..12]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Month must be a number from 1 to 12. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    day   <- tryReadNum (pack (g:h:[])) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    day   <- tryReadNum (pack [g, h]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
     when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse value: " ++ unpack xs ++ ". Day of month must be a number from 1 to 31. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
     case fromGregorianValid year (fromInteger month) (fromInteger day) of
       Just x -> return x

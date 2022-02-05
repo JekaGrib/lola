@@ -21,7 +21,7 @@ import ParseQueryStr hiding (tryReadNum)
 import ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
 import ConnectDB  (tryConnect,ConnDB(..))
-import           Network.Wai
+import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404, status301, movedPermanently301, http11, Status, ResponseHeaders )
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import           Network.Wai.Handler.Warp       ( run )
@@ -969,8 +969,6 @@ getTokenKey' = do
   gen <- getStdGen
   newStdGen
   return . take 6 $ randomRs ('a','z') gen
-
-    
 
 
 -- clear functions:

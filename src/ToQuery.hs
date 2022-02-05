@@ -19,11 +19,11 @@ import           Data.List                      ( intercalate )
 
 toSelQ :: Table -> [Param] -> Where -> Query
 toSelQ table params where' = 
-  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where'
+  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where'
 
 toSelLimQ :: Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
 toSelLimQ table orderBy page limitNumber params where' = 
-  fromString $ "SELECT " ++ (intercalate ", " params) ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)
+  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)
 
 toUpdQ :: Table -> Set -> Where -> Query
 toUpdQ table set where' = 

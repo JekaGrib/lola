@@ -1,10 +1,5 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
---{-# LANGUAGE FlexibleInstances #-}
---{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 
 
 
@@ -27,7 +22,7 @@ tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
   (do 
     conn <- connectPostgreSQL (fromString str) 
     return (conn,connDB)) `catch` (\e -> do
-      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ (show (e :: E.IOException))
+      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ show (e :: E.IOException)
       connDB2 <- getConnDBParams
       tryConnect connDB2)
 
@@ -51,6 +46,5 @@ inputInteger valueName = do
 inputString :: String -> IO String
 inputString valueName = do
   putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
-  input <- getLine
-  return input
+  getLine
 
