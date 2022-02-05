@@ -20,6 +20,7 @@ type DraftId = Id
 type CommentId = Id
 type PictureId = Id
 type CategoryId = Id
+type TagId = Id
 
 type QueryParamKey = Text
 

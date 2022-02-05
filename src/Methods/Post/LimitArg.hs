@@ -5,7 +5,7 @@
 
 
 
-module LimitArg (LimitArg(..), FilterArg(..), SortArg(..), chooseArgs, isDateASC) where
+module Methods.Post.LimitArg (LimitArg(..), FilterArg(..), SortArg(..), chooseArgs, isDateASC) where
           
 
 import           Data.Text                      ( pack, unpack, Text, concat, toUpper )

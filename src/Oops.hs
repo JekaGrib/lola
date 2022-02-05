@@ -23,13 +23,13 @@ data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | Unexpected
 
 instance Exception UnexpectedDbOutPutException
 
-logOnErr :: (Monad m, MonadCatch m,MonadFail m) => LogHandle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
+logOnErr :: (Monad m, MonadCatch m) => LogHandle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr logH m = m `catchE` (\e -> do
   lift $ logWarning logH $ show e
   throwE e)
 
 
-hideErr :: (Monad m, MonadCatch m, MonadFail m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideErr m = m `catchE` (throwE . toSecret)
 
 

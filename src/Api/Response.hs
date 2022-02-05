@@ -234,7 +234,7 @@ instance ToJSON CommentIdTextUserResponse where
 
 
 data CommentsResponse = CommentsResponse {
-      page     :: Integer
+      pageCR     :: Integer
     , post_id9 :: Integer
     , comments :: [CommentIdTextUserResponse]
     } deriving (Eq,Show)

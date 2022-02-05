@@ -17,17 +17,19 @@ import           Control.Monad.Catch            ( MonadCatch)
 import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
 
-checkDraftReqJson :: (Monad m, MonadCatch m,MonadFail m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
+checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson json =  
   case (decode json :: Maybe DraftRequest) of
     Just body -> return body
     Nothing   -> case (decode json :: Maybe Object) of
       Just obj -> do
-        let numParams = ["draft_category_id","draft_main_pic_id"]
-        let textParams = ["token","draft_name","draft_text"]
-        let arrayParams = ["draft_tags_ids","draft_pics_ids"]
-        let params = numParams ++ textParams ++ arrayParams
-        [catIdVal,picIdVal,tokenVal,nameVal,txtVal,tagsIdsVal,picsIdsVal] <- mapM (isExistInObj obj) params
+        catIdVal <- isExistInObj obj "draft_category_id"
+        picIdVal <- isExistInObj obj "draft_main_pic_id"
+        tokenVal <- isExistInObj obj "token"
+        nameVal <- isExistInObj obj "draft_name"
+        txtVal <- isExistInObj obj "draft_text"
+        tagsIdsVal <- isExistInObj obj "draft_tags_ids"
+        picsIdsVal <- isExistInObj obj "draft_pics_ids"
         mapM_ checkNumVal [catIdVal,picIdVal]
         mapM_ checkStrVal [tokenVal,nameVal,txtVal]
         mapM_ checkNumArrVal [tagsIdsVal,picsIdsVal]
@@ -35,25 +37,25 @@ checkDraftReqJson json =
       Nothing -> throwE $ SimpleError  "Invalid request body"
 
 
-isExistInObj :: (Monad m, MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
+isExistInObj :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
 isExistInObj obj param = 
   case lookup param . toList $ obj of
     Just val -> return val
     Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack param
 
-checkNumVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
+checkNumVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
 checkNumVal val = 
   case val of
     Number _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be number"
 
-checkStrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
+checkStrVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
 checkStrVal val = 
   case val of
     String _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be text"
 
-checkNumArrVal :: (Monad m, MonadCatch m) => Value -> ExceptT ReqError m ()
+checkNumArrVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
 checkNumArrVal values = 
   case values of
     Array arr -> case V.toList arr of

@@ -11,6 +11,8 @@ module Main where
 
 import           App
 import           Logger
+import Conf
+import Methods.Handle (isExistInDb',getDay')
 import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
 import           Data.Text                      ( Text, pack, unpack, intercalate )
 import           Network.Wai.Handler.Warp       ( run )
@@ -25,6 +27,7 @@ import qualified Control.Exception              as E
 import qualified Data.ByteString.Lazy           as BSL
 import           Codec.Picture                  ( decodeImage )
 import           Data.Char                      ( toUpper )
+
 
 pullConfig :: IO C.Config
 pullConfig = do
@@ -288,7 +291,7 @@ crateNewDefUser picId = do
 createDefaultUser :: Integer -> IO Integer
 createDefaultUser picId = do
   conn <- connectPostgreSQL "host='localhost' port=5432 user='evgenya' dbname='newdb' password='123456'"
-  day <- App.getDay'  
+  day <- getDay'  
   [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( '12345678','DELETED','DELETED',?,?, false ) RETURNING user_id" [ pack (show picId), pack day ]
   return userId
 
