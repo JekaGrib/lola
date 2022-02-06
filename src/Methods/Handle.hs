@@ -12,12 +12,14 @@ import           Api.Response
 import           Api.Request
 import           Logger
 import           Types
+import Methods.Handle.Select
 import           Oops
-import Conf (Config(..))
-import ParseQueryStr hiding (tryReadNum)
-import ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
+import  Conf (Config(..)) 
+import ParseQueryStr 
+import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
 import ConnectDB  (tryConnect,ConnDB(..))
+import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404, Status, ResponseHeaders )
 import           Data.Aeson (ToJSON,encode)
@@ -68,11 +70,6 @@ data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHea
 okHelper :: (Monad m, MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
-tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNum xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"
 
 
 selectOneE :: (Monad m, MonadCatch m, Select b) => MethodsHandle m -> Table -> [Param] -> Where -> [Text] -> ExceptT ReqError m b
@@ -179,6 +176,12 @@ insertManyE h table insNames insValues = catchDbErr $ do
 withTransactionDBE :: (Monad m, MonadCatch m) => MethodsHandle m  -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchDbErr . lift . withTransactionDB h
 
+checkSingleOutPut :: (MonadCatch m) => [a] -> m a
+checkSingleOutPut xs = case xs of
+  [] -> throwM UnexpectedEmptyDbOutPutException
+  (x:[]) -> return x
+  _ -> throwM UnexpectedMultipleDbOutPutException
+
 -- IO handle functions:
 
 getDay' :: IO String
@@ -213,7 +216,8 @@ deleteFromDb' conn table where' values = do
 
 isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
 isExistInDb' conn table checkName where' values = do
-  [Only check]  <- query conn (toExQ table checkName where') values
+  onlyChecks  <- query conn (toExQ table checkName where') values
+  Only check <- checkSingleOutPut onlyChecks
   return check
 
 insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
@@ -237,6 +241,7 @@ getTokenKey' = do
   _ <- newStdGen
   return . take 6 $ randomRs ('a','z') gen
 
+ 
 
 -- clear functions:
 

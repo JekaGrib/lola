@@ -13,6 +13,7 @@ import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
+import Methods.Handle.Select (Post(..))
 import Methods.Category (makeCatResp)
 import ParseQueryStr 
 import Conf (Config(..))

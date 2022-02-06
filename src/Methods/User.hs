@@ -1,24 +1,24 @@
 --{-# OPTIONS_GHC -Werror #-}
 --{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module Methods.User where
           
-import           Api.Response
+import           Api.Response (UserTokenResponse(..),UserResponse(..),OkResponse(..))
 import           Logger
 import           Types
-import           Oops
+import           Oops (ReqError)
 import           Methods.Handle
+import Methods.Handle.Select (User(..))
 import ParseQueryStr (CreateUser(..),DeleteUser(..))
 import Conf (Config(..))
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
-import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import           Control.Monad.Trans.Except
+import           Data.Text                      ( pack )
+import           Database.PostgreSQL.Simple (Only(..))
+import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
 import Methods.Post (deleteAllAboutDrafts)

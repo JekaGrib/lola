@@ -13,6 +13,7 @@ import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
+import Methods.Handle.Select (Cat(..))
 import ParseQueryStr 
 import Conf (Config(..))
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)

@@ -25,8 +25,8 @@ import           Methods.Tag
 import           Methods.User
 import           Methods.Handle (MethodsHandle, ResponseInfo(..),makeMethodsHWithConn)
 import           Conf (Config(..))
-import ParseQueryStr hiding (tryReadNum)
-import ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
+import ParseQueryStr  (parseQueryStr,ParseQueryStr)
+import TryRead (tryReadNum)
 import CheckJsonReq (checkDraftReqJson)
 import ConnectDB  (tryConnect,ConnDB(..))
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
@@ -155,7 +155,6 @@ chooseRespEx h req = do
     ["deleteTag"]        -> do
       lift $ logInfo (hLog h) $ "Delete tag command"
       tokenAdminAuth (hMeth h)  req
-      DeleteTag tagIdNum <- parseQueryStr req
       preParseQueryStr h req $ deleteTag (hMeth h)
     ["createNewDraft"]  -> do
       lift $ logInfo (hLog h) $ "Create new draft command"
@@ -242,8 +241,3 @@ preParseQueryStr h req foo = do
   foo queStr
 
 
-tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNum xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"

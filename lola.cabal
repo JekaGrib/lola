@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 45731aaae709906cad52709cc015b06fbddf99f725f6c099dc4437478b90b32f
+-- hash: 1ea0780b5ce3b4d8a247841f870f5f8e13379322e9b013841cc546e8bd24f191
 
 name:           lola
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       App
       CheckJsonReq
       Conf
+      Conf.CreateDefault
       ConnectDB
       Logger
       Methods.Admin
@@ -41,6 +42,8 @@ library
       Methods.Comment
       Methods.Draft
       Methods.Handle
+      Methods.Handle.Select
+      Methods.Handle.ToQuery
       Methods.Picture
       Methods.Post
       Methods.Post.LimitArg
@@ -48,7 +51,7 @@ library
       Methods.User
       Oops
       ParseQueryStr
-      ToQuery
+      TryRead
       Types
   other-modules:
       Paths_lola

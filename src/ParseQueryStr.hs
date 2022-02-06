@@ -10,6 +10,7 @@ module ParseQueryStr   where
 --(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Types
+import TryRead (tryReadNum)
 import           Data.Text                      ( unpack, Text )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -249,8 +250,3 @@ checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString 
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
     Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack paramKey
 
-tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNum xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"

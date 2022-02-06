@@ -14,6 +14,7 @@ import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
+import Methods.Handle.Select (Author(..),Draft(..),PostInfo(..),Tag(..))
 import Methods.Auth (AccessMode(..))
 import ParseQueryStr 
 import Conf (Config(..))
@@ -205,11 +206,7 @@ isUserAuthorE_ h usIdNum = do
   isUserAuthorE h  usIdNum
   return ()
 
-checkSingleOutPut :: (MonadCatch m) => [a] -> m a
-checkSingleOutPut xs = case xs of
-  [] -> throwM UnexpectedEmptyDbOutPutException
-  (x:[]) -> return x
-  _ -> throwM UnexpectedMultipleDbOutPutException  
+ 
 
 isNULL :: PostId -> PostIdOrNull
 isNULL 0      = PostIdNull
