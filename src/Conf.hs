@@ -1,5 +1,5 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -13,21 +13,13 @@ import Types
 import           Logger
 import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
 import           Data.Text                      ( Text, pack, unpack, intercalate )
-import           Network.Wai.Handler.Warp       ( run )
-import           Database.PostgreSQL.Simple
-import qualified Network.HTTP.Simple            as HT
-import           Data.Time.LocalTime
-import           Data.String                    ( fromString )
-import           Control.Monad.Catch            ( catch )
+import           Database.PostgreSQL.Simple (Connection,Only(..),query)
+import           Data.Time.LocalTime (getZonedTime)
 import qualified Data.Configurator              as C
 import qualified Data.Configurator.Types        as C
 import qualified Control.Exception              as E
-import qualified Data.ByteString.Lazy           as BSL
-import           Codec.Picture                  ( decodeImage )
 import           Data.Char                      ( toUpper )
-import           Data.ByteString                ( ByteString )
 import Methods.Handle.ToQuery (toExQ)
-import           Data.Time.Calendar             ( showGregorian)
 
 
 

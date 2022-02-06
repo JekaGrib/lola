@@ -14,7 +14,7 @@ import           Control.Monad.Catch            ( catch, MonadCatch,Exception)
 import           Control.Monad.Trans            ( lift )
 
 
-data ReqError = SecretError String | SimpleError String | DatabaseError String | DatabaseAndUnrollError String
+data ReqError = SecretError String | SimpleError String | DatabaseError String 
   deriving (Eq,Show)
 
 data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
@@ -59,7 +59,6 @@ toSecret :: ReqError -> ReqError
 toSecret (SimpleError str) = SecretError str
 toSecret (SecretError str) = SecretError str
 toSecret (DatabaseError str) = SecretError str
-toSecret (DatabaseAndUnrollError str) = SecretError str
 
 
 

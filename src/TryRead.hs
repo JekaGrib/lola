@@ -1,34 +1,16 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module TryRead where
           
-import           Api.Response
-import           Api.Request
-import           Logger
-import           Types
 import           Oops
 import           Data.Time.Calendar             ( Day, fromGregorianValid)
 import           Data.Text                      ( pack, unpack, Text )
-import           Data.ByteString.Builder        ( lazyByteString, Builder, toLazyByteString )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import qualified Network.HTTP.Simple            as HT
-import           Data.Time.LocalTime
-import           Data.Time.Calendar             ( showGregorian)
-import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, nub, (\\) )
 import           Control.Monad.Trans.Except (ExceptT,throwE,catchE)
-import           Control.Monad.Trans            ( lift )
-import           Data.ByteString                ( ByteString )
-import qualified Data.ByteString.Lazy           as BSL
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
-import           Crypto.Hash                    (hash,Digest)
-import Crypto.Hash.Algorithms (SHA1)
 import           Control.Monad (when)
 
 

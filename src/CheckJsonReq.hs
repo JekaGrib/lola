@@ -8,7 +8,7 @@
 module CheckJsonReq (checkDraftReqJson) where
           
 import           Api.Request (DraftRequest)
-import           Oops
+import           Oops (ReqError(..))
 import           Data.Aeson (Object,Value(..),decode)
 import           Data.Text                      (  unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)
