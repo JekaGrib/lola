@@ -1,26 +1,23 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module Methods.Admin where
           
-import           Api.Response
+import           Api.Response (UserTokenResponse(..))
 import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
 import ParseQueryStr (CreateAdmin(..))
-import Conf (Config(..))
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import           Control.Monad.Trans.Except
+import           Database.PostgreSQL.Simple (Only(..))
+import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
+import           Control.Monad.Catch            ( MonadCatch)
 
 
 createAdmin :: (MonadCatch m) => MethodsHandle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
@@ -36,12 +33,11 @@ createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = d
   let insNames  = ["password","first_name","last_name","user_pic_id"    ,"user_create_date","admin","token_key"]
   let insValues = [hashPwdParam  ,fNameParam  ,lNameParam ,picIdParam,pack day          ,"TRUE",pack tokenKey ]
   admId <-  insertReturnE h "users" "user_id" insNames insValues 
-  lift $ logDebug (hLog h) $ "DB return user_id" ++ show admId
-  lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
   let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
+  lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
   okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day }
 
-checkKeyE :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m ()
+checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
 checkKeyE keyParam key 
   | keyParam == key = return ()
   | otherwise       = throwE $ SimpleError "Invalid create_admin_key"

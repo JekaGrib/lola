@@ -155,7 +155,7 @@ insertReturnE h table returnName insNames insValues =  do
   case xs of
     []           -> throwE $ DatabaseError "DatabaseError.Empty output"
     [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB"
+      lift $ logInfo (hLog h) $ "Data received from DB. " ++ returnName ++ ": " ++ show x
       return x
     _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
@@ -260,6 +260,7 @@ inCommResp (Comment idCom usId txt) = CommentIdTextUserResponse idCom txt usId
 
 inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
+
 
 makeMyPicUrl :: PictureId -> Text
 makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId

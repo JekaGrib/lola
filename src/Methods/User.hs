@@ -1,5 +1,5 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -15,12 +15,11 @@ import           Methods.Handle
 import Methods.Handle.Select (User(..))
 import ParseQueryStr (CreateUser(..),DeleteUser(..))
 import Conf (Config(..))
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Data.Text                      ( pack )
 import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
+import           Control.Monad.Catch            ( MonadCatch)
 import Methods.Post (deleteAllAboutDrafts)
 import           Data.Time.Calendar             ( showGregorian)
 
@@ -49,15 +48,15 @@ deleteUser :: (MonadCatch m) => MethodsHandle m -> DeleteUser -> ExceptT ReqErro
 deleteUser h (DeleteUser usIdNum) = do
   let usIdParam = pack . show $ usIdNum
   isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
-  let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ (cDefUsId $ hConf h),usIdParam]
+  let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ cDefUsId (hConf h),usIdParam]
   let deleteUs = deleteFromDb h "users" "user_id=?" [usIdParam]
   maybeAuId <- selectMaybeOneE h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
     Just (Only authorId) -> do
-      let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),pack . show $ (authorId :: Integer)]
+      let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId  (hConf h),pack . show $ (authorId :: Integer)]
       onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
       let draftsIds = fmap fromOnly onlyDraftsIds
-      let deleteDr = deleteAllAboutDrafts h $ draftsIds
+      let deleteDr = deleteAllAboutDrafts h draftsIds
       let deleteAu = deleteFromDb h "authors" "author_id=?" [pack . show $ authorId]
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)
     Nothing -> 

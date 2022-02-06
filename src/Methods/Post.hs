@@ -1,29 +1,28 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module Methods.Post where
           
-import           Api.Response
+import           Api.Response (PostResponse(..), OkResponse(..),PostsResponse(..),AuthorResponse(..))
 import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
 import Methods.Handle.Select (Post(..))
 import Methods.Category (makeCatResp)
-import ParseQueryStr 
+import ParseQueryStr (DeletePost(..))
 import Conf (Config(..))
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
-import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import           Control.Monad.Trans.Except
+import           Network.Wai (Request)
+import           Data.Text                      ( pack )
+import           Database.PostgreSQL.Simple (Only(..))
+import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
-import Methods.Post.LimitArg
+import           Control.Monad.Catch            ( MonadCatch)
+import Methods.Post.LimitArg (chooseArgs, isDateASC,LimitArg(..))
 import           Data.List                      ( intercalate, zip4 )
 import           Data.Time.Calendar             ( showGregorian)
 
@@ -37,7 +36,8 @@ getPost h postIdNum = do
   let picsIds = fmap fromOnly onlyPicsIds
   tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
   catResp <- makeCatResp h  pCatId
-  okHelper $ PostResponse {post_id = postIdNum, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
+  lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response" 
+  okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
 
 getPosts :: (MonadCatch m) => MethodsHandle m -> Request -> Integer -> ExceptT ReqError m ResponseInfo 
 getPosts h req pageNum = do
@@ -47,15 +47,16 @@ getPosts h req pageNum = do
   let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
   let defWhere = "true"
   let defValues = []
-  params <- selectListLimitFromDbE h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs 
-  let postIdsText = fmap (pack . show . post_idP) params
-  let postCatsIds = fmap post_cat_idP params 
+  posts <- selectListLimitFromDbE h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs 
+  let postIdsText = fmap (pack . show . post_idP) posts
+  let postCatsIds = fmap post_cat_idP posts 
   manyCatResp <- mapM (makeCatResp h) postCatsIds
   manyOnlyPostPicsIds <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
   let manyPostPicsIds = (fmap . fmap) fromOnly manyOnlyPostPicsIds
   tagSMany <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
-  let allParams = zip4 params manyCatResp manyPostPicsIds tagSMany
-  okHelper $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate pCat pText picId),catResp,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
+  let allParams = zip4 posts manyCatResp manyPostPicsIds tagSMany
+  lift $ logInfo (hLog h) $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response" 
+  okHelper $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate _ pText picId),catResp,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
 
 
 deletePost :: (MonadCatch m) => MethodsHandle m -> DeletePost -> ExceptT ReqError m ResponseInfo 
@@ -63,6 +64,7 @@ deletePost h (DeletePost postIdNum) = do
   let postIdParam = numToTxt postIdNum
   isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
   withTransactionDBE h $ deleteAllAboutPost h postIdNum
+  lift $ logInfo (hLog h) $ "Post_id: " ++ show postIdNum ++ " deleted" 
   okHelper $ OkResponse { ok = True }
 
 deleteAllAboutPost :: (MonadCatch m) => MethodsHandle m  -> PostId -> m ()

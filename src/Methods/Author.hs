@@ -1,14 +1,13 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module Methods.Author where
           
-import           Api.Response
+import           Api.Response (AuthorResponse(..),OkResponse(..))
 import           Logger
 import           Types
 import           Oops
@@ -16,12 +15,11 @@ import           Methods.Handle
 import Methods.Handle.Select (Author(..))
 import ParseQueryStr (CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..))
 import Conf (Config(..))
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
-import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import           Control.Monad.Trans.Except
+import           Data.Text                      ( pack, unpack )
+import           Database.PostgreSQL.Simple (Only(..))
+import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
+import           Control.Monad.Catch            ( MonadCatch)
 import Methods.Post (deleteAllAboutDrafts)
 
 
@@ -39,7 +37,8 @@ getAuthor :: (MonadCatch m) => MethodsHandle m -> GetAuthor -> ExceptT ReqError 
 getAuthor h (GetAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   Author auId auInfo usId <- selectOneIfExistE h "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
-  okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usId, author_info = auInfo}
+  lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response." 
+  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
   
 updateAuthor :: (MonadCatch m) => MethodsHandle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo 
 updateAuthor h (UpdateAuthor auIdNum usIdNum auInfoParam) = do
@@ -49,18 +48,20 @@ updateAuthor h (UpdateAuthor auIdNum usIdNum auInfoParam) = do
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
   isntUserOtherAuthor h usIdNum auIdNum
   updateInDbE h "authors" "author_info=?,user_id=?" "author_id=?" [auInfoParam,usIdParam,auIdParam]
+  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " updated." 
   okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => MethodsHandle m -> DeleteAuthor -> ExceptT ReqError m ResponseInfo 
 deleteAuthor h (DeleteAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
-  let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ (cDefAuthId $ hConf h),auIdParam]
+  let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h),auIdParam]
   onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
   let draftsIds = fmap fromOnly onlyDraftsIds
   let deleteDr = deleteAllAboutDrafts h  draftsIds
   let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
+  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " deleted." 
   okHelper $ OkResponse {ok = True}
 
 isntUserOtherAuthor :: (MonadCatch m) => MethodsHandle m -> UserId -> AuthorId -> ExceptT ReqError m ()

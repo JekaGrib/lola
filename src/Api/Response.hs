@@ -139,8 +139,8 @@ instance ToJSON DraftResponse where
 
 
 data PicIdUrl = PicIdUrl {
-      pic_id   :: Integer
-    , pic_url2 :: Text
+      pic_idPU   :: Integer
+    , pic_urlPU :: Text
     } deriving (Eq,Show)
 
 instance ToJSON PicIdUrl where
@@ -195,8 +195,8 @@ instance ToJSON PostsResponse where
 
 
 data TagResponse = TagResponse {
-      tag_id   :: Integer
-    , tag_name :: Text
+      tag_idTR   :: Integer
+    , tag_nameTR :: Text
     } deriving (Eq,Show)
 
 instance ToJSON TagResponse where

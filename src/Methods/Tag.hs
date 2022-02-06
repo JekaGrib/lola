@@ -1,36 +1,34 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
 
 module Methods.Tag where
           
-import           Api.Response
+import           Api.Response (TagResponse(..),OkResponse(..))
 import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
-import ParseQueryStr 
-import Conf (Config(..))
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
-import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
-import           Control.Monad.Trans.Except
+import ParseQueryStr (CreateTag(..),UpdateTag(..),DeleteTag(..))
+import           Database.PostgreSQL.Simple (Only(..))
+import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
+import           Control.Monad.Catch            ( MonadCatch)
 
 
 createTag :: (Monad m,MonadCatch m) => MethodsHandle m -> CreateTag -> ExceptT ReqError m ResponseInfo
 createTag h (CreateTag tagNameParam) = do
-  tagId <-  insertReturnE h "tags" "tag_id" ["tag_name"] [tagNameParam] 
+  tagId <-  insertReturnE h "tags" "tag_id" ["tag_name"] [tagNameParam]
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " created"
   okHelper $ TagResponse tagId tagNameParam
   
 getTag :: (Monad m,MonadCatch m) => MethodsHandle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
   Only tagName <- selectOneIfExistE h "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   
 updateTag :: (Monad m,MonadCatch m) => MethodsHandle m -> UpdateTag -> ExceptT ReqError m ResponseInfo 
@@ -38,6 +36,7 @@ updateTag h (UpdateTag tagIdNum tagNameParam) = do
   let tagIdParam = numToTxt tagIdNum
   isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam] 
   updateInDbE h "tags" "tag_name=?" "tag_id=?" [tagNameParam,tagIdParam]
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " updated"
   okHelper $ TagResponse tagIdNum tagNameParam
 
 deleteTag :: (Monad m,MonadCatch m) => MethodsHandle m -> DeleteTag -> ExceptT ReqError m ResponseInfo 
@@ -48,5 +47,6 @@ deleteTag h (DeleteTag tagIdNum) = do
   let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [tagIdParam] 
   let deleteTg = deleteFromDb h "tags" "tag_id=?" [tagIdParam]
   withTransactionDBE h (deleteDrTg >> deletePosTg >> deleteTg)
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
 

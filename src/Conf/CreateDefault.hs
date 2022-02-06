@@ -1,5 +1,5 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 
@@ -8,30 +8,21 @@
 module Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat) where
 
 
-import ConnectDB (ConnDB)
 import Types
-import           Logger
-import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
-import           Data.Text                      ( Text, pack, unpack, intercalate )
-import           Network.Wai.Handler.Warp       ( run )
-import           Database.PostgreSQL.Simple
+import           Data.Text                      ( pack)
+import           Database.PostgreSQL.Simple     (Only(Only),Connection,query_,query,Binary(Binary))
 import qualified Network.HTTP.Simple            as HT
-import           Data.Time.LocalTime
+import           Data.Time.LocalTime            (getZonedTime,localDay,zonedTimeToLocalTime)
 import           Data.String                    ( fromString )
 import           Control.Monad.Catch            ( catch )
-import qualified Data.Configurator              as C
-import qualified Data.Configurator.Types        as C
-import qualified Control.Exception              as E
 import qualified Data.ByteString.Lazy           as BSL
 import           Codec.Picture                  ( decodeImage )
-import           Data.Char                      ( toUpper )
 import           Data.ByteString                ( ByteString )
-import Methods.Handle.ToQuery (toExQ)
 import           Data.Time.Calendar             ( showGregorian)
 
 
 
-createNewDefPic :: Connection -> IO Integer
+createNewDefPic :: Connection -> IO PictureId
 createNewDefPic conn = do
   defPicBs <- enterUrlAndGetPicBs
   picId <- createDefaultPicture conn defPicBs
@@ -40,7 +31,7 @@ createNewDefPic conn = do
 
 enterUrlAndGetPicBs :: IO ByteString
 enterUrlAndGetPicBs = do
-  putStrLn $ "Enter default picture url"
+  putStrLn "Enter default picture url"
   input <- getLine
   (do
     res <- HT.httpLBS . fromString $ input  
@@ -51,21 +42,21 @@ enterUrlAndGetPicBs = do
       Left _  -> do
         putStrLn $ "Invalid picture url:" ++ input
         enterUrlAndGetPicBs) `catch` (\e -> do
-          putStrLn $ "Invalid picture url:" ++ input ++ ". " ++ (show (e :: HT.HttpException))
+          putStrLn $ "Invalid picture url:" ++ input ++ ". " ++ show (e :: HT.HttpException)
           enterUrlAndGetPicBs)
 
-createDefaultPicture :: Connection -> ByteString -> IO Integer
+createDefaultPicture :: Connection -> ByteString -> IO PictureId
 createDefaultPicture conn defPicBs = do
   [Only picId] <- query conn "INSERT INTO pics ( pic ) VALUES (?) RETURNING pic_id " [Binary defPicBs]
   return picId
 
-createNewDefUser :: Connection -> Integer -> IO Integer
+createNewDefUser :: Connection -> PictureId -> IO UserId
 createNewDefUser conn picId = do
   userId <- createDefaultUser conn picId
   putStrLn $ "Default user created, id:" ++ show userId
   return userId
 
-createDefaultUser :: Connection -> Integer -> IO Integer
+createDefaultUser :: Connection -> PictureId -> IO UserId
 createDefaultUser conn picId = do
   day <- getDay  
   [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( '12345678','DELETED','DELETED',?,?, false ) RETURNING user_id" [ pack (show picId), pack day ]
@@ -77,24 +68,24 @@ getDay = do
   let day = showGregorian . localDay . zonedTimeToLocalTime $ time
   return day
 
-createNewDefAuthor :: Connection -> Integer -> IO Integer
+createNewDefAuthor :: Connection -> UserId -> IO AuthorId
 createNewDefAuthor conn userId = do
   authorId <- createDefaultAuthor conn userId
   putStrLn $ "Default author created, id:" ++ show authorId
   return authorId
 
-createDefaultAuthor :: Connection -> Integer -> IO Integer
+createDefaultAuthor :: Connection -> UserId -> IO AuthorId
 createDefaultAuthor conn userId = do
   [Only authorId] <- query conn "INSERT INTO authors ( user_id , author_info) VALUES ( ?,'DELETED' ) RETURNING author_id" [pack . show $ userId]  
   return authorId
 
-createNewDefCat :: Connection -> IO Integer
+createNewDefCat :: Connection -> IO CategoryId
 createNewDefCat conn = do
   catId <- createDefaultCategory conn
   putStrLn $ "Default category created, id:" ++ show catId
   return catId
 
-createDefaultCategory :: Connection -> IO Integer
+createDefaultCategory :: Connection -> IO CategoryId
 createDefaultCategory conn = do
   [Only catId] <- query_ conn "INSERT INTO categories (category_name) VALUES ( 'NONE' ) RETURNING category_id" 
   return catId
