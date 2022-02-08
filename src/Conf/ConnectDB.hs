@@ -4,7 +4,7 @@
 
 
 
-module ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger) where
+module Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger) where
           
 
 import           Database.PostgreSQL.Simple (connectPostgreSQL,Connection)

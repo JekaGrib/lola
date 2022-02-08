@@ -8,10 +8,9 @@
 module Conf where
 
 import Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat)
-import ConnectDB (ConnDB,ConnDBInfo(..))
+import Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger)
 import Types
 import           Logger
-import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
 import           Data.Text                      ( Text, pack, unpack, intercalate )
 import           Database.PostgreSQL.Simple (Connection,Only(..),query)
 import           Data.Time.LocalTime (getZonedTime)
@@ -62,6 +61,14 @@ parseConf = do
   prio            <- parseConfPrio     conf 
   return $ Config connDB prio defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit 
 
+reConnectDB :: Config -> IO Config
+reConnectDB oldConf = do
+  let ConnDB _ connDBInfo = cConnDB oldConf
+  connDB <- tryConnect connDBInfo
+  return $ oldConf {cConnDB = connDB}
+
+extractConn :: Config -> Connection
+extractConn conf = let ConnDB conn _ = cConnDB conf in conn
 
 pullConfig :: IO C.Config
 pullConfig = do

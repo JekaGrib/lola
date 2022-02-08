@@ -14,12 +14,10 @@ import           Logger
 import           Types
 import Methods.Handle.Select
 import           Oops
-import  Conf (Config(..))
-import ConnectDB  (ConnDB(..))
+import  Conf (Config(..),extractConn)
 import ParseQueryStr 
 import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
-import ConnectDB  (tryConnect,ConnDB(..))
 import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404, Status, ResponseHeaders )
@@ -78,7 +76,7 @@ data MethodsHandle m = MethodsHandle
     }
 
 makeMethodsH :: Config -> LogHandle IO -> MethodsHandle IO
-makeMethodsH conf hLog = let ConnDB conn _ = cConnDB conf in
+makeMethodsH conf hLog = let conn = extractConn conf in
   MethodsHandle 
     conf 
     hLog 

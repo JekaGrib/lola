@@ -9,7 +9,6 @@ module App where
           
 import           Api.Response (OkInfoResponse(..))
 import           Api.Request (DraftRequest(..))
-import ConnectDB  (ConnDB(..))
 import           Logger
 import           Types
 import           Oops (ReqError(..),logOnErr)
@@ -24,11 +23,10 @@ import           Methods.Post (getPost,getPosts,deletePost)
 import           Methods.Tag (createTag,getTag,updateTag,deleteTag)
 import           Methods.User (createUser,getUser,deleteUser)
 import           Methods.Handle (MethodsHandle, ResponseInfo(..),makeMethodsH)
-import           Conf (Config(..))
+import           Conf (Config(..),reConnectDB)
 import ParseQueryStr  (parseQueryStr,ParseQueryStr)
 import TryRead (tryReadNum)
 import CheckJsonReq (checkDraftReqJson)
-import ConnectDB  (tryConnect)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404 )
 import           Data.Aeson (encode)
@@ -49,9 +47,7 @@ data Handle m = Handle
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
-  let ConnDB _ connDBInfo = cConnDB config
-  connDB <- tryConnect connDBInfo
-  let newConfig = config {cConnDB = connDB}
+  newConfig <- reConnectDB config
   let methH = makeMethodsH newConfig handleLog 
   let h = Handle handleLog methH strictRequestBody 
   logDebug (hLog h) "Connect to DB"
