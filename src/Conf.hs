@@ -8,7 +8,7 @@
 module Conf where
 
 import Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat)
-import ConnectDB (ConnDB)
+import ConnectDB (ConnDB,ConnDBInfo(..))
 import Types
 import           Logger
 import ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger)
@@ -51,7 +51,7 @@ parseConf = do
   userDB          <- parseConfDBUser      conf
   dbName          <- parseConfDBname      conf
   pwdDB           <- parseConfDBpwd       conf
-  (conn,connDB)   <- tryConnect (ConnDB hostDB portDB userDB dbName pwdDB) 
+  connDB@(ConnDB conn _) <- tryConnect (ConnDBInfo hostDB portDB userDB dbName pwdDB) 
   defPicId        <- parseConfDefPicId    conf conn 
   defUsId         <- parseConfDefUsId     conf conn defPicId
   defAuthId       <- parseConfDefAuthId   conf conn defUsId

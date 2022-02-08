@@ -4,7 +4,7 @@
 
 
 
-module ConnectDB (tryConnect,ConnDB(..),inputString,inputInteger) where
+module ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger) where
           
 
 import           Database.PostgreSQL.Simple (connectPostgreSQL,Connection)
@@ -13,27 +13,30 @@ import           Data.String                    ( fromString )
 import           Control.Monad.Catch            ( catch)
 
 
-data ConnDB = ConnDB {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
-   
+data ConnDB = ConnDB Connection ConnDBInfo
 
-tryConnect :: ConnDB -> IO (Connection, ConnDB)
-tryConnect connDB@(ConnDB hostDB portDB userDB dbName pwdDB) = do
+data ConnDBInfo = ConnDBInfo {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
+
+
+
+tryConnect :: ConnDBInfo -> IO ConnDB
+tryConnect connDBInf@(ConnDBInfo hostDB portDB userDB dbName pwdDB) = do
   let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
   (do 
     conn <- connectPostgreSQL (fromString str) 
-    return (conn,connDB)) `catch` (\e -> do
+    return $ ConnDB conn connDBInf) `catch` (\e -> do
       putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ show (e :: E.IOException)
-      connDB2 <- getConnDBParams
-      tryConnect connDB2)
+      connDBInf2 <- inputConnDBInfo
+      tryConnect connDBInf2)
 
-getConnDBParams :: IO ConnDB
-getConnDBParams = do
+inputConnDBInfo :: IO ConnDBInfo
+inputConnDBInfo = do
   hostDB          <- inputString  "DataBase.host"
   portDB          <- inputInteger "DataBase.port"
   userDB          <- inputString  "DataBase.user"
   dbName          <- inputString  "DataBase.dbname"
   pwdDB           <- inputString  "DataBase.password"
-  return (ConnDB hostDB portDB userDB dbName pwdDB)
+  return (ConnDBInfo hostDB portDB userDB dbName pwdDB)
 
 inputInteger :: String -> IO Integer
 inputInteger valueName = do

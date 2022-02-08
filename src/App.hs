@@ -9,6 +9,7 @@ module App where
           
 import           Api.Response (OkInfoResponse(..))
 import           Api.Request (DraftRequest(..))
+import ConnectDB  (ConnDB(..))
 import           Logger
 import           Types
 import           Oops (ReqError(..),logOnErr)
@@ -22,7 +23,7 @@ import           Methods.Picture (sendPicture,browsePicture)
 import           Methods.Post (getPost,getPosts,deletePost)
 import           Methods.Tag (createTag,getTag,updateTag,deleteTag)
 import           Methods.User (createUser,getUser,deleteUser)
-import           Methods.Handle (MethodsHandle, ResponseInfo(..),makeMethodsHWithConn)
+import           Methods.Handle (MethodsHandle, ResponseInfo(..),makeMethodsH)
 import           Conf (Config(..))
 import ParseQueryStr  (parseQueryStr,ParseQueryStr)
 import TryRead (tryReadNum)
@@ -48,9 +49,10 @@ data Handle m = Handle
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
-  let connDB = cConnDB config
-  (conn,_) <- tryConnect connDB
-  let methH = makeMethodsHWithConn config handleLog conn
+  let ConnDB _ connDBInfo = cConnDB config
+  connDB <- tryConnect connDBInfo
+  let newConfig = config {cConnDB = connDB}
+  let methH = makeMethodsH newConfig handleLog 
   let h = Handle handleLog methH strictRequestBody 
   logDebug (hLog h) "Connect to DB"
   respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req

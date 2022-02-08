@@ -14,7 +14,8 @@ import           Logger
 import           Types
 import Methods.Handle.Select
 import           Oops
-import  Conf (Config(..)) 
+import  Conf (Config(..))
+import ConnectDB  (ConnDB(..))
 import ParseQueryStr 
 import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
@@ -47,37 +48,37 @@ import Methods.Post.LimitArg
 data MethodsHandle m = MethodsHandle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectTxt          :: String -> [String] -> String -> [Text] -> m [Only Text],
-    selectDay          :: String -> [String] -> String -> [Text] -> m [Only Day],
-    selectBS           :: String -> [String] -> String -> [Text] -> m [Only (Binary ByteString)],
-    selectNum          :: String -> [String] -> String -> [Text] -> m [Only Id],
-    selectTwoIds       :: String -> [String] -> String -> [Text] -> m [TwoIds],
-    selectAuth         :: String -> [String] -> String -> [Text] -> m [Auth],
-    selectCat          :: String -> [String] -> String -> [Text] -> m [Cat],
-    selectTag          :: String -> [String] -> String -> [Text] -> m [Tag],
-    selectAuthor       :: String -> [String] -> String -> [Text] -> m [Author],
-    selectComment      :: String -> [String] -> String -> [Text] -> m [Comment],
-    selectUser         :: String -> [String] -> String -> [Text] -> m [User],
-    selectPostInfo     :: String -> [String] -> String -> [Text] -> m [PostInfo],
-    selectDraft        :: String -> [String] -> String -> [Text] -> m [Draft],
-    selectPost         :: String -> [String] -> String -> [Text] -> m [Post],
-    selectLimitComment :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
-    selectLimitDraft   :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
-    selectLimitPost    :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
-    updateInDb         :: String -> String -> String -> [Text] -> m (),
-    deleteFromDb       :: String -> String -> [Text] -> m (),
-    isExistInDb        :: String -> String -> String -> [Text] -> m Bool,
-    insertReturn       :: String -> String -> [String] -> [Text] -> m Integer,
-    insertByteaInDb    :: String -> String -> [String] -> ByteString -> m Integer,
-    insertMany         :: String -> [String] -> [(Integer,Integer)] -> m (),
+    selectTxt          :: Table -> [String] -> String -> [Text] -> m [Only Text],
+    selectDay          :: Table -> [String] -> String -> [Text] -> m [Only Day],
+    selectBS           :: Table -> [String] -> String -> [Text] -> m [Only (Binary ByteString)],
+    selectNum          :: Table -> [String] -> String -> [Text] -> m [Only Id],
+    selectTwoIds       :: Table -> [String] -> String -> [Text] -> m [TwoIds],
+    selectAuth         :: Table -> [String] -> String -> [Text] -> m [Auth],
+    selectCat          :: Table -> [String] -> String -> [Text] -> m [Cat],
+    selectTag          :: Table -> [String] -> String -> [Text] -> m [Tag],
+    selectAuthor       :: Table -> [String] -> String -> [Text] -> m [Author],
+    selectComment      :: Table -> [String] -> String -> [Text] -> m [Comment],
+    selectUser         :: Table -> [String] -> String -> [Text] -> m [User],
+    selectPostInfo     :: Table -> [String] -> String -> [Text] -> m [PostInfo],
+    selectDraft        :: Table -> [String] -> String -> [Text] -> m [Draft],
+    selectPost         :: Table -> [String] -> String -> [Text] -> m [Post],
+    selectLimitComment :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
+    selectLimitDraft   :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
+    selectLimitPost    :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
+    updateInDb         :: Table -> String -> String -> [Text] -> m (),
+    deleteFromDb       :: Table -> String -> [Text] -> m (),
+    isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
+    insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
+    insertByteaInDb    :: Table -> String -> [String] -> ByteString -> m Integer,
+    insertMany         :: Table -> [String] -> [(Integer,Integer)] -> m (),
     httpAction         :: HT.Request -> m (HT.Response BSL.ByteString),
     getDay             :: m String,
     getTokenKey        :: m String,
     withTransactionDB  :: forall a. m a -> m a
     }
 
-makeMethodsHWithConn :: Config -> LogHandle IO -> Connection -> MethodsHandle IO
-makeMethodsHWithConn conf hLog conn =
+makeMethodsH :: Config -> LogHandle IO -> MethodsHandle IO
+makeMethodsH conf hLog = let ConnDB conn _ = cConnDB conf in
   MethodsHandle 
     conf 
     hLog 
@@ -187,17 +188,17 @@ ifExistInDbThrowE h table checkName where' values = do
       lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
       return ()
 
-insertReturnE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => MethodsHandle m  -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnE h table returnName insNames insValues =  catchDbErr $
   lift $ insertReturn h table returnName insNames insValues
 
 
-insertByteaInDbE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE :: (MonadCatch m) => MethodsHandle m  -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
 insertByteaInDbE h table returnName insNames bs =  catchDbErr 
   $ lift $ insertByteaInDb h table returnName insNames bs
 
 
-insertManyE :: (MonadCatch m) => MethodsHandle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
+insertManyE :: (MonadCatch m) => MethodsHandle m  -> Table -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
 insertManyE h table insNames insValues = catchDbErr $ do
   lift $ insertMany h table insNames insValues
 
