@@ -16,7 +16,6 @@ import Methods.Handle.Select (Cat(..))
 import ParseQueryStr (CreateCategory(..),CreateSubCategory(..),UpdateCategory(..),DeleteCategory(..))
 import Conf (Config(..))
 import           Data.Text                      ( pack )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Catch            ( MonadCatch)
 import           Data.List                      ( intercalate )
@@ -94,7 +93,7 @@ findAllSubCats h  catId = do
 findOneLevelSubCats :: (MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m [Integer]
 findOneLevelSubCats h catId = do
     catsIds <- checkListE h $ selectNum h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
-    return (fmap fromOnly catsIds)   
+    return catsIds  
 
 makeCatResp :: (MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h catId = do

@@ -17,7 +17,6 @@ import Methods.Handle.Select (Author(..),Draft(..),PostInfo(..),Tag(..))
 import ParseQueryStr (CreatePostsDraft(..),GetDraft(..),GetDrafts(..),DeleteDraft(..),PublishDraft(..))
 import Conf (Config(..))
 import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            (  MonadCatch)
@@ -50,8 +49,7 @@ createPostsDraft h usIdNum (CreatePostsDraft postIdNum) = do
   let params = ["a.author_id","author_info","post_name","post_category_id","post_text","post_main_pic_id"]
   PostInfo auId auInfo postName postCatId postTxt mPicId <- checkOneIfExistE h (selectPostInfo h) table params "post_id=?" postIdParam
   isPostAuthor h  postIdParam usIdNum          
-  onlyPicsIds <- checkListE h $ selectNum h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
-  let picsIds = fmap fromOnly onlyPicsIds
+  picsIds <- checkListE h $ selectNum h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
   tagS <- checkListE h $ selectTag h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam]
   let tagsIds = fmap tag_idT tagS
   catResp <- makeCatResp h  postCatId
@@ -83,8 +81,7 @@ getDrafts h usIdNum (GetDrafts pageNum) = do
   let alldraftIdsText = fmap (pack . show . draft_idD) drafts
   let allCatIdsNum = fmap draft_cat_idD drafts
   manyCatResp <- mapM (makeCatResp h ) allCatIdsNum
-  manyOnlyDraftPicsIds   <- mapM (checkListE h . selectNum h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
-  let manyDraftPicsIds = (fmap . fmap) fromOnly manyOnlyDraftPicsIds
+  manyDraftPicsIds   <- mapM (checkListE h . selectNum h "draftspics" ["pic_id"] "draft_id=?") $ fmap (:[]) alldraftIdsText  
   tagSMany <- mapM (checkListE h . selectTag h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" ) $ fmap (:[]) alldraftIdsText
   let allParams = zip4 drafts manyCatResp manyDraftPicsIds tagSMany
   lift $ logInfo (hLog h) $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response" 
@@ -96,7 +93,7 @@ updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -
 updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds)  = do
   let draftIdParam = numToTxt draftIdNum
   DraftInfo auResp tagResps catResp <- getDraftInfo h usIdNum drReq
-  Only postId <- checkOneE h $ selectNum h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
+  postId <- checkOneE h $ selectNum h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
   withTransactionDBE h $ do
     deleteDraftsPicsTags h [draftIdNum]
     updateInDb h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [nameParam,pack . show $ catIdParam,txtParam,pack . show $ picId,draftIdParam]
@@ -131,7 +128,7 @@ publishDraft h usIdNum (PublishDraft draftIdNum) = do
       lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName , post_create_date = pack day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
     PostIdExist postId  -> do       
-      Only day <- checkOneE h $ selectDay h "posts" ["post_create_date"] "post_id=?" [numToTxt postId]    
+      day <- checkOneE h $ selectDay h "posts" ["post_create_date"] "post_id=?" [numToTxt postId]    
       withTransactionDBE h $ do
         updateInDb h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [draftName,numToTxt . fromCatResp $ catResp,draftTxt,numToTxt mPicId,numToTxt postId]
         deletePostsPicsTags h [postId]
@@ -149,8 +146,7 @@ selectDraftAndMakeResp h usIdNum draftIdNum = do
   Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- checkOneIfExistE h (selectDraft h) table params "draft_id=?" draftIdParam         
   Author auId _ _ <- isUserAuthorE h  usIdNum  
   isDraftAuthor h  draftIdParam usIdNum
-  onlyPicsIds <- checkListE h $ selectNum h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
-  let picsIds = fmap fromOnly onlyPicsIds
+  picsIds <- checkListE h $ selectNum h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
   tagS <- checkListE h $ selectTag h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
   catResp <- makeCatResp h  draftCatId 
   return DraftResponse { draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
@@ -171,14 +167,14 @@ getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = d
 isDraftAuthor :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h  draftIdParam usIdNum = do
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
-  Only usDraftId <- checkOneE h $ selectNum h table ["user_id"] "draft_id=?" [draftIdParam]  
+  usDraftId <- checkOneE h $ selectNum h table ["user_id"] "draft_id=?" [draftIdParam]  
   unless (usDraftId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of draft_id: " ++ unpack draftIdParam
 
 isPostAuthor :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isPostAuthor h  postIdParam usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  Only usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [postIdParam]  
+  usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [postIdParam]  
   unless (usPostId  == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of post_id: " ++ unpack postIdParam
 

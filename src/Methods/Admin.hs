@@ -14,7 +14,6 @@ import           Oops
 import           Methods.Handle
 import ParseQueryStr (CreateAdmin(..))
 import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -23,8 +22,7 @@ import           Control.Monad.Catch            ( MonadCatch)
 createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = do
   let picIdParam = numToTxt picIdNum
-  onlyKeys <- checkListE h $ selectTxt h "key" ["create_admin_key"] "true" ([]::[Text])  
-  let keys = fmap fromOnly onlyKeys
+  keys <- checkListE h $ selectTxt h "key" ["create_admin_key"] "true" ([]::[Text])  
   checkEmptyList keys
   checkKeyE keyParam (last keys)
   day   <- lift $ getDay h

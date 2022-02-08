@@ -17,7 +17,6 @@ import Methods.Auth (AccessMode(..))
 import ParseQueryStr (CreateComment(..),GetComments(..),UpdateComment(..),DeleteComment(..))
 import Conf (Config(..))
 import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            (MonadCatch)
@@ -47,7 +46,7 @@ updateComment h usIdNum (UpdateComment commIdNum txtParam) = do
   let commIdParam = numToTxt commIdNum 
   isCommAuthorIfExist h  commIdParam usIdNum
   updateInDbE h "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
-  Only postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]
+  postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]
   lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " updated"
   okHelper $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
 
@@ -61,7 +60,7 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
       okHelper $ OkResponse { ok = True }
     UserMode -> do
-      Only postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+      postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]  
       isCommOrPostAuthor h commIdNum postId usIdNum 
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
       lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " deleted"
@@ -70,13 +69,13 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
 isCommOrPostAuthor :: (MonadCatch m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor h commIdNum postId usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  Only usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [pack . show $ postId] 
-  Only usComId <- checkOneE h $ selectNum h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
+  usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [pack . show $ postId] 
+  usComId <- checkOneE h $ selectNum h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
   unless (usPostId == usIdNum || usComId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
 
 isCommAuthorIfExist :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isCommAuthorIfExist h  commIdParam usIdNum = do
-  Only usId <- checkOneIfExistE h (selectNum h) "comments" ["user_id"] "comment_id=?" commIdParam  
+  usId <- checkOneIfExistE h (selectNum h) "comments" ["user_id"] "comment_id=?" commIdParam  
   unless (usId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ unpack commIdParam

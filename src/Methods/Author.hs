@@ -16,7 +16,6 @@ import Methods.Handle.Select (Author(..))
 import ParseQueryStr (CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..))
 import Conf (Config(..))
 import           Data.Text                      ( pack, unpack )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -56,8 +55,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
   let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h),auIdParam]
-  onlyDraftsIds <- checkListE h $ selectNum h "drafts" ["draft_id"] "author_id=?" [auIdParam]
-  let draftsIds = fmap fromOnly onlyDraftsIds
+  draftsIds <- checkListE h $ selectNum h "drafts" ["draft_id"] "author_id=?" [auIdParam]
   let deleteDr = deleteAllAboutDrafts h  draftsIds
   let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
@@ -69,7 +67,7 @@ isntUserOtherAuthor h usIdNum auIdNum = do
   let usIdParam = pack . show $ usIdNum
   maybeAuId <- checkMaybeOneE h $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
-    Just (Only auId) -> if auId == auIdNum 
+    Just auId -> if auId == auIdNum 
       then return ()
       else throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
     Nothing -> return ()

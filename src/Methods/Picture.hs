@@ -13,7 +13,6 @@ import           Oops
 import           Methods.Handle
 import ParseQueryStr (BrowsePicture(..))
 import           Data.Text                      ( unpack, Text )
-import           Database.PostgreSQL.Simple (Only(..),Binary(Binary))
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( catch, MonadCatch)
@@ -27,7 +26,7 @@ import           Network.HTTP.Types             ( status200 )
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture h picIdNum = do
-  Only (Binary bs) <- checkOneIfExistE h (selectBS h) "pics" ["pic"] "pic_id=?" (numToTxt picIdNum) 
+  bs <- checkOneIfExistE h (selectBS h) "pics" ["pic"] "pic_id=?" (numToTxt picIdNum) 
   let lbs = BSL.fromStrict bs
   lift $ logInfo (hLog h) $ "Pic_id: " ++ show picIdNum ++ " sending in response" 
   return $ ResponseInfo 

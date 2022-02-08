@@ -17,7 +17,6 @@ import TryRead (tryReadNum)
 import ParseQueryStr (Token(..),LogIn(..),parseQueryStr)
 import           Network.Wai (Request)
 import           Data.Text                      ( pack, unpack, Text )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -58,7 +57,7 @@ checkAdminTokenParam h tokenParam =
         usIdNum <- tryReadNum (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
-          Just (Only tokenKey) ->  
+          Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
                  && strSha1 ("hij" ++ unpack tokenKey) == ys
               then do
@@ -83,7 +82,7 @@ checkUserTokenParam h tokenParam =
         usIdNum <- tryReadNum (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
-          Just (Only tokenKey) ->  
+          Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
                  && strSha1 ("stu" ++ unpack tokenKey) == ys 
               then do
@@ -95,7 +94,7 @@ checkUserTokenParam h tokenParam =
         usIdNum <- tryReadNum (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
-          Just (Only tokenKey) ->  
+          Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
                  && strSha1 ("hij" ++ unpack tokenKey) == ys
               then do

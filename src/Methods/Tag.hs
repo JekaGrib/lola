@@ -13,7 +13,6 @@ import           Types
 import           Oops
 import           Methods.Handle
 import ParseQueryStr (CreateTag(..),UpdateTag(..),DeleteTag(..))
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -27,7 +26,7 @@ createTag h (CreateTag tagNameParam) = do
   
 getTag :: (Monad m,MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
-  Only tagName <- checkOneIfExistE h (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  tagName <- checkOneIfExistE h (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   

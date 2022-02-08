@@ -24,7 +24,8 @@ import           Network.HTTP.Types             ( status200, status404, Status, 
 import           Data.Aeson (ToJSON,encode)
 import           Data.Text                      ( pack, unpack, Text )
 import           Data.ByteString.Builder        ( lazyByteString, Builder, toLazyByteString )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
+import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(..))
+import           Database.PostgreSQL.Simple.FromField (FromField)
 import qualified Network.HTTP.Simple            as HT
 import           Data.Time.LocalTime
 import           Data.Time.Calendar             ( showGregorian,Day)
@@ -46,10 +47,10 @@ import Methods.Post.LimitArg
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectTxt          :: Table -> [String] -> String -> [Text] -> m [Only Text],
-    selectDay          :: Table -> [String] -> String -> [Text] -> m [Only Day],
-    selectBS           :: Table -> [String] -> String -> [Text] -> m [Only (Binary ByteString)],
-    selectNum          :: Table -> [String] -> String -> [Text] -> m [Only Id],
+    selectTxt          :: Table -> [String] -> String -> [Text] -> m [Text],
+    selectDay          :: Table -> [String] -> String -> [Text] -> m [Day],
+    selectNum          :: Table -> [String] -> String -> [Text] -> m [Id],
+    selectBS           :: Table -> [String] -> String -> [Text] -> m [ByteString],
     selectTwoIds       :: Table -> [String] -> String -> [Text] -> m [TwoIds],
     selectAuth         :: Table -> [String] -> String -> [Text] -> m [Auth],
     selectCat          :: Table -> [String] -> String -> [Text] -> m [Cat],
@@ -80,10 +81,10 @@ makeMethodsH conf hLog = let conn = extractConn conf in
   Handle 
     conf 
     hLog 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
+    (selectOnly' conn) 
+    (selectOnly' conn)  
+    (selectOnly' conn) 
+    (selectBS' conn)  
     (select' conn) 
     (select' conn) 
     (select' conn) 
@@ -222,10 +223,15 @@ select' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return xs
 
-{-selectOnly' :: (Only a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
+selectOnly' :: (FromField a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
 selectOnly' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
-  return (fmap fromOnly xs)-}
+  return $ fmap fromOnly xs
+
+selectBS' :: Connection -> String -> [String] -> String -> [Text] -> IO [ByteString]
+selectBS' conn table params where' values = do
+  xs <- query conn (toSelQ table params where') values
+  return $ fmap (fromBinary . fromOnly) xs  
 
 selectLimit' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do

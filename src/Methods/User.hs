@@ -16,7 +16,6 @@ import Methods.Handle.Select (User(..))
 import ParseQueryStr (CreateUser(..),DeleteUser(..))
 import Conf (Config(..))
 import           Data.Text                      ( pack )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -52,10 +51,9 @@ deleteUser h (DeleteUser usIdNum) = do
   let deleteUs = deleteFromDb h "users" "user_id=?" [usIdParam]
   maybeAuId <- checkMaybeOneE h $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
-    Just (Only authorId) -> do
+    Just authorId -> do
       let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId  (hConf h),pack . show $ (authorId :: Integer)]
-      onlyDraftsIds <- checkListE h $ selectNum h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
-      let draftsIds = fmap fromOnly onlyDraftsIds
+      draftsIds <- checkListE h $ selectNum h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
       let deleteDr = deleteAllAboutDrafts h draftsIds
       let deleteAu = deleteFromDb h "authors" "author_id=?" [pack . show $ authorId]
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)

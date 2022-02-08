@@ -18,7 +18,6 @@ import ParseQueryStr (DeletePost(..))
 import Conf (Config(..))
 import           Network.Wai (Request)
 import           Data.Text                      ( pack )
-import           Database.PostgreSQL.Simple (Only(..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
@@ -32,8 +31,7 @@ getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseIn
 getPost h postIdNum = do
   let postIdParam = numToTxt postIdNum
   Post pId auId auInfo usId pName pDate pCatId pText picId <- checkOneIfExistE h (selectPost h) "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" postIdParam 
-  onlyPicsIds <- checkListE h $ selectNum h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
-  let picsIds = fmap fromOnly onlyPicsIds
+  picsIds <- checkListE h $ selectNum h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
   tagS <- checkListE h $ selectTag h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
   catResp <- makeCatResp h  pCatId
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response" 
@@ -51,8 +49,7 @@ getPosts h req pageNum = do
   let postIdsText = fmap (pack . show . post_idP) posts
   let postCatsIds = fmap post_cat_idP posts 
   manyCatResp <- mapM (makeCatResp h) postCatsIds
-  manyOnlyPostPicsIds <- mapM (checkListE h . selectNum h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
-  let manyPostPicsIds = (fmap . fmap) fromOnly manyOnlyPostPicsIds
+  manyPostPicsIds <- mapM (checkListE h . selectNum h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
   tagSMany <- mapM (checkListE h . selectTag h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
   let allParams = zip4 posts manyCatResp manyPostPicsIds tagSMany
   lift $ logInfo (hLog h) $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response" 
@@ -72,8 +69,8 @@ deleteAllAboutPost h postId = do
   let postIdTxt = pack . show $ postId
   deletePostsPicsTags h [postId]
   deleteFromDb h "comments" "post_id=?" [postIdTxt]
-  onlyDraftsIds <- selectNum h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
-  deleteAllAboutDrafts h $ fmap fromOnly onlyDraftsIds
+  draftsIds <- selectNum h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
+  deleteAllAboutDrafts h draftsIds
   deleteFromDb h "posts" "post_id=?" [postIdTxt]
 
 deletePostsPicsTags :: (MonadCatch m) => Handle m  -> [PostId] -> m ()
