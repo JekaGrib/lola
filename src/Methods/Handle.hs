@@ -28,7 +28,7 @@ import           Data.ByteString.Builder        ( lazyByteString, Builder, toLaz
 import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(Binary))
 import qualified Network.HTTP.Simple            as HT
 import           Data.Time.LocalTime
-import           Data.Time.Calendar             ( showGregorian)
+import           Data.Time.Calendar             ( showGregorian,Day)
 import           Data.String                    ( fromString )
 import           Data.List                      ( intercalate, zip4, nub, (\\) )
 import           Control.Monad.Trans.Except
@@ -45,59 +45,91 @@ import Methods.Post.LimitArg
 
 
 data MethodsHandle m = MethodsHandle 
-  { hConf             :: Config,
-    hLog              :: LogHandle m ,
-    select      :: forall a. (Select a) => String -> [String] -> String -> [Text] -> m [a],
-    selectLimit :: forall a. (Select a) => String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [a],
-    updateInDb        :: String -> String -> String -> [Text] -> m (),
-    deleteFromDb      :: String -> String -> [Text] -> m (),
-    isExistInDb       :: String -> String -> String -> [Text] -> m Bool,
-    insertReturn  :: String -> String -> [String] -> [Text] -> m [Integer],
-    insertByteaInDb   :: String -> String -> [String] -> ByteString -> m [Integer],
-    insertMany    :: String -> [String] -> [(Integer,Integer)] -> m (),
-    httpAction        :: HT.Request -> m (HT.Response BSL.ByteString),
-    getDay            :: m String,
-    getTokenKey       :: m String,
-    withTransactionDB :: forall a. m a -> m a
+  { hConf              :: Config,
+    hLog               :: LogHandle m ,
+    selectTxt          :: String -> [String] -> String -> [Text] -> m [Only Text],
+    selectDay          :: String -> [String] -> String -> [Text] -> m [Only Day],
+    selectBS           :: String -> [String] -> String -> [Text] -> m [Only (Binary ByteString)],
+    selectNum          :: String -> [String] -> String -> [Text] -> m [Only Id],
+    selectTwoIds       :: String -> [String] -> String -> [Text] -> m [TwoIds],
+    selectAuth         :: String -> [String] -> String -> [Text] -> m [Auth],
+    selectCat          :: String -> [String] -> String -> [Text] -> m [Cat],
+    selectTag          :: String -> [String] -> String -> [Text] -> m [Tag],
+    selectAuthor       :: String -> [String] -> String -> [Text] -> m [Author],
+    selectComment      :: String -> [String] -> String -> [Text] -> m [Comment],
+    selectUser         :: String -> [String] -> String -> [Text] -> m [User],
+    selectPostInfo     :: String -> [String] -> String -> [Text] -> m [PostInfo],
+    selectDraft        :: String -> [String] -> String -> [Text] -> m [Draft],
+    selectPost         :: String -> [String] -> String -> [Text] -> m [Post],
+    selectLimitComment :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
+    selectLimitDraft   :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
+    selectLimitPost    :: String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
+    updateInDb         :: String -> String -> String -> [Text] -> m (),
+    deleteFromDb       :: String -> String -> [Text] -> m (),
+    isExistInDb        :: String -> String -> String -> [Text] -> m Bool,
+    insertReturn       :: String -> String -> [String] -> [Text] -> m Integer,
+    insertByteaInDb    :: String -> String -> [String] -> ByteString -> m Integer,
+    insertMany         :: String -> [String] -> [(Integer,Integer)] -> m (),
+    httpAction         :: HT.Request -> m (HT.Response BSL.ByteString),
+    getDay             :: m String,
+    getTokenKey        :: m String,
+    withTransactionDB  :: forall a. m a -> m a
     }
 
 makeMethodsHWithConn :: Config -> LogHandle IO -> Connection -> MethodsHandle IO
 makeMethodsHWithConn conf hLog conn =
-  MethodsHandle conf hLog (select' conn) (selectLimit' conn) (updateInDb' conn) (deleteFromDb' conn) (isExistInDb' conn) (insertReturn' conn) (insertByteaInDb' conn) (insertMany' conn) HT.httpLBS getDay'   getTokenKey' (withTransaction conn)
+  MethodsHandle 
+    conf 
+    hLog 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (select' conn) 
+    (selectLimit' conn) 
+    (selectLimit' conn) 
+    (selectLimit' conn) 
+    (updateInDb' conn) 
+    (deleteFromDb' conn) 
+    (isExistInDb' conn) 
+    (insertReturn' conn) 
+    (insertByteaInDb' conn) 
+    (insertMany' conn) 
+    HT.httpLBS 
+    getDay'   
+    getTokenKey' 
+    (withTransaction conn)
 
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
-okHelper :: (Monad m, MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
+okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
 
-
-selectOneE :: (Monad m, MonadCatch m, Select b) => MethodsHandle m -> Table -> [Param] -> Where -> [Text] -> ExceptT ReqError m b
-selectOneE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' values
+checkOneE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m a
+checkOneE h m = do
+  lift $ logDebug (hLog h) $ "Select data from DB." 
+  xs <- catchDbErr $ lift m
   case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
+    []           -> throwE $ DatabaseError "Empty output"
     [x] -> do
       lift $ logInfo (hLog h) $ "Data received from DB"
       return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+    _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-selectOneIfExistE :: (Monad m, MonadCatch m, Select b) => MethodsHandle m -> Table -> [Param] -> Where -> Text -> ExceptT ReqError m b
-selectOneIfExistE h table params where' value = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' [value]
-  case xs of
-    []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
-    [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
-
-selectMaybeOneE :: (Monad m, MonadCatch m, Select b) => MethodsHandle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m (Maybe b)
-selectMaybeOneE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
-  xs <- catchDbErr $ lift $ select h table params where' values
+checkMaybeOneE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
+checkMaybeOneE h m = do
+  lift $ logDebug (hLog h) $ "Select data from DB." 
+  xs <- catchDbErr $ lift m
   case xs of
     []           -> do
       lift $ logInfo (hLog h) $ "Received empty data from DB"
@@ -105,31 +137,37 @@ selectMaybeOneE h table params where' values = do
     [x] -> do
       lift $ logInfo (hLog h) $ "Data received from DB"
       return (Just x)
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+    _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-selectListFromDbE :: (Monad m, MonadCatch m,Select b) => MethodsHandle m  -> String -> [String] -> String -> [Text] -> ExceptT ReqError m [b]
-selectListFromDbE h table params where' values = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table
-  xs <- catchDbErr $ lift $ select h table params where' values
-  lift $ logInfo (hLog h) $ "Data received from DB"
-  return xs 
+checkOneIfExistE :: (MonadCatch m,Show a) => MethodsHandle m -> 
+  (Table -> [Param] -> Where -> [Text] -> m [a]) ->
+  Table -> [Param] -> Where -> Text -> ExceptT ReqError m a
+checkOneIfExistE h func table params where' value = do
+  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
+  xs <- catchDbErr $ lift $ func table params where' [value]
+  case xs of
+    []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
+    (x:[]) -> do
+      lift $ logInfo (hLog h) $ "Data received from DB"
+      return x
+    _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-selectListLimitFromDbE :: (Monad m, MonadCatch m,Select b) => MethodsHandle m  -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> ExceptT ReqError m [b]
-selectListLimitFromDbE h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs =  do
+checkListE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m [a]
+checkListE h m = do
   lift $ logDebug (hLog h) $ "Select data from DB."
-  xs <- catchDbErr $ lift $ selectLimit h defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs
+  xs <- catchDbErr $ lift m
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs
 
-updateInDbE :: (Monad m, MonadCatch m) => MethodsHandle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE :: (MonadCatch m) => MethodsHandle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h table set where' values = catchDbErr $ do
   lift $ updateInDb h table set where' values
 
-deleteFromDbE :: (Monad m, MonadCatch m) => MethodsHandle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
+deleteFromDbE :: (MonadCatch m) => MethodsHandle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
 deleteFromDbE h table where' values = catchDbErr $ do
   lift $ deleteFromDb h table where' values   
 
-isExistInDbE :: (Monad m, MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 isExistInDbE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -139,7 +177,7 @@ isExistInDbE h table checkName where' values = do
       return ()
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
   
-ifExistInDbThrowE :: (Monad m, MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+ifExistInDbThrowE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 ifExistInDbThrowE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -149,35 +187,25 @@ ifExistInDbThrowE h table checkName where' values = do
       lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
       return ()
 
-insertReturnE :: (Monad m, MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
-insertReturnE h table returnName insNames insValues =  do
-  xs <- catchDbErr $ lift $ insertReturn h table returnName insNames insValues
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB. " ++ returnName ++ ": " ++ show x
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
+insertReturnE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE h table returnName insNames insValues =  catchDbErr $
+  lift $ insertReturn h table returnName insNames insValues
 
-insertByteaInDbE :: (Monad m, MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
-insertByteaInDbE h table returnName insNames bs =  do
-  xs <- catchDbErr $ lift $ insertByteaInDb h table returnName insNames bs
-  case xs of
-    []           -> throwE $ DatabaseError "DatabaseError.Empty output"
-    [x] -> do 
-      lift $ logInfo (hLog h) $ "Data received from DB"
-      return x
-    _            -> throwE $ DatabaseError $ "DatabaseError. Output not single" ++ show xs
 
-insertManyE :: (Monad m, MonadCatch m) => MethodsHandle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
+insertByteaInDbE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE h table returnName insNames bs =  catchDbErr 
+  $ lift $ insertByteaInDb h table returnName insNames bs
+
+
+insertManyE :: (MonadCatch m) => MethodsHandle m  -> String -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
 insertManyE h table insNames insValues = catchDbErr $ do
   lift $ insertMany h table insNames insValues
 
-withTransactionDBE :: (Monad m, MonadCatch m) => MethodsHandle m  -> m a -> ExceptT ReqError m a
+withTransactionDBE :: (MonadCatch m) => MethodsHandle m  -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchDbErr . lift . withTransactionDB h
 
-checkSingleOutPut :: (MonadCatch m) => [a] -> m a
-checkSingleOutPut xs = case xs of
+checkOneM :: (MonadCatch m) => [a] -> m a
+checkOneM xs = case xs of
   [] -> throwM UnexpectedEmptyDbOutPutException
   (x:[]) -> return x
   _ -> throwM UnexpectedMultipleDbOutPutException
@@ -194,6 +222,11 @@ select' :: (Select a) => Connection -> String -> [String] -> String -> [Text] ->
 select' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return xs
+
+{-selectOnly' :: (Only a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
+selectOnly' conn table params where' values = do
+  xs <- query conn (toSelQ table params where') values
+  return (fmap fromOnly xs)-}
 
 selectLimit' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
@@ -217,18 +250,20 @@ deleteFromDb' conn table where' values = do
 isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
 isExistInDb' conn table checkName where' values = do
   onlyChecks  <- query conn (toExQ table checkName where') values
-  Only check <- checkSingleOutPut onlyChecks
+  Only check <- checkOneM onlyChecks
   return check
 
-insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO [Integer]
+insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO Id
 insertReturn' conn table returnName insNames insValues = do
-  xs <- query conn ( toInsRetQ table returnName insNames ) insValues 
-  return (fmap fromOnly xs)
+  onlyXs <- query conn ( toInsRetQ table returnName insNames ) insValues
+  Only num <- checkOneM onlyXs
+  return num
 
-insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO [Integer]
+insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO Id
 insertByteaInDb' conn table returnName insNames bs = do
-  xs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs] 
-  return (fmap fromOnly xs)
+  onlyXs <- query conn ( toInsRetQ table returnName insNames ) [Binary bs]
+  Only num <- checkOneM onlyXs
+  return num
 
 insertMany' :: Connection -> String -> [String] -> [(Integer,Integer)] -> IO ()
 insertMany' conn table insNames insValues = do

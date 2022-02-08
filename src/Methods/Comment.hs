@@ -38,7 +38,7 @@ getComments :: (MonadCatch m) => MethodsHandle m -> GetComments -> ExceptT ReqEr
 getComments h (GetComments postIdNum pageNum) = do
   let postIdParam = numToTxt postIdNum
   isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
-  comms <- selectListLimitFromDbE h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
+  comms <- checkListE h $ selectLimitComment h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id","user_id","comment_text"] "post_id=?" [postIdParam] [] []
   lift $ logInfo (hLog h) $ "Comments_id: " ++ show (fmap comment_idC comms) ++ " sending in response" 
   okHelper $ CommentsResponse {pageCR = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
   
@@ -47,7 +47,7 @@ updateComment h usIdNum (UpdateComment commIdNum txtParam) = do
   let commIdParam = numToTxt commIdNum 
   isCommAuthorIfExist h  commIdParam usIdNum
   updateInDbE h "comments" "comment_text=?" "comment_id=?" [txtParam,commIdParam]
-  Only postId <- selectOneE h "comments" ["post_id"] "comment_id=?" [commIdParam]
+  Only postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]
   lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " updated"
   okHelper $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
 
@@ -61,7 +61,7 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
       okHelper $ OkResponse { ok = True }
     UserMode -> do
-      Only postId <- selectOneE h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+      Only postId <- checkOneE h $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]  
       isCommOrPostAuthor h commIdNum postId usIdNum 
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
       lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " deleted"
@@ -70,13 +70,13 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
 isCommOrPostAuthor :: (MonadCatch m) => MethodsHandle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor h commIdNum postId usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  Only usPostId <- selectOneE h table ["user_id"] "post_id=?" [pack . show $ postId] 
-  Only usComId <- selectOneE h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
+  Only usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [pack . show $ postId] 
+  Only usComId <- checkOneE h $ selectNum h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
   unless (usPostId == usIdNum || usComId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
 
 isCommAuthorIfExist :: (MonadCatch m) => MethodsHandle m  -> Text -> UserId -> ExceptT ReqError m ()
 isCommAuthorIfExist h  commIdParam usIdNum = do
-  Only usId <- selectOneIfExistE h "comments" ["user_id"] "comment_id=?" commIdParam  
+  Only usId <- checkOneIfExistE h (selectNum h) "comments" ["user_id"] "comment_id=?" commIdParam  
   unless (usId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ unpack commIdParam

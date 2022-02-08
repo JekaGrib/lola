@@ -23,7 +23,7 @@ import           Control.Monad.Catch            ( MonadCatch)
 createAdmin :: (MonadCatch m) => MethodsHandle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = do
   let picIdParam = numToTxt picIdNum
-  onlyKeys <- selectListFromDbE h "key" ["create_admin_key"] "true" ([]::[Text])  
+  onlyKeys <- checkListE h $ selectTxt h "key" ["create_admin_key"] "true" ([]::[Text])  
   let keys = fmap fromOnly onlyKeys
   checkEmptyList keys
   checkKeyE keyParam (last keys)

@@ -31,10 +31,10 @@ import           Data.Time.Calendar             ( showGregorian)
 getPost :: (MonadCatch m) => MethodsHandle m -> PostId -> ExceptT ReqError m ResponseInfo 
 getPost h postIdNum = do
   let postIdParam = numToTxt postIdNum
-  Post pId auId auInfo usId pName pDate pCatId pText picId <- selectOneIfExistE h "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" postIdParam 
-  onlyPicsIds <- selectListFromDbE h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
+  Post pId auId auInfo usId pName pDate pCatId pText picId <- checkOneIfExistE h (selectPost h) "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" postIdParam 
+  onlyPicsIds <- checkListE h $ selectNum h "postspics" ["pic_id"] "post_id=?" [postIdParam] 
   let picsIds = fmap fromOnly onlyPicsIds
-  tagS <- selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
+  tagS <- checkListE h $ selectTag h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?" [postIdParam] 
   catResp <- makeCatResp h  pCatId
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response" 
   okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
@@ -47,13 +47,13 @@ getPosts h req pageNum = do
   let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
   let defWhere = "true"
   let defValues = []
-  posts <- selectListLimitFromDbE h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs 
+  posts <- checkListE h $ selectLimitPost h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs 
   let postIdsText = fmap (pack . show . post_idP) posts
   let postCatsIds = fmap post_cat_idP posts 
   manyCatResp <- mapM (makeCatResp h) postCatsIds
-  manyOnlyPostPicsIds <- mapM (selectListFromDbE h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
+  manyOnlyPostPicsIds <- mapM (checkListE h . selectNum h "postspics" ["pic_id"] "post_id=?") $ fmap (:[]) postIdsText  
   let manyPostPicsIds = (fmap . fmap) fromOnly manyOnlyPostPicsIds
-  tagSMany <- mapM (selectListFromDbE h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
+  tagSMany <- mapM (checkListE h . selectTag h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "post_id=?") $ fmap (:[]) postIdsText  
   let allParams = zip4 posts manyCatResp manyPostPicsIds tagSMany
   lift $ logInfo (hLog h) $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response" 
   okHelper $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate _ pText picId),catResp,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
@@ -72,7 +72,7 @@ deleteAllAboutPost h postId = do
   let postIdTxt = pack . show $ postId
   deletePostsPicsTags h [postId]
   deleteFromDb h "comments" "post_id=?" [postIdTxt]
-  onlyDraftsIds <- select h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
+  onlyDraftsIds <- selectNum h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
   deleteAllAboutDrafts h $ fmap fromOnly onlyDraftsIds
   deleteFromDb h "posts" "post_id=?" [postIdTxt]
 

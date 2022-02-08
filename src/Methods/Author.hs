@@ -36,7 +36,7 @@ createAuthor h (CreateAuthor usIdNum auInfoParam) = do
 getAuthor :: (MonadCatch m) => MethodsHandle m -> GetAuthor -> ExceptT ReqError m ResponseInfo 
 getAuthor h (GetAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
-  Author auId auInfo usId <- selectOneIfExistE h "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
+  Author auId auInfo usId <- checkOneIfExistE h (selectAuthor h) "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response." 
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
   
@@ -56,7 +56,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
   let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h),auIdParam]
-  onlyDraftsIds <- selectListFromDbE h "drafts" ["draft_id"] "author_id=?" [auIdParam]
+  onlyDraftsIds <- checkListE h $ selectNum h "drafts" ["draft_id"] "author_id=?" [auIdParam]
   let draftsIds = fmap fromOnly onlyDraftsIds
   let deleteDr = deleteAllAboutDrafts h  draftsIds
   let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
@@ -67,7 +67,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
 isntUserOtherAuthor :: (MonadCatch m) => MethodsHandle m -> UserId -> AuthorId -> ExceptT ReqError m ()
 isntUserOtherAuthor h usIdNum auIdNum = do
   let usIdParam = pack . show $ usIdNum
-  maybeAuId <- selectMaybeOneE h "authors" ["author_id"] "user_id=?" [usIdParam]
+  maybeAuId <- checkMaybeOneE h $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
     Just (Only auId) -> if auId == auIdNum 
       then return ()

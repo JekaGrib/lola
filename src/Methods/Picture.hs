@@ -27,7 +27,7 @@ import           Network.HTTP.Types             ( status200 )
 
 sendPicture :: (MonadCatch m) => MethodsHandle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture h picIdNum = do
-  Only (Binary bs) <- selectOneIfExistE h "pics" ["pic"] "pic_id=?" (numToTxt picIdNum) 
+  Only (Binary bs) <- checkOneIfExistE h (selectBS h) "pics" ["pic"] "pic_id=?" (numToTxt picIdNum) 
   let lbs = BSL.fromStrict bs
   lift $ logInfo (hLog h) $ "Pic_id: " ++ show picIdNum ++ " sending in response" 
   return $ ResponseInfo 

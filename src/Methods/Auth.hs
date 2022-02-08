@@ -26,7 +26,7 @@ import           Control.Monad.Catch            ( MonadCatch)
 logIn :: (MonadCatch m) => MethodsHandle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn h (LogIn usIdNum pwdParam) = do
   let usIdParam = numToTxt usIdNum
-  Auth pwd admBool <- selectOneIfExistE h "users" ["password","admin"] "user_id=?" usIdParam 
+  Auth pwd admBool <- checkOneIfExistE h (selectAuth h) "users" ["password","admin"] "user_id=?" usIdParam 
   checkPwd pwdParam pwd
   tokenKey <- lift $ getTokenKey h
   updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
@@ -56,7 +56,7 @@ checkAdminTokenParam h tokenParam =
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just (Only tokenKey) ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
@@ -81,7 +81,7 @@ checkUserTokenParam h tokenParam =
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just (Only tokenKey) ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
@@ -93,7 +93,7 @@ checkUserTokenParam h tokenParam =
           Nothing -> throwE . SimpleError $ "INVALID token"
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- selectMaybeOneE h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just (Only tokenKey) ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 

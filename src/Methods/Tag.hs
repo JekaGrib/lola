@@ -27,7 +27,7 @@ createTag h (CreateTag tagNameParam) = do
   
 getTag :: (Monad m,MonadCatch m) => MethodsHandle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
-  Only tagName <- selectOneIfExistE h "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  Only tagName <- checkOneIfExistE h (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   

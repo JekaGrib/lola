@@ -93,12 +93,12 @@ findAllSubCats h  catId = do
 
 findOneLevelSubCats :: (MonadCatch m) => MethodsHandle m  -> CategoryId -> ExceptT ReqError m [Integer]
 findOneLevelSubCats h catId = do
-    catsIds <- selectListFromDbE h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
+    catsIds <- checkListE h $ selectNum h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
     return (fmap fromOnly catsIds)   
 
 makeCatResp :: (MonadCatch m) => MethodsHandle m  -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h catId = do
-  Cat catName superCatId <- selectOneE h "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
+  Cat catName superCatId <- checkOneE h $ (selectCat h) "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of 
     0 -> return $ CatResponse {cat_id = catId, cat_name = catName, one_level_sub_cats = subCatsIds , super_cat = "NULL"}
