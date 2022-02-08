@@ -19,19 +19,19 @@ import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
 
 
-createTag :: (Monad m,MonadCatch m) => MethodsHandle m -> CreateTag -> ExceptT ReqError m ResponseInfo
+createTag :: (Monad m,MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
 createTag h (CreateTag tagNameParam) = do
   tagId <-  insertReturnE h "tags" "tag_id" ["tag_name"] [tagNameParam]
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " created"
   okHelper $ TagResponse tagId tagNameParam
   
-getTag :: (Monad m,MonadCatch m) => MethodsHandle m -> TagId -> ExceptT ReqError m ResponseInfo 
+getTag :: (Monad m,MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
   Only tagName <- checkOneIfExistE h (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   
-updateTag :: (Monad m,MonadCatch m) => MethodsHandle m -> UpdateTag -> ExceptT ReqError m ResponseInfo 
+updateTag :: (Monad m,MonadCatch m) => Handle m -> UpdateTag -> ExceptT ReqError m ResponseInfo 
 updateTag h (UpdateTag tagIdNum tagNameParam) = do
   let tagIdParam = numToTxt tagIdNum
   isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam] 
@@ -39,7 +39,7 @@ updateTag h (UpdateTag tagIdNum tagNameParam) = do
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " updated"
   okHelper $ TagResponse tagIdNum tagNameParam
 
-deleteTag :: (Monad m,MonadCatch m) => MethodsHandle m -> DeleteTag -> ExceptT ReqError m ResponseInfo 
+deleteTag :: (Monad m,MonadCatch m) => Handle m -> DeleteTag -> ExceptT ReqError m ResponseInfo 
 deleteTag h (DeleteTag tagIdNum) = do
   let tagIdParam = numToTxt tagIdNum
   isExistInDbE h "tags" "tag_id" "tag_id=?" [tagIdParam]

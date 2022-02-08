@@ -25,7 +25,7 @@ import           Data.String                    ( fromString )
 import           Network.HTTP.Types             ( status200 )
 
 
-sendPicture :: (MonadCatch m) => MethodsHandle m -> PictureId -> ExceptT ReqError m ResponseInfo
+sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture h picIdNum = do
   Only (Binary bs) <- checkOneIfExistE h (selectBS h) "pics" ["pic"] "pic_id=?" (numToTxt picIdNum) 
   let lbs = BSL.fromStrict bs
@@ -35,7 +35,7 @@ sendPicture h picIdNum = do
     [("Content-Type", "image/jpeg")] 
     (lazyByteString lbs)
 
-browsePicture :: (MonadCatch m) => MethodsHandle m -> BrowsePicture -> ExceptT ReqError m ResponseInfo
+browsePicture :: (MonadCatch m) => Handle m -> BrowsePicture -> ExceptT ReqError m ResponseInfo
 browsePicture h (BrowsePicture picUrlParam) = do
   lbs <- checkPicUrlGetPic h picUrlParam
   let sbs = BSL.toStrict lbs
@@ -43,7 +43,7 @@ browsePicture h (BrowsePicture picUrlParam) = do
   lift $ logInfo (hLog h) $ "Picture_id: " ++ show picId ++ " uploaded"
   okHelper $ inPicIdUrl picId 
 
-checkPicUrlGetPic :: (MonadCatch m) => MethodsHandle m  -> Text -> ExceptT ReqError m BSL.ByteString
+checkPicUrlGetPic :: (MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic h url = do
   res <- lift ( httpAction h . fromString . unpack $ url) `catch`  (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException)) 
   let lbs = HT.getResponseBody res

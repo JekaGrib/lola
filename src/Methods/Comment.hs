@@ -25,7 +25,7 @@ import           Control.Monad (unless)
 
 
 
-createComment :: (MonadCatch m) => MethodsHandle m -> UserId -> CreateComment -> ExceptT ReqError m ResponseInfo
+createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> ExceptT ReqError m ResponseInfo
 createComment h usIdNum (CreateComment postIdNum txtParam) = do
   let postIdParam = numToTxt postIdNum
   isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
@@ -34,7 +34,7 @@ createComment h usIdNum (CreateComment postIdNum txtParam) = do
   okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdNum, user_id6 = usIdNum}
 
   
-getComments :: (MonadCatch m) => MethodsHandle m -> GetComments -> ExceptT ReqError m ResponseInfo 
+getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m ResponseInfo 
 getComments h (GetComments postIdNum pageNum) = do
   let postIdParam = numToTxt postIdNum
   isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
@@ -42,7 +42,7 @@ getComments h (GetComments postIdNum pageNum) = do
   lift $ logInfo (hLog h) $ "Comments_id: " ++ show (fmap comment_idC comms) ++ " sending in response" 
   okHelper $ CommentsResponse {pageCR = pageNum, post_id9 = postIdNum, comments = fmap inCommResp comms}
   
-updateComment :: (MonadCatch m) => MethodsHandle m -> UserId -> UpdateComment -> ExceptT ReqError m ResponseInfo 
+updateComment :: (MonadCatch m) => Handle m -> UserId -> UpdateComment -> ExceptT ReqError m ResponseInfo 
 updateComment h usIdNum (UpdateComment commIdNum txtParam) = do
   let commIdParam = numToTxt commIdNum 
   isCommAuthorIfExist h  commIdParam usIdNum
@@ -52,7 +52,7 @@ updateComment h usIdNum (UpdateComment commIdNum txtParam) = do
   okHelper $ CommentResponse {comment_id = commIdNum, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
 
 
-deleteComment :: (MonadCatch m) => MethodsHandle m -> UserId -> AccessMode ->  DeleteComment -> ExceptT ReqError m ResponseInfo 
+deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode ->  DeleteComment -> ExceptT ReqError m ResponseInfo 
 deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
   let commIdParam = numToTxt commIdNum
   isExistInDbE h "comments" "comment_id" "comment_id=?" [commIdParam] 
@@ -67,7 +67,7 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
       lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " deleted"
       okHelper $ OkResponse {ok = True}      
 
-isCommOrPostAuthor :: (MonadCatch m) => MethodsHandle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
+isCommOrPostAuthor :: (MonadCatch m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor h commIdNum postId usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
   Only usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [pack . show $ postId] 
@@ -75,7 +75,7 @@ isCommOrPostAuthor h commIdNum postId usIdNum = do
   unless (usPostId == usIdNum || usComId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
 
-isCommAuthorIfExist :: (MonadCatch m) => MethodsHandle m  -> Text -> UserId -> ExceptT ReqError m ()
+isCommAuthorIfExist :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isCommAuthorIfExist h  commIdParam usIdNum = do
   Only usId <- checkOneIfExistE h (selectNum h) "comments" ["user_id"] "comment_id=?" commIdParam  
   unless (usId == usIdNum) $

@@ -23,7 +23,7 @@ import           Control.Monad.Catch            ( MonadCatch)
 import Methods.Post (deleteAllAboutDrafts)
 
 
-createAuthor :: (MonadCatch m) => MethodsHandle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
+createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
 createAuthor h (CreateAuthor usIdNum auInfoParam) = do
   let usIdParam = numToTxt usIdNum
   isExistInDbE h  "users" "user_id"  "user_id=?" [usIdParam] 
@@ -33,14 +33,14 @@ createAuthor h (CreateAuthor usIdNum auInfoParam) = do
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
   
-getAuthor :: (MonadCatch m) => MethodsHandle m -> GetAuthor -> ExceptT ReqError m ResponseInfo 
+getAuthor :: (MonadCatch m) => Handle m -> GetAuthor -> ExceptT ReqError m ResponseInfo 
 getAuthor h (GetAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   Author auId auInfo usId <- checkOneIfExistE h (selectAuthor h) "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response." 
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
   
-updateAuthor :: (MonadCatch m) => MethodsHandle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo 
+updateAuthor :: (MonadCatch m) => Handle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo 
 updateAuthor h (UpdateAuthor auIdNum usIdNum auInfoParam) = do
   let usIdParam = numToTxt usIdNum
   let auIdParam = numToTxt auIdNum
@@ -51,7 +51,7 @@ updateAuthor h (UpdateAuthor auIdNum usIdNum auInfoParam) = do
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " updated." 
   okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
 
-deleteAuthor :: (MonadCatch m) => MethodsHandle m -> DeleteAuthor -> ExceptT ReqError m ResponseInfo 
+deleteAuthor :: (MonadCatch m) => Handle m -> DeleteAuthor -> ExceptT ReqError m ResponseInfo 
 deleteAuthor h (DeleteAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
@@ -64,7 +64,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " deleted." 
   okHelper $ OkResponse {ok = True}
 
-isntUserOtherAuthor :: (MonadCatch m) => MethodsHandle m -> UserId -> AuthorId -> ExceptT ReqError m ()
+isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
 isntUserOtherAuthor h usIdNum auIdNum = do
   let usIdParam = pack . show $ usIdNum
   maybeAuId <- checkMaybeOneE h $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]

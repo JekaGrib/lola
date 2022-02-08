@@ -24,7 +24,7 @@ import Methods.Post (deleteAllAboutDrafts)
 import           Data.Time.Calendar             ( showGregorian)
 
 
-createUser :: (MonadCatch m) => MethodsHandle m -> CreateUser -> ExceptT ReqError m ResponseInfo
+createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
 createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
   let picIdParam = numToTxt picIdNum
   day <- lift $ getDay h
@@ -38,13 +38,13 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
   let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
   okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day}
   
-getUser :: (MonadCatch m) => MethodsHandle m -> UserId -> ExceptT ReqError m ResponseInfo 
+getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo 
 getUser h usIdNum = do
   let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
   User fName lName picId usCreateDate <- checkOneIfExistE h (selectUser h) "users" selectParams "user_id=?" (numToTxt usIdNum)
   okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
 
-deleteUser :: (MonadCatch m) => MethodsHandle m -> DeleteUser -> ExceptT ReqError m ResponseInfo 
+deleteUser :: (MonadCatch m) => Handle m -> DeleteUser -> ExceptT ReqError m ResponseInfo 
 deleteUser h (DeleteUser usIdNum) = do
   let usIdParam = pack . show $ usIdNum
   isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 

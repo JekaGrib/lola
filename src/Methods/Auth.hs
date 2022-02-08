@@ -23,7 +23,7 @@ import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
 
 
-logIn :: (MonadCatch m) => MethodsHandle m -> LogIn -> ExceptT ReqError m ResponseInfo
+logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn h (LogIn usIdNum pwdParam) = do
   let usIdParam = numToTxt usIdNum
   Auth pwd admBool <- checkOneIfExistE h (selectAuth h) "users" ["password","admin"] "user_id=?" usIdParam 
@@ -44,13 +44,13 @@ logIn h (LogIn usIdNum pwdParam) = do
 type UserAccessMode = (UserId,AccessMode)
 data AccessMode = UserMode | AdminMode
 
-tokenAdminAuth :: (MonadCatch m) => MethodsHandle m -> Request -> ExceptT ReqError m ()
+tokenAdminAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ()
 tokenAdminAuth h req = do
   Token tokenParam <- parseQueryStr req
   lift $ logInfo (hLog h) "Token parsed"
   hideErr $ checkAdminTokenParam h tokenParam
 
-checkAdminTokenParam :: (MonadCatch m) => MethodsHandle m -> Text -> ExceptT ReqError m ()  
+checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
 checkAdminTokenParam h tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of
@@ -69,13 +69,13 @@ checkAdminTokenParam h tokenParam =
       _ -> throwE . SimpleError $ "INVALID token"
     _        -> throwE . SimpleError $ "INVALID token"
 
-tokenUserAuth :: (MonadCatch m) => MethodsHandle m -> Request -> ExceptT ReqError m UserAccessMode
+tokenUserAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
 tokenUserAuth h req = do
   Token tokenParam <- parseQueryStr req
   lift $ logInfo (hLog h) "Token parsed"
   checkUserTokenParam h tokenParam
 
-checkUserTokenParam :: (MonadCatch m) => MethodsHandle m -> Text -> ExceptT ReqError m UserAccessMode    
+checkUserTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode    
 checkUserTokenParam h tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of

@@ -28,7 +28,7 @@ import           Data.Time.Calendar             ( showGregorian)
 
 
   
-getPost :: (MonadCatch m) => MethodsHandle m -> PostId -> ExceptT ReqError m ResponseInfo 
+getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo 
 getPost h postIdNum = do
   let postIdParam = numToTxt postIdNum
   Post pId auId auInfo usId pName pDate pCatId pText picId <- checkOneIfExistE h (selectPost h) "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id","posts.author_id","author_info","user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"] "post_id=?" postIdParam 
@@ -39,7 +39,7 @@ getPost h postIdNum = do
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response" 
   okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl picsIds, post_tags = fmap inTagResp tagS}
 
-getPosts :: (MonadCatch m) => MethodsHandle m -> Request -> Integer -> ExceptT ReqError m ResponseInfo 
+getPosts :: (MonadCatch m) => Handle m -> Request -> Integer -> ExceptT ReqError m ResponseInfo 
 getPosts h req pageNum = do
   let extractParams = ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
   LimitArg filterArgs sortArgs <- chooseArgs req 
@@ -59,7 +59,7 @@ getPosts h req pageNum = do
   okHelper $ PostsResponse {page10 = pageNum , posts10 = fmap (\((Post pId auId auInfo usId pName pDate _ pText picId),catResp,pics,tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl picId, post_pics = fmap inPicIdUrl pics, post_tags = fmap inTagResp tagS}) allParams}
 
 
-deletePost :: (MonadCatch m) => MethodsHandle m -> DeletePost -> ExceptT ReqError m ResponseInfo 
+deletePost :: (MonadCatch m) => Handle m -> DeletePost -> ExceptT ReqError m ResponseInfo 
 deletePost h (DeletePost postIdNum) = do
   let postIdParam = numToTxt postIdNum
   isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam] 
@@ -67,7 +67,7 @@ deletePost h (DeletePost postIdNum) = do
   lift $ logInfo (hLog h) $ "Post_id: " ++ show postIdNum ++ " deleted" 
   okHelper $ OkResponse { ok = True }
 
-deleteAllAboutPost :: (MonadCatch m) => MethodsHandle m  -> PostId -> m ()
+deleteAllAboutPost :: (MonadCatch m) => Handle m  -> PostId -> m ()
 deleteAllAboutPost h postId = do
   let postIdTxt = pack . show $ postId
   deletePostsPicsTags h [postId]
@@ -76,7 +76,7 @@ deleteAllAboutPost h postId = do
   deleteAllAboutDrafts h $ fmap fromOnly onlyDraftsIds
   deleteFromDb h "posts" "post_id=?" [postIdTxt]
 
-deletePostsPicsTags :: (MonadCatch m) => MethodsHandle m  -> [PostId] -> m ()
+deletePostsPicsTags :: (MonadCatch m) => Handle m  -> [PostId] -> m ()
 deletePostsPicsTags _ [] = return ()
 deletePostsPicsTags h postsIds = do
   let values = fmap (pack . show) postsIds
@@ -84,7 +84,7 @@ deletePostsPicsTags h postsIds = do
   deleteFromDb h "postspics" where' values
   deleteFromDb h "poststags" where' values
 
-deleteAllAboutDrafts :: (MonadCatch m) => MethodsHandle m  -> [DraftId] -> m ()
+deleteAllAboutDrafts :: (MonadCatch m) => Handle m  -> [DraftId] -> m ()
 deleteAllAboutDrafts _ [] = return ()
 deleteAllAboutDrafts h draftsIds = do
   let values = fmap (pack . show) draftsIds
@@ -92,7 +92,7 @@ deleteAllAboutDrafts h draftsIds = do
   deleteDraftsPicsTags h draftsIds
   deleteFromDb h "drafts" where' values
 
-deleteDraftsPicsTags :: (MonadCatch m) => MethodsHandle m  -> [DraftId] -> m ()
+deleteDraftsPicsTags :: (MonadCatch m) => Handle m  -> [DraftId] -> m ()
 deleteDraftsPicsTags _ [] = return ()
 deleteDraftsPicsTags h draftsIds = do
   let values = fmap (pack . show) draftsIds

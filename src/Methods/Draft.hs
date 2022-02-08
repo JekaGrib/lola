@@ -28,7 +28,7 @@ import Methods.Post ( deletePostsPicsTags, deleteAllAboutDrafts,deleteDraftsPics
 import           Control.Monad (unless)
 
 
-createNewDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> DraftRequest -> ExceptT ReqError m ResponseInfo
+createNewDraft :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 createNewDraft h usIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds) = do
   DraftInfo auResp@(AuthorResponse auId _ _) tagResps catResp <- getDraftInfo h usIdNum drReq
   draftId <- withTransactionDBE h $ do
@@ -42,7 +42,7 @@ createNewDraft h usIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam pic
   okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = auResp, draft_name2 = nameParam , draft_cat2 = catResp , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = tagResps, draft_pics2 = fmap inPicIdUrl picsIds}
 
 
-createPostsDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> CreatePostsDraft -> ExceptT ReqError m ResponseInfo
+createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> CreatePostsDraft -> ExceptT ReqError m ResponseInfo
 createPostsDraft h usIdNum (CreatePostsDraft postIdNum) = do
   let postIdParam = numToTxt postIdNum
   isUserAuthorE_ h  usIdNum 
@@ -65,13 +65,13 @@ createPostsDraft h usIdNum (CreatePostsDraft postIdNum) = do
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postIdNum
   okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
 
-getDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> GetDraft -> ExceptT ReqError m ResponseInfo
+getDraft :: (MonadCatch m) => Handle m -> UserId -> GetDraft -> ExceptT ReqError m ResponseInfo
 getDraft h usIdNum (GetDraft draftIdNum) = do
   resp <- selectDraftAndMakeResp h usIdNum draftIdNum
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftIdNum ++ " sending in response" 
   okHelper resp
 
-getDrafts :: (MonadCatch m) => MethodsHandle m -> UserId -> GetDrafts -> ExceptT ReqError m ResponseInfo
+getDrafts :: (MonadCatch m) => Handle m -> UserId -> GetDrafts -> ExceptT ReqError m ResponseInfo
 getDrafts h usIdNum (GetDrafts pageNum) = do
   Author auId _ _ <- isUserAuthorE h  usIdNum  
   let table = "drafts JOIN authors ON authors.author_id = drafts.author_id"
@@ -92,7 +92,7 @@ getDrafts h usIdNum (GetDrafts pageNum) = do
     { page9 = pageNum
     , drafts9 = fmap (\( Draft draftId auInfo postId draftName _ draftText draftMainPicId ,catResp,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
 
-updateDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> DraftId -> DraftRequest -> ExceptT ReqError m ResponseInfo
+updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds)  = do
   let draftIdParam = numToTxt draftIdNum
   DraftInfo auResp tagResps catResp <- getDraftInfo h usIdNum drReq
@@ -105,7 +105,7 @@ updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtP
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftIdNum ++ " updated"
   okHelper $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = tagResps, draft_pics2 = fmap inPicIdUrl picsIds}
 
-deleteDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> DeleteDraft -> ExceptT ReqError m ResponseInfo
+deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DeleteDraft -> ExceptT ReqError m ResponseInfo
 deleteDraft h usIdNum (DeleteDraft draftIdNum) = do
   let draftIdParam = numToTxt draftIdNum
   isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam] 
@@ -115,7 +115,7 @@ deleteDraft h usIdNum (DeleteDraft draftIdNum) = do
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftIdNum ++ " deleted"
   okHelper $ OkResponse { ok = True }
 
-publishDraft :: (MonadCatch m) => MethodsHandle m -> UserId -> PublishDraft -> ExceptT ReqError m ResponseInfo
+publishDraft :: (MonadCatch m) => Handle m -> UserId -> PublishDraft -> ExceptT ReqError m ResponseInfo
 publishDraft h usIdNum (PublishDraft draftIdNum) = do
   DraftResponse draftId draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usIdNum draftIdNum
   case draftPostId of
@@ -141,7 +141,7 @@ publishDraft h usIdNum (PublishDraft draftIdNum) = do
       okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName , post_create_date = pack . showGregorian $ day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
 
   
-selectDraftAndMakeResp :: (MonadCatch m) => MethodsHandle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
+selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
 selectDraftAndMakeResp h usIdNum draftIdNum = do
   let draftIdParam = numToTxt draftIdNum
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
@@ -157,7 +157,7 @@ selectDraftAndMakeResp h usIdNum draftIdNum = do
 
 data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 
-getDraftInfo :: (MonadCatch m) => MethodsHandle m -> UserId -> DraftRequest -> ExceptT ReqError m DraftInfo
+getDraftInfo :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m DraftInfo
 getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = do
   isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam] 
   mapM_ (isExistInDbE h "tags" "tag_id" "tag_id=?") $ fmap ( (:[]) . pack . show) tagsIds
@@ -168,21 +168,21 @@ getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = d
   catResp <- makeCatResp h  catIdParam
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp
 
-isDraftAuthor :: (MonadCatch m) => MethodsHandle m  -> Text -> UserId -> ExceptT ReqError m ()
+isDraftAuthor :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h  draftIdParam usIdNum = do
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
   Only usDraftId <- checkOneE h $ selectNum h table ["user_id"] "draft_id=?" [draftIdParam]  
   unless (usDraftId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of draft_id: " ++ unpack draftIdParam
 
-isPostAuthor :: (MonadCatch m) => MethodsHandle m  -> Text -> UserId -> ExceptT ReqError m ()
+isPostAuthor :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isPostAuthor h  postIdParam usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
   Only usPostId <- checkOneE h $ selectNum h table ["user_id"] "post_id=?" [postIdParam]  
   unless (usPostId  == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of post_id: " ++ unpack postIdParam
 
-isUserAuthorE :: (MonadCatch m) => MethodsHandle m -> UserId -> ExceptT ReqError m Author
+isUserAuthorE :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
 isUserAuthorE h  usIdNum = do
   lift $ logDebug (hLog h) "Checking in DB is user author"  
   maybeAu <- checkMaybeOneE h $ selectAuthor h "authors" ["author_id","author_info","user_id"] "user_id=?" [pack . show $ usIdNum] 
@@ -190,7 +190,7 @@ isUserAuthorE h  usIdNum = do
     Nothing -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " isn`t author"
     Just author -> return author
 
-isUserAuthorE_ :: (MonadCatch m) => MethodsHandle m -> UserId -> ExceptT ReqError m ()
+isUserAuthorE_ :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ()
 isUserAuthorE_ h usIdNum = do
   _ <- isUserAuthorE h  usIdNum
   return ()

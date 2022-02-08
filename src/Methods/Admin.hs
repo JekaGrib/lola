@@ -20,7 +20,7 @@ import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
 
 
-createAdmin :: (MonadCatch m) => MethodsHandle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
+createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = do
   let picIdParam = numToTxt picIdNum
   onlyKeys <- checkListE h $ selectTxt h "key" ["create_admin_key"] "true" ([]::[Text])  

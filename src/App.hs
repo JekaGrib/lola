@@ -22,7 +22,8 @@ import           Methods.Picture (sendPicture,browsePicture)
 import           Methods.Post (getPost,getPosts,deletePost)
 import           Methods.Tag (createTag,getTag,updateTag,deleteTag)
 import           Methods.User (createUser,getUser,deleteUser)
-import           Methods.Handle (MethodsHandle, ResponseInfo(..),makeMethodsH)
+import           Methods.Handle (ResponseInfo(..),makeMethodsH)
+import qualified Methods.Handle (Handle)
 import           Conf (Config(..),reConnectDB)
 import ParseQueryStr  (parseQueryStr,ParseQueryStr)
 import TryRead (tryReadNum)
@@ -39,7 +40,7 @@ import           Data.ByteString.Builder        ( lazyByteString, toLazyByteStri
 
 data Handle m = Handle 
   { hLog              :: LogHandle m ,
-    hMeth             :: MethodsHandle m,
+    hMeth             :: Methods.Handle.Handle m,
     getBody           :: Request -> m BSL.ByteString
     }
 

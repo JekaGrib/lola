@@ -43,7 +43,7 @@ import Methods.Post.LimitArg
 
 
 
-data MethodsHandle m = MethodsHandle 
+data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
     selectTxt          :: Table -> [String] -> String -> [Text] -> m [Only Text],
@@ -75,9 +75,9 @@ data MethodsHandle m = MethodsHandle
     withTransactionDB  :: forall a. m a -> m a
     }
 
-makeMethodsH :: Config -> LogHandle IO -> MethodsHandle IO
+makeMethodsH :: Config -> LogHandle IO -> Handle IO
 makeMethodsH conf hLog = let conn = extractConn conf in
-  MethodsHandle 
+  Handle 
     conf 
     hLog 
     (select' conn) 
@@ -114,7 +114,7 @@ okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
 
-checkOneE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m a
+checkOneE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m a
 checkOneE h m = do
   lift $ logDebug (hLog h) $ "Select data from DB." 
   xs <- catchDbErr $ lift m
@@ -125,7 +125,7 @@ checkOneE h m = do
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkMaybeOneE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
+checkMaybeOneE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m (Maybe a)
 checkMaybeOneE h m = do
   lift $ logDebug (hLog h) $ "Select data from DB." 
   xs <- catchDbErr $ lift m
@@ -138,7 +138,7 @@ checkMaybeOneE h m = do
       return (Just x)
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkOneIfExistE :: (MonadCatch m,Show a) => MethodsHandle m -> 
+checkOneIfExistE :: (MonadCatch m,Show a) => Handle m -> 
   (Table -> [Param] -> Where -> [Text] -> m [a]) ->
   Table -> [Param] -> Where -> Text -> ExceptT ReqError m a
 checkOneIfExistE h func table params where' value = do
@@ -151,22 +151,22 @@ checkOneIfExistE h func table params where' value = do
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkListE :: (MonadCatch m,Show a) => MethodsHandle m -> m [a] -> ExceptT ReqError m [a]
+checkListE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m [a]
 checkListE h m = do
   lift $ logDebug (hLog h) $ "Select data from DB."
   xs <- catchDbErr $ lift m
   lift $ logInfo (hLog h) $ "Data received from DB"
   return xs
 
-updateInDbE :: (MonadCatch m) => MethodsHandle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h table set where' values = catchDbErr $ do
   lift $ updateInDb h table set where' values
 
-deleteFromDbE :: (MonadCatch m) => MethodsHandle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
+deleteFromDbE :: (MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
 deleteFromDbE h table where' values = catchDbErr $ do
   lift $ deleteFromDb h table where' values   
 
-isExistInDbE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 isExistInDbE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -176,7 +176,7 @@ isExistInDbE h table checkName where' values = do
       return ()
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
   
-ifExistInDbThrowE :: (MonadCatch m) => MethodsHandle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+ifExistInDbThrowE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
 ifExistInDbThrowE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
@@ -186,21 +186,21 @@ ifExistInDbThrowE h table checkName where' values = do
       lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
       return ()
 
-insertReturnE :: (MonadCatch m) => MethodsHandle m  -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m  -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
 insertReturnE h table returnName insNames insValues =  catchDbErr $
   lift $ insertReturn h table returnName insNames insValues
 
 
-insertByteaInDbE :: (MonadCatch m) => MethodsHandle m  -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE :: (MonadCatch m) => Handle m  -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
 insertByteaInDbE h table returnName insNames bs =  catchDbErr 
   $ lift $ insertByteaInDb h table returnName insNames bs
 
 
-insertManyE :: (MonadCatch m) => MethodsHandle m  -> Table -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
+insertManyE :: (MonadCatch m) => Handle m  -> Table -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
 insertManyE h table insNames insValues = catchDbErr $ do
   lift $ insertMany h table insNames insValues
 
-withTransactionDBE :: (MonadCatch m) => MethodsHandle m  -> m a -> ExceptT ReqError m a
+withTransactionDBE :: (MonadCatch m) => Handle m  -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchDbErr . lift . withTransactionDB h
 
 checkOneM :: (MonadCatch m) => [a] -> m a
