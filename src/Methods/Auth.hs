@@ -20,12 +20,32 @@ import           Data.Text                      ( pack, unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
+import  Conf (Config(..),extractConn)
 
+
+data Handle m = Handle 
+  { hConf              :: Config,
+    hLog               :: LogHandle m ,
+    selectTxt          :: Table -> [Param] -> Where -> [Text] -> m [Text],
+    selectAuth         :: Table -> [Param] -> Where -> [Text] -> m [Auth],
+    updateInDb         :: Table -> String -> String -> [Text] -> m (),
+    getTokenKey        :: m String
+    }
+
+makeH :: Config -> LogHandle IO -> Handle IO
+makeH conf logH = let conn = extractConn conf in
+  Handle 
+    conf 
+    logH 
+    (selectOnly' conn)  
+    (select' conn)
+    (updateInDb' conn) 
+    getTokenKey' 
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn h (LogIn usIdNum pwdParam) = do
   let usIdParam = numToTxt usIdNum
-  Auth pwd admBool <- checkOneIfExistE h (selectAuth h) "users" ["password","admin"] "user_id=?" usIdParam 
+  Auth pwd admBool <- checkOneIfExistE (hLog h) (selectAuth h) "users" ["password","admin"] "user_id=?" usIdParam 
   checkPwd pwdParam pwd
   tokenKey <- lift $ getTokenKey h
   updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
@@ -55,7 +75,7 @@ checkAdminTokenParam h tokenParam =
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
@@ -80,7 +100,7 @@ checkUserTokenParam h tokenParam =
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
@@ -92,7 +112,7 @@ checkUserTokenParam h tokenParam =
           Nothing -> throwE . SimpleError $ "INVALID token"
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadNum (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE h $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxt h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  
             if strSha1 (unpack tokenKey) == tokenKeyParam 
@@ -111,3 +131,6 @@ checkPwd pwdParam pwd
   | otherwise       = throwE . SimpleError $ "INVALID password"
     where
       hashPwdParam = txtSha1 pwdParam
+
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values

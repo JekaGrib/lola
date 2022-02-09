@@ -5,24 +5,13 @@
 
 module Methods.Handle.Select where
 
-import           Database.PostgreSQL.Simple
-import           Database.PostgreSQL.Simple.FromRow
-import           Data.ByteString                ( ByteString )
+import           Database.PostgreSQL.Simple.FromRow (FromRow(..),field)
 import           Data.Text                      ( Text)
 import           Data.Time.Calendar             ( Day)
 
 
 
 class (Show a,FromRow a) => Select a
-
-instance Select (Only Integer)
-
-instance Select (Only Day)
-
-instance Select (Only Text)
-
-instance Select (Only (Binary ByteString))
-
 
 data TwoIds = TwoIds   {id_1 :: Integer, id_2 :: Integer}
     deriving (Eq,Show)

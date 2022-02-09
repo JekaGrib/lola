@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Werror #-}
 {-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+
 
 
 
@@ -12,11 +14,37 @@ import           Logger
 import           Types
 import           Oops
 import           Methods.Handle
+import  Conf (Config(..),extractConn)
 import ParseQueryStr (CreateTag(..),UpdateTag(..),DeleteTag(..))
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
+import           Data.Text                      ( Text )
+import           Database.PostgreSQL.Simple (withTransaction)
 
+
+data Handle m = Handle 
+  { hConf              :: Config,
+    hLog               :: LogHandle m ,
+    selectTxt          :: Table -> [Param] -> Where -> [Text] -> m [Text],
+    updateInDb         :: Table -> String -> String -> [Text] -> m (),
+    deleteFromDb       :: Table -> String -> [Text] -> m (),
+    isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
+    insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
+    withTransactionDB  :: forall a. m a -> m a
+    }
+
+makeH :: Config -> LogHandle IO -> Handle IO
+makeH conf logH = let conn = extractConn conf in
+  Handle 
+    conf 
+    logH 
+    (selectOnly' conn) 
+    (updateInDb' conn) 
+    (deleteFromDb' conn) 
+    (isExistInDb' conn) 
+    (insertReturn' conn) 
+    (withTransaction conn)
 
 createTag :: (Monad m,MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
 createTag h (CreateTag tagNameParam) = do
@@ -26,7 +54,7 @@ createTag h (CreateTag tagNameParam) = do
   
 getTag :: (Monad m,MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
-  tagName <- checkOneIfExistE h (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  tagName <- checkOneIfExistE (hLog h) (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   
@@ -49,3 +77,14 @@ deleteTag h (DeleteTag tagIdNum) = do
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
+
+isExistInDbE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
+
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
+
+withTransactionDBE :: (MonadCatch m) => Handle m  -> m a -> ExceptT ReqError m a
+withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h

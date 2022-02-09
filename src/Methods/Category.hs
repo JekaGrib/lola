@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Werror #-}
 {-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+
 
 
 
@@ -14,14 +16,41 @@ import           Oops
 import           Methods.Handle
 import Methods.Handle.Select (Cat(..))
 import ParseQueryStr (CreateCategory(..),CreateSubCategory(..),UpdateCategory(..),DeleteCategory(..))
-import Conf (Config(..))
-import           Data.Text                      ( pack )
+import           Data.Text                      ( pack,Text)
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Catch            ( MonadCatch)
 import           Data.List                      ( intercalate )
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad (when)
+import  Conf (Config(..),extractConn)
+import           Database.PostgreSQL.Simple (withTransaction)
 
+
+
+data Handle m = Handle 
+  { hConf              :: Config,
+    hLog               :: LogHandle m ,
+    selectNum          :: Table -> [Param] -> Where -> [Text] -> m [Id],
+    selectCat          :: Table -> [Param] -> Where -> [Text] -> m [Cat],
+    updateInDb         :: Table -> String -> String -> [Text] -> m (),
+    deleteFromDb       :: Table -> String -> [Text] -> m (),
+    isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
+    insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
+    withTransactionDB  :: forall a. m a -> m a
+    }
+
+makeH :: Config -> LogHandle IO -> Handle IO
+makeH conf logH = let conn = extractConn conf in
+  Handle 
+    conf 
+    logH 
+    (selectOnly' conn) 
+    (select' conn) 
+    (updateInDb' conn) 
+    (deleteFromDb' conn) 
+    (isExistInDb' conn) 
+    (insertReturn' conn) 
+    (withTransaction conn)
 
 createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
 createCategory h (CreateCategory catNameParam) = do
@@ -82,7 +111,7 @@ checkRelationCats h  catIdNum superCatIdNum
       throwE $ SimpleError $ "super_category_id: " ++ show superCatIdNum ++ " is subCategory of category_id: " ++ show catIdNum
 
 findAllSubCats :: (MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m [Integer]
-findAllSubCats h  catId = do
+findAllSubCats h catId = do
   catsIds <- findOneLevelSubCats h catId 
   case catsIds of
     [] -> return [catId]
@@ -92,12 +121,12 @@ findAllSubCats h  catId = do
 
 findOneLevelSubCats :: (MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m [Integer]
 findOneLevelSubCats h catId = do
-    catsIds <- checkListE h $ selectNum h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
+    catsIds <- checkListE (hLog h) $ selectNum h "categories" ["category_id"] "super_category_id=?" [pack . show $ catId]
     return catsIds  
 
 makeCatResp :: (MonadCatch m) => Handle m  -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h catId = do
-  Cat catName superCatId <- checkOneE h $ (selectCat h) "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
+  Cat catName superCatId <- checkOneE (hLog h) $ (selectCat h) "categories" ["category_name","COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [pack . show $ catId] 
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of 
     0 -> return $ CatResponse {cat_id = catId, cat_name = catName, one_level_sub_cats = subCatsIds , super_cat = "NULL"}
@@ -108,3 +137,15 @@ makeCatResp h catId = do
 fromCatResp :: CatResponse -> CategoryId
 fromCatResp (SubCatResponse a _ _ _) = a
 fromCatResp (CatResponse a _ _ _) = a
+
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
+
+isExistInDbE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
+
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
+
+withTransactionDBE :: (MonadCatch m) => Handle m  -> m a -> ExceptT ReqError m a
+withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h

@@ -44,70 +44,6 @@ import Methods.Post.LimitArg
 
 
 
-data Handle m = Handle 
-  { hConf              :: Config,
-    hLog               :: LogHandle m ,
-    selectTxt          :: Table -> [String] -> String -> [Text] -> m [Text],
-    selectDay          :: Table -> [String] -> String -> [Text] -> m [Day],
-    selectNum          :: Table -> [String] -> String -> [Text] -> m [Id],
-    selectBS           :: Table -> [String] -> String -> [Text] -> m [ByteString],
-    selectTwoIds       :: Table -> [String] -> String -> [Text] -> m [TwoIds],
-    selectAuth         :: Table -> [String] -> String -> [Text] -> m [Auth],
-    selectCat          :: Table -> [String] -> String -> [Text] -> m [Cat],
-    selectTag          :: Table -> [String] -> String -> [Text] -> m [Tag],
-    selectAuthor       :: Table -> [String] -> String -> [Text] -> m [Author],
-    selectComment      :: Table -> [String] -> String -> [Text] -> m [Comment],
-    selectUser         :: Table -> [String] -> String -> [Text] -> m [User],
-    selectPostInfo     :: Table -> [String] -> String -> [Text] -> m [PostInfo],
-    selectDraft        :: Table -> [String] -> String -> [Text] -> m [Draft],
-    selectPost         :: Table -> [String] -> String -> [Text] -> m [Post],
-    selectLimitComment :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
-    selectLimitDraft   :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
-    selectLimitPost    :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
-    updateInDb         :: Table -> String -> String -> [Text] -> m (),
-    deleteFromDb       :: Table -> String -> [Text] -> m (),
-    isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
-    insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
-    insertByteaInDb    :: Table -> String -> [String] -> ByteString -> m Integer,
-    insertMany         :: Table -> [String] -> [(Integer,Integer)] -> m (),
-    httpAction         :: HT.Request -> m (HT.Response BSL.ByteString),
-    getDay             :: m String,
-    getTokenKey        :: m String,
-    withTransactionDB  :: forall a. m a -> m a
-    }
-
-makeMethodsH :: Config -> LogHandle IO -> Handle IO
-makeMethodsH conf hLog = let conn = extractConn conf in
-  Handle 
-    conf 
-    hLog 
-    (selectOnly' conn) 
-    (selectOnly' conn)  
-    (selectOnly' conn) 
-    (selectBS' conn)  
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (select' conn) 
-    (selectLimit' conn) 
-    (selectLimit' conn) 
-    (selectLimit' conn) 
-    (updateInDb' conn) 
-    (deleteFromDb' conn) 
-    (isExistInDb' conn) 
-    (insertReturn' conn) 
-    (insertByteaInDb' conn) 
-    (insertMany' conn) 
-    HT.httpLBS 
-    getDay'   
-    getTokenKey' 
-    (withTransaction conn)
 
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
@@ -115,94 +51,92 @@ okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]  (lazyByteString . encode $ toJ)
 
 
-checkOneE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m a
-checkOneE h m = do
-  lift $ logDebug (hLog h) $ "Select data from DB." 
+checkOneE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
+checkOneE logH m = do
+  lift $ logDebug logH $ "Select data from DB." 
   xs <- catchDbErr $ lift m
   case xs of
     []           -> throwE $ DatabaseError "Empty output"
     [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
+      lift $ logInfo logH $ "Data received from DB"
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkMaybeOneE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m (Maybe a)
-checkMaybeOneE h m = do
-  lift $ logDebug (hLog h) $ "Select data from DB." 
+checkMaybeOneE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
+checkMaybeOneE logH m = do
+  lift $ logDebug logH $ "Select data from DB." 
   xs <- catchDbErr $ lift m
   case xs of
     []           -> do
-      lift $ logInfo (hLog h) $ "Received empty data from DB"
+      lift $ logInfo logH $ "Received empty data from DB"
       return Nothing
     [x] -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
+      lift $ logInfo logH $ "Data received from DB"
       return (Just x)
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkOneIfExistE :: (MonadCatch m,Show a) => Handle m -> 
+checkOneIfExistE :: (MonadCatch m,Show a) => LogHandle m -> 
   (Table -> [Param] -> Where -> [Text] -> m [a]) ->
   Table -> [Param] -> Where -> Text -> ExceptT ReqError m a
-checkOneIfExistE h func table params where' value = do
-  lift $ logDebug (hLog h) $ "Select data from DB. Table: " ++ table 
+checkOneIfExistE logH func table params where' value = do
+  lift $ logDebug logH $ "Select data from DB. Table: " ++ table 
   xs <- catchDbErr $ lift $ func table params where' [value]
   case xs of
     []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
     (x:[]) -> do
-      lift $ logInfo (hLog h) $ "Data received from DB"
+      lift $ logInfo logH $ "Data received from DB"
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkListE :: (MonadCatch m,Show a) => Handle m -> m [a] -> ExceptT ReqError m [a]
-checkListE h m = do
-  lift $ logDebug (hLog h) $ "Select data from DB."
+checkListE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
+checkListE logH m = do
+  lift $ logDebug logH "Select data from DB."
   xs <- catchDbErr $ lift m
-  lift $ logInfo (hLog h) $ "Data received from DB"
+  lift $ logInfo logH "Data received from DB"
   return xs
 
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
-updateInDbE h table set where' values = catchDbErr $ do
-  lift $ updateInDb h table set where' values
+checkE :: (MonadCatch m) => m a -> ExceptT ReqError m a
+checkE = catchDbErr . lift
 
-deleteFromDbE :: (MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
-deleteFromDbE h table where' values = catchDbErr $ do
-  lift $ deleteFromDb h table where' values   
+checkUpdE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
+checkUpdE logH m = do
+  lift $ logDebug logH "Update data in DB."
+  checkE m
+  lift $ logInfo logH "Data updated in DB"
 
-isExistInDbE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-isExistInDbE h table checkName where' values = do
-  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
-  case check of
+checkDelE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
+checkDelE logH m = do
+  lift $ logDebug logH "Delete data from DB."
+  checkE m
+  lift $ logInfo logH "Data deleted from DB"
+
+checkIsExistE :: (MonadCatch m) => LogHandle m ->
+  (String -> String -> String -> [Text] -> m Bool) -> 
+   String -> String -> String -> [Text] -> ExceptT ReqError m ()
+checkIsExistE logH func table checkName where' values = do
+  lift $ logDebug logH $ "Checking existence entity (" ++ checkName ++ ") in the DB"
+  isExist  <- checkE $ func table checkName where' values 
+  case isExist of
     True -> do
-      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") exist"
+      lift $ logInfo logH $ "Entity (" ++ checkName ++ ") exist"
       return ()
     False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
-  
-ifExistInDbThrowE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-ifExistInDbThrowE h table checkName where' values = do
-  lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  check  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
-  case check of
-    True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
-    False -> do
-      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
-      return ()
 
-insertReturnE :: (MonadCatch m) => Handle m  -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
-insertReturnE h table returnName insNames insValues =  catchDbErr $
-  lift $ insertReturn h table returnName insNames insValues
+checkInsRetE :: (MonadCatch m) => LogHandle m ->
+  (Table -> String -> [String] -> a -> m Integer) -> 
+   Table -> String -> [String] -> a -> ExceptT ReqError m Integer
+checkInsRetE logH func table returnName insNames insValues = do
+  lift $ logDebug logH $ "Insert data in the DB"
+  i <- checkE $ func table returnName insNames insValues
+  lift $ logInfo logH $ "DB return " ++ returnName ++ ": " ++ show i
+  return i
 
-
-insertByteaInDbE :: (MonadCatch m) => Handle m  -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
-insertByteaInDbE h table returnName insNames bs =  catchDbErr 
-  $ lift $ insertByteaInDb h table returnName insNames bs
-
-
-insertManyE :: (MonadCatch m) => Handle m  -> Table -> [String] -> [(Integer,Integer)] -> ExceptT ReqError m ()
-insertManyE h table insNames insValues = catchDbErr $ do
-  lift $ insertMany h table insNames insValues
-
-withTransactionDBE :: (MonadCatch m) => Handle m  -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchDbErr . lift . withTransactionDB h
+checkTransactE :: (MonadCatch m) => LogHandle m -> m a -> ExceptT ReqError m a
+checkTransactE logH m = do
+  lift $ logDebug logH "Open transaction in DB to do several actions"
+  a <- checkE m
+  lift $ logInfo logH "Transaction closed. Several actions in DB finished."
+  return a
 
 checkOneM :: (MonadCatch m) => [a] -> m a
 checkOneM xs = case xs of
@@ -218,22 +152,22 @@ getDay' = do
   let day = showGregorian . localDay . zonedTimeToLocalTime $ time
   return day
 
-select' :: (Select a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
+select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
 select' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return xs
 
-selectOnly' :: (FromField a) => Connection -> String -> [String] -> String -> [Text] -> IO [a]
+selectOnly' :: (FromField a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
 selectOnly' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap fromOnly xs
 
-selectBS' :: Connection -> String -> [String] -> String -> [Text] -> IO [ByteString]
+selectBS' :: Connection -> Table -> [Param] -> Where -> [Text] -> IO [ByteString]
 selectBS' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap (fromBinary . fromOnly) xs  
 
-selectLimit' :: (Select a) => Connection -> String -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
+selectLimit' :: (Select a) => Connection -> Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
   let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
   let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
@@ -255,8 +189,8 @@ deleteFromDb' conn table where' values = do
 isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
 isExistInDb' conn table checkName where' values = do
   onlyChecks  <- query conn (toExQ table checkName where') values
-  Only check <- checkOneM onlyChecks
-  return check
+  Only isExist <- checkOneM onlyChecks
+  return isExist
 
 insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO Id
 insertReturn' conn table returnName insNames insValues = do
