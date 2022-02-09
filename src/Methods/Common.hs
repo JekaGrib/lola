@@ -1,7 +1,6 @@
---{-# OPTIONS_GHC -Werror #-}
---{-# OPTIONS_GHC  -Wall  #-}
+{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 
 
 
@@ -9,33 +8,25 @@
 module Methods.Common where
           
 import           Api.Response
-import           Api.Request
 import           Logger
 import           Types
 import Methods.Common.Select
 import           Oops
-import  Conf (Config(..),extractConn)
-import ParseQueryStr 
-import CheckJsonReq (checkDraftReqJson)
 import Methods.Common.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
-import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
-import           Network.HTTP.Types             ( status200, status404, Status, ResponseHeaders )
+import           Network.HTTP.Types             ( status200, Status, ResponseHeaders )
 import           Data.Aeson (ToJSON,encode)
 import           Data.Text                      ( pack, unpack, Text )
-import           Data.ByteString.Builder        ( lazyByteString, Builder, toLazyByteString )
-import           Database.PostgreSQL.Simple (query, withTransaction, execute, executeMany,Connection,Only(..),Binary(..))
+import           Data.ByteString.Builder        ( lazyByteString, Builder)
+import           Database.PostgreSQL.Simple (query, execute, executeMany,Connection,Only(..),Binary(..))
 import           Database.PostgreSQL.Simple.FromField (FromField)
-import qualified Network.HTTP.Simple            as HT
 import           Data.Time.LocalTime
-import           Data.Time.Calendar             ( showGregorian,Day)
+import           Data.Time.Calendar             ( showGregorian)
 import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate, zip4, nub, (\\) )
+import           Data.List                      ( intercalate, (\\) )
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans            ( lift )
-import           Codec.Picture                  ( decodeImage )
 import           Data.ByteString                ( ByteString )
-import qualified Data.ByteString.Lazy           as BSL
-import           Control.Monad.Catch            ( catch, throwM, MonadCatch)
+import           Control.Monad.Catch            ( throwM, MonadCatch)
 import           Crypto.Hash                    (hash,Digest)
 import Crypto.Hash.Algorithms (SHA1)
 import System.Random (getStdGen,newStdGen,randomRs)
