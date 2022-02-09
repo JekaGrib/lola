@@ -13,7 +13,7 @@ import           Api.Response (TagResponse(..),OkResponse(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
+import           Methods.Common
 import  Conf (Config(..),extractConn)
 import ParseQueryStr (CreateTag(..),UpdateTag(..),DeleteTag(..))
 import           Control.Monad.Trans.Except (ExceptT)

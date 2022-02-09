@@ -6,19 +6,18 @@
 
 
 
-module Methods.Handle where
+module Methods.Common where
           
 import           Api.Response
 import           Api.Request
 import           Logger
 import           Types
-import Methods.Handle.Select
+import Methods.Common.Select
 import           Oops
 import  Conf (Config(..),extractConn)
 import ParseQueryStr 
-import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import CheckJsonReq (checkDraftReqJson)
-import Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
+import Methods.Common.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404, Status, ResponseHeaders )
 import           Data.Aeson (ToJSON,encode)
@@ -43,7 +42,7 @@ import System.Random (getStdGen,newStdGen,randomRs)
 import Methods.Post.LimitArg
 
 
-
+-- common logic functions:
 
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
@@ -144,7 +143,7 @@ checkOneM xs = case xs of
   (x:[]) -> return x
   _ -> throwM UnexpectedMultipleDbOutPutException
 
--- IO handle functions:
+-- common IO handle functions:
 
 getDay' :: IO String
 getDay' = do
@@ -217,7 +216,7 @@ getTokenKey' = do
 
  
 
--- clear functions:
+-- common clear functions:
 
 sha1 :: ByteString -> Digest SHA1
 sha1 = hash

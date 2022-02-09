@@ -14,8 +14,8 @@ import Api.Request (DraftRequest(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
-import Methods.Handle.Select (Author(..),Draft(..),PostInfo(..),Tag(..),Auth,Cat,Post)
+import           Methods.Common
+import Methods.Common.Select (Author(..),Draft(..),PostInfo(..),Tag(..),Auth,Cat,Post)
 import ParseQueryStr (CreatePostsDraft(..),GetDraft(..),GetDrafts(..),DeleteDraft(..),PublishDraft(..))
 import           Data.Text                      ( pack, unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -30,7 +30,7 @@ import qualified Methods.Post (Handle,makeH)
 import           Control.Monad (unless)
 import  Conf (Config(..),extractConn)
 import           Database.PostgreSQL.Simple (withTransaction)
-import Methods.Post.LimitArg (FilterArg(..), SortArg(..))
+import Methods.Post.LimitArg (FilterArg, SortArg)
 import           Data.Time.Calendar             ( Day)
 
 

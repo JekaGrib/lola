@@ -11,8 +11,8 @@ import           Api.Response (TokenResponse(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
-import Methods.Handle.Select (Auth(..))
+import           Methods.Common
+import Methods.Common.Select (Auth(..))
 import TryRead (tryReadNum)
 import ParseQueryStr (Token(..),LogIn(..),parseQueryStr)
 import           Network.Wai (Request)

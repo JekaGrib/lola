@@ -8,11 +8,11 @@
 module Methods.Comment where
           
 import           Api.Response (CommentResponse(..),CommentsResponse(..),OkResponse(..))
-import Methods.Handle.Select (Comment(comment_idC))
+import Methods.Common.Select (Comment(comment_idC))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
+import           Methods.Common
 import Methods.Auth (AccessMode(..))
 import ParseQueryStr (CreateComment(..),GetComments(..),UpdateComment(..),DeleteComment(..))
 import           Data.Text                      ( pack, unpack, Text )

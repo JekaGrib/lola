@@ -11,7 +11,7 @@ import           Api.Response (UserTokenResponse(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
+import           Methods.Common
 import ParseQueryStr (CreateAdmin(..))
 import           Data.Text                      ( pack, unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)

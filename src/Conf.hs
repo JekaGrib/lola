@@ -18,7 +18,7 @@ import qualified Data.Configurator              as C
 import qualified Data.Configurator.Types        as C
 import qualified Control.Exception              as E
 import           Data.Char                      ( toUpper )
-import Methods.Handle.ToQuery (toExQ)
+import Methods.Common.ToQuery (toExQ)
 
 
 

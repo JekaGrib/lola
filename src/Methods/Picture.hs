@@ -10,7 +10,7 @@ module Methods.Picture where
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
+import           Methods.Common
 import ParseQueryStr (BrowsePicture(..))
 import           Data.Text                      ( unpack, Text )
 import           Control.Monad.Trans.Except

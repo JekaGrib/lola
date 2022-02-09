@@ -13,8 +13,8 @@ import           Api.Response (CatResponse(..),OkResponse(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
-import Methods.Handle.Select (Cat(..))
+import           Methods.Common
+import Methods.Common.Select (Cat(..))
 import ParseQueryStr (CreateCategory(..),CreateSubCategory(..),UpdateCategory(..),DeleteCategory(..))
 import           Data.Text                      ( pack,Text)
 import           Control.Monad.Trans.Except (ExceptT,throwE)

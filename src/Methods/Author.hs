@@ -13,8 +13,8 @@ import           Api.Response (AuthorResponse(..),OkResponse(..))
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
-import Methods.Handle.Select (Author(..))
+import           Methods.Common
+import Methods.Common.Select (Author(..))
 import ParseQueryStr (CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..))
 import           Data.Text                      ( pack, unpack,Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)

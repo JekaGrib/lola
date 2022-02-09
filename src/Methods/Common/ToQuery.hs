@@ -4,7 +4,7 @@
 
 
 
-module Methods.Handle.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ) where
+module Methods.Common.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ) where
           
 
 import           Types

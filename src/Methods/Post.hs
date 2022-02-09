@@ -13,8 +13,8 @@ import           Api.Response (PostResponse(..), OkResponse(..),PostsResponse(..
 import           Logger
 import           Types
 import           Oops
-import           Methods.Handle
-import Methods.Handle.Select (Post(..),Tag)
+import           Methods.Common
+import Methods.Common.Select (Post(..),Tag)
 import Methods.Category (makeCatResp)
 import qualified Methods.Category (Handle,makeH)
 import ParseQueryStr (DeletePost(..))

@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 
-module Methods.Handle.Select where
+module Methods.Common.Select where
 
 import           Database.PostgreSQL.Simple.FromRow (FromRow(..),field)
 import           Data.Text                      ( Text)

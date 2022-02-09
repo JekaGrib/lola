@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a84b86009e27e7beec229c742adc210d90c2d720113b7b9f7bba675c2641ff09
+-- hash: 2d0d50a8301762d2136aa88fb902d62ec49b3e103b2329c6bd912adaf78defab
 
 name:           lola
 version:        0.1.0.0
@@ -41,10 +41,10 @@ library
       Methods.Author
       Methods.Category
       Methods.Comment
+      Methods.Common
+      Methods.Common.Select
+      Methods.Common.ToQuery
       Methods.Draft
-      Methods.Handle
-      Methods.Handle.Select
-      Methods.Handle.ToQuery
       Methods.Picture
       Methods.Post
       Methods.Post.LimitArg

@@ -13,8 +13,8 @@ import           Api.Response (UserTokenResponse(..),UserResponse(..),OkResponse
 import           Logger
 import           Types
 import           Oops (ReqError)
-import           Methods.Handle
-import Methods.Handle.Select (User(..))
+import           Methods.Common
+import Methods.Common.Select (User(..))
 import ParseQueryStr (CreateUser(..),DeleteUser(..))
 import           Data.Text                      ( pack,Text )
 import           Control.Monad.Trans.Except (ExceptT)
