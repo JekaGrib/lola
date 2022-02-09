@@ -20,8 +20,8 @@ import           Data.Text                      ( pack, unpack,Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
-import Methods.Post (deleteAllAboutDrafts)
-import qualified Methods.Post (Handle,makeH)
+import Methods.Common.DeleteMany (deleteAllAboutDrafts)
+import qualified Methods.Common.DeleteMany (Handle,makeH)
 import  Conf (Config(..),extractConn)
 import           Database.PostgreSQL.Simple (withTransaction)
 import           Data.List                      ( intercalate )
@@ -38,7 +38,7 @@ data Handle m = Handle
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
     insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
     withTransactionDB  :: forall a. m a -> m a,
-    hPost :: Methods.Post.Handle m
+    hDelMany :: Methods.Common.DeleteMany.Handle m
     }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -53,8 +53,8 @@ makeH conf logH = let conn = extractConn conf in
     (isExistInDb' conn) 
     (insertReturn' conn) 
     (withTransaction conn)
-    (Methods.Post.makeH conf logH)
-
+    (Methods.Common.DeleteMany.makeH conf )
+    
 
 createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
 createAuthor h (CreateAuthor usIdNum auInfoParam) = do
@@ -90,7 +90,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
   let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h),auIdParam]
   draftsIds <- checkListE (hLog h) $ selectNum h "drafts" ["draft_id"] "author_id=?" [auIdParam]
-  let deleteDr = deleteAllAboutDrafts (hPost h)  draftsIds
+  let deleteDr = deleteAllAboutDrafts (hDelMany h)  draftsIds
   let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " deleted." 

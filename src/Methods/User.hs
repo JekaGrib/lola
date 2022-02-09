@@ -20,8 +20,8 @@ import           Data.Text                      ( pack,Text )
 import           Control.Monad.Trans.Except (ExceptT)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            ( MonadCatch)
-import Methods.Post (deleteAllAboutDrafts)
-import qualified Methods.Post (Handle,makeH)
+import Methods.Common.DeleteMany (deleteAllAboutDrafts)
+import qualified Methods.Common.DeleteMany (Handle,makeH)
 import           Data.Time.Calendar             ( showGregorian)
 import  Conf (Config(..),extractConn)
 import           Database.PostgreSQL.Simple (withTransaction)
@@ -41,7 +41,7 @@ data Handle m = Handle
     getDay             :: m String,
     getTokenKey        :: m String,
     withTransactionDB  :: forall a. m a -> m a,
-    hPost :: Methods.Post.Handle m
+    hDelMany :: Methods.Common.DeleteMany.Handle m
     }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -58,7 +58,7 @@ makeH conf logH = let conn = extractConn conf in
     getDay'   
     getTokenKey' 
     (withTransaction conn)
-    (Methods.Post.makeH conf logH)
+    (Methods.Common.DeleteMany.makeH conf )
 
 
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
@@ -92,7 +92,7 @@ deleteUser h (DeleteUser usIdNum) = do
     Just authorId -> do
       let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId  (hConf h),pack . show $ (authorId :: Integer)]
       draftsIds <- checkListE (hLog h) $ selectNum h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
-      let deleteDr = deleteAllAboutDrafts (hPost h) draftsIds
+      let deleteDr = deleteAllAboutDrafts (hDelMany h) draftsIds
       let deleteAu = deleteFromDb h "authors" "author_id=?" [pack . show $ authorId]
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)
     Nothing -> 
