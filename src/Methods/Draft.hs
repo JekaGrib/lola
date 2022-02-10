@@ -98,7 +98,7 @@ createNewDraft h usIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam pic
     insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
     return draftId  
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created"
-  okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = auResp, draft_name2 = nameParam , draft_cat2 = catResp , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl picId , draft_tags2 = tagResps, draft_pics2 = fmap inPicIdUrl picsIds}
+  okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = auResp, draft_name2 = nameParam , draft_cat2 = catResp , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl (hConf h) picId , draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
 
 createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> CreatePostsDraft -> ExceptT ReqError m ResponseInfo
@@ -121,7 +121,7 @@ createPostsDraft h usIdNum (CreatePostsDraft postIdNum) = do
     insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
     return draftId
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postIdNum
-  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
 getDraft :: (MonadCatch m) => Handle m -> UserId -> GetDraft -> ExceptT ReqError m ResponseInfo
 getDraft h usIdNum (GetDraft draftIdNum) = do
@@ -147,7 +147,7 @@ getDrafts h usIdNum (GetDrafts pageNum) = do
   lift $ logInfo (hLog h) $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response" 
   okHelper $ DraftsResponse 
     { page9 = pageNum
-    , drafts9 = fmap (\( Draft draftId auInfo postId draftName _ draftText draftMainPicId ,catResp,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap inPicIdUrl pics}) allParams }
+    , drafts9 = fmap (\( Draft draftId auInfo postId draftName _ draftText draftMainPicId ,catResp,pics,tagS) -> DraftResponse { draft_id2 = draftId, post_id2 = isNULL postId , author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftText, draft_main_pic_id2 =  draftMainPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) draftMainPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 =  fmap (inPicIdUrl (hConf h)) pics}) allParams }
 
 updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds)  = do
@@ -160,7 +160,7 @@ updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtP
     insertMany h "draftspics" ["draft_id","pic_id"] (zip (repeat draftIdNum) picsIds)
     insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftIdNum) tagsIds)
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftIdNum ++ " updated"
-  okHelper $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl picId, draft_tags2 = tagResps, draft_pics2 = fmap inPicIdUrl picsIds}
+  okHelper $ DraftResponse {draft_id2 = draftIdNum, post_id2 = isNULL postId, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 =  picId, draft_main_pic_url2 = makeMyPicUrl (hConf h) picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
 deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DeleteDraft -> ExceptT ReqError m ResponseInfo
 deleteDraft h usIdNum (DeleteDraft draftIdNum) = do
@@ -209,7 +209,7 @@ selectDraftAndMakeResp h usIdNum draftIdNum = do
   picsIds <- checkListE (hLog h) $ selectNum h "draftspics" ["pic_id"] "draft_id=?" [draftIdParam] 
   tagS <- checkListE (hLog h) $ selectTag h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id","tag_name"] "draft_id=?" [draftIdParam]
   catResp <- makeCatResp (hCatResp h) draftCatId 
-  return DraftResponse { draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap inPicIdUrl picsIds}
+  return DraftResponse { draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName , draft_cat2 = catResp, draft_text2 = draftTxt , draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
 data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 

@@ -73,13 +73,13 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
   lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
   lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
   let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day}
+  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl (hConf h) picIdNum, user_create_dateUTR = pack day}
   
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo 
 getUser h usIdNum = do
   let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
   User fName lName picId usCreateDate <- checkOneIfExistE (hLog h) (selectUser h) "users" selectParams "user_id=?" (numToTxt usIdNum)
-  okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl picId, user_create_date = pack . showGregorian $ usCreateDate}
+  okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl (hConf h) picId, user_create_date = pack . showGregorian $ usCreateDate}
 
 deleteUser :: (MonadCatch m) => Handle m -> DeleteUser -> ExceptT ReqError m ResponseInfo 
 deleteUser h (DeleteUser usIdNum) = do

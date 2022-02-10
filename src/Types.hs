@@ -22,6 +22,7 @@ type QueryParamKey = Text
 type QueryTxtParam = Text
 
 
+type Port = Int
 type Table = String
 type Param = String
 type ReturnParam = Param

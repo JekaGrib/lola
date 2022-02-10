@@ -11,8 +11,8 @@ module Main where
 
 import           App (application)
 import           Logger (LogHandle(..),LogConfig(..),logger)
-import Conf (parseConf,getTime,Config(cPriority))
-import           Network.Wai.Handler.Warp       ( run )
+import Conf (parseConf,getTime,Config(cPriority),extractSettings)
+import           Network.Wai.Handler.Warp       ( runSettings)
 
 
 
@@ -23,9 +23,10 @@ main :: IO ()
 main = do
   time <- getTime                          
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " .log"
-  config <- parseConf 
+  config <- parseConf
+  let sets = extractSettings config 
   let handleLog = LogHandle (LogConfig (cPriority config)) (logger handleLog currLogPath)
-  run 3000 (application config handleLog)
+  runSettings sets (application config handleLog)
 
 
 

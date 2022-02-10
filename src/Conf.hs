@@ -8,7 +8,7 @@
 module Conf where
 
 import Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat)
-import Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger)
+import Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputNum)
 import Types
 import           Logger
 import           Data.Text                      ( Text, pack, unpack, intercalate )
@@ -19,11 +19,14 @@ import qualified Data.Configurator.Types        as C
 import qualified Control.Exception              as E
 import           Data.Char                      ( toUpper )
 import Methods.Common.ToQuery (toExQ)
+import Data.String (fromString)
+import Network.Wai.Handler.Warp (defaultSettings,setHost,setPort,Settings)
 
 
-
-data Config = Config 
-  { cConnDB      :: ConnDB,
+data Config = Config
+  { cServHost    :: String,
+    cServPort    :: Int,
+    cConnDB      :: ConnDB,
     cPriority :: Priority,    
     cDefPicId    :: Integer,
     cDefUsId     :: UserId,
@@ -40,11 +43,26 @@ getTime = do
   time    <- getZonedTime
   return $ show time     
 
+extractConn :: Config -> Connection
+extractConn conf = let ConnDB conn _ = cConnDB conf in conn
 
+extractSettings :: Config -> Settings
+extractSettings conf = 
+  let port = cServPort conf
+      servH = fromString . cServHost $ conf
+  in  setHost servH . setPort port $ defaultSettings
+
+reConnectDB :: Config -> IO Config
+reConnectDB oldConf = do
+  let ConnDB _ connDBInfo = cConnDB oldConf
+  connDB <- tryConnect connDBInfo
+  return $ oldConf {cConnDB = connDB}
 
 parseConf :: IO Config
 parseConf = do
   conf            <- pullConfig
+  servHost        <- parseConfServHost    conf
+  servPort        <- parseConfServPort    conf
   hostDB          <- parseConfDBHost      conf     
   portDB          <- parseConfDBport      conf
   userDB          <- parseConfDBUser      conf
@@ -59,16 +77,7 @@ parseConf = do
   draftsNumLimit  <- parseConfDraftsLimit conf
   postsNumLimit   <- parseConfPostsLimit  conf
   prio            <- parseConfPrio     conf 
-  return $ Config connDB prio defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit 
-
-reConnectDB :: Config -> IO Config
-reConnectDB oldConf = do
-  let ConnDB _ connDBInfo = cConnDB oldConf
-  connDB <- tryConnect connDBInfo
-  return $ oldConf {cConnDB = connDB}
-
-extractConn :: Config -> Connection
-extractConn conf = let ConnDB conn _ = cConnDB conf in conn
+  return $ Config (fromString servHost) servPort connDB prio defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit 
 
 pullConfig :: IO C.Config
 pullConfig = do
@@ -76,6 +85,24 @@ pullConfig = do
     `E.catch` (\e -> putStrLn (show (e :: C.ConfigError)) >> return C.empty)
     `E.catch` (\e -> putStrLn (show (e :: C.KeyError   )) >> return C.empty)
     `E.catch` (\e -> putStrLn (show (e :: E.IOException  )) >> return C.empty)
+
+parseConfServHost :: C.Config -> IO String
+parseConfServHost conf = do
+  str <- ((C.lookup conf "Server.host") :: IO (Maybe String))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
+  case str of
+    Nothing -> inputString "Server.host"
+    Just x  -> return x
+
+parseConfServPort :: C.Config -> IO Port
+parseConfServPort conf = do
+  str <- ((C.lookup conf "Server.port") :: IO (Maybe Port))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Port) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Port) ) 
+  case str of
+    Nothing -> inputNum "Server.port"
+    Just x  -> return x
 
 parseConfDBHost :: C.Config -> IO String
 parseConfDBHost conf = do
@@ -92,7 +119,7 @@ parseConfDBport conf = do
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputInteger "DataBase.port"
+    Nothing -> inputNum "DataBase.port"
     Just x  -> return x
 
 parseConfDBUser :: C.Config -> IO String
@@ -128,7 +155,7 @@ parseConfCommLimit conf = do
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputInteger "commentNumberLimit"
+    Nothing -> inputNum "commentNumberLimit"
     Just x  -> return x
 
 parseConfDraftsLimit :: C.Config -> IO Integer
@@ -137,7 +164,7 @@ parseConfDraftsLimit conf = do
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputInteger "draftNumberLimit"
+    Nothing -> inputNum "draftNumberLimit"
     Just x  -> return x
 
 parseConfPostsLimit :: C.Config -> IO Integer
@@ -146,7 +173,7 @@ parseConfPostsLimit conf = do
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputInteger "postNumberLimit"
+    Nothing -> inputNum "postNumberLimit"
     Just x  -> return x
 
 parseConfPrio :: C.Config -> IO Priority

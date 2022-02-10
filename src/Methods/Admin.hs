@@ -54,7 +54,7 @@ createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = d
   admId <- insertReturnE h "users" "user_id" insNames insValues 
   let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
   lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
-  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl picIdNum, user_create_dateUTR = pack day }
+  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdNum, user_pic_urlUTR = makeMyPicUrl (hConf h) picIdNum, user_create_dateUTR = pack day }
 
 checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
 checkKeyE keyParam key 

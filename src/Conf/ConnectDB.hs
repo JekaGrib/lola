@@ -4,7 +4,7 @@
 
 
 
-module Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputInteger) where
+module Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputNum) where
           
 
 import           Database.PostgreSQL.Simple (connectPostgreSQL,Connection)
@@ -32,22 +32,26 @@ tryConnect connDBInf@(ConnDBInfo hostDB portDB userDB dbName pwdDB) = do
 inputConnDBInfo :: IO ConnDBInfo
 inputConnDBInfo = do
   hostDB          <- inputString  "DataBase.host"
-  portDB          <- inputInteger "DataBase.port"
+  portDB          <- inputNum "DataBase.port"
   userDB          <- inputString  "DataBase.user"
   dbName          <- inputString  "DataBase.dbname"
   pwdDB           <- inputString  "DataBase.password"
   return (ConnDBInfo hostDB portDB userDB dbName pwdDB)
 
-inputInteger :: String -> IO Integer
-inputInteger valueName = do
+inputNum :: (Num a,Read a) => String -> IO a
+inputNum valueName = do
   putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName
   input <- getLine
   case reads input of
+    [] ->  do 
+      putStrLn "Empty input"
+      inputNum valueName
     [(a,"")] -> return a
-    _        -> inputInteger valueName
+    _        -> inputNum valueName
 
 inputString :: String -> IO String
 inputString valueName = do
   putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
   getLine
+
 

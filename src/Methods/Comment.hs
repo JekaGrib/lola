@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Werror #-}
 {-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+
 
 
 
@@ -89,27 +91,30 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
       okHelper $ OkResponse {ok = True}      
 
 isCommOrPostAuthor :: (MonadCatch m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
-isCommOrPostAuthor h commIdNum postId usIdNum = do
+isCommOrPostAuthor Handle{..} commIdNum postId usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  usPostId <- checkOneE (hLog h) $ selectNum h table ["user_id"] "post_id=?" [pack . show $ postId] 
-  usComId <- checkOneE (hLog h) $ selectNum h "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
+  usPostId <- checkOneE hLog $ selectNum table ["user_id"] "post_id=?" [pack . show $ postId] 
+  usComId <- checkOneE hLog $ selectNum "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
   unless (usPostId == usIdNum || usComId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
 
 isCommAuthorIfExist :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
-isCommAuthorIfExist h  commIdParam usIdNum = do
-  usId <- checkOneIfExistE (hLog h) (selectNum h) "comments" ["user_id"] "comment_id=?" commIdParam  
+isCommAuthorIfExist Handle{..} commIdParam usIdNum = do
+  usId <- checkOneIfExistE hLog selectNum "comments" ["user_id"] "comment_id=?" commIdParam  
   unless (usId == usIdNum) $
     throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ unpack commIdParam
 
 insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
-insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
+insertReturnE Handle{..} = checkInsRetE hLog insertReturn 
 
 deleteFromDbE :: (MonadCatch m) => Handle m -> Table -> Where -> [Text] -> ExceptT ReqError m ()
-deleteFromDbE h t w values = checkDelE (hLog h) $ deleteFromDb h t w values
+deleteFromDbE Handle{..} t w values = do
+  lift . logDebug hLog $ "Delete data from DB."
+  catchDbErrE $ deleteFromDb t w values
+  lift . logInfo hLog $ "Data deleted from DB"
 
 updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
-updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
+updateInDbE Handle{..} t s w values = checkUpdE hLog $ updateInDb t s w values
 
 isExistInDbE :: (MonadCatch m) => Handle m  -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
-isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
+isExistInDbE Handle{..} = checkIsExistE hLog isExistInDb 

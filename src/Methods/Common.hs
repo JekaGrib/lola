@@ -7,10 +7,10 @@
 
 module Methods.Common where
           
-import           Api.Response
+import           Api.Response (TagResponse(..), CommentIdTextUserResponse(..),PicIdUrl(..))
 import           Logger
 import           Types
-import Methods.Common.Select
+import Methods.Common.Select (Select,Comment(..),Tag(..))
 import           Oops
 import Methods.Common.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ)
 import           Network.HTTP.Types             ( status200, Status, ResponseHeaders )
@@ -31,6 +31,7 @@ import           Crypto.Hash                    (hash,Digest)
 import Crypto.Hash.Algorithms (SHA1)
 import System.Random (getStdGen,newStdGen,randomRs)
 import Methods.Post.LimitArg
+import  Conf (Config(..))
 
 
 -- common logic functions:
@@ -85,27 +86,22 @@ checkListE logH m = do
   lift $ logInfo logH "Data received from DB"
   return xs
 
-checkE :: (MonadCatch m) => m a -> ExceptT ReqError m a
-checkE = catchDbErr . lift
+catchDbErrE :: (MonadCatch m) => m a -> ExceptT ReqError m a
+catchDbErrE = catchDbErr . lift
 
 checkUpdE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
 checkUpdE logH m = do
   lift $ logDebug logH "Update data in DB."
-  checkE m
+  catchDbErrE m
   lift $ logInfo logH "Data updated in DB"
 
-checkDelE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
-checkDelE logH m = do
-  lift $ logDebug logH "Delete data from DB."
-  checkE m
-  lift $ logInfo logH "Data deleted from DB"
 
 checkIsExistE :: (MonadCatch m) => LogHandle m ->
   (String -> String -> String -> [Text] -> m Bool) -> 
    String -> String -> String -> [Text] -> ExceptT ReqError m ()
 checkIsExistE logH func table checkName where' values = do
   lift $ logDebug logH $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  isExist  <- checkE $ func table checkName where' values 
+  isExist  <- catchDbErrE $ func table checkName where' values 
   case isExist of
     True -> do
       lift $ logInfo logH $ "Entity (" ++ checkName ++ ") exist"
@@ -117,14 +113,14 @@ checkInsRetE :: (MonadCatch m) => LogHandle m ->
    Table -> String -> [String] -> a -> ExceptT ReqError m Integer
 checkInsRetE logH func table returnName insNames insValues = do
   lift $ logDebug logH $ "Insert data in the DB"
-  i <- checkE $ func table returnName insNames insValues
+  i <- catchDbErrE $ func table returnName insNames insValues
   lift $ logInfo logH $ "DB return " ++ returnName ++ ": " ++ show i
   return i
 
 checkTransactE :: (MonadCatch m) => LogHandle m -> m a -> ExceptT ReqError m a
 checkTransactE logH m = do
   lift $ logDebug logH "Open transaction in DB to do several actions"
-  a <- checkE m
+  a <- catchDbErrE m
   lift $ logInfo logH "Transaction closed. Several actions in DB finished."
   return a
 
@@ -225,15 +221,11 @@ inCommResp (Comment idCom usId txt) = CommentIdTextUserResponse idCom txt usId
 inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
 
+makeMyPicUrl :: Config -> PictureId -> Text
+makeMyPicUrl conf picId = pack $ "http://" ++ cServHost conf ++ ":" ++ show (cServPort conf) ++ "/picture/" ++ show picId
 
-makeMyPicUrl :: PictureId -> Text
-makeMyPicUrl picId = pack $ "http://localhost:3000/picture/" ++ show picId
-
-inPicIdUrl :: PictureId -> PicIdUrl
-inPicIdUrl picId    = PicIdUrl picId (makeMyPicUrl picId)
-
-fromTwoIdsToPair :: TwoIds -> (Integer,Integer)
-fromTwoIdsToPair (TwoIds a b) = (a,b)
+inPicIdUrl :: Config -> PictureId -> PicIdUrl
+inPicIdUrl conf picId = PicIdUrl picId (makeMyPicUrl conf picId)
 
 numToTxt :: Id -> Text
 numToTxt = pack . show

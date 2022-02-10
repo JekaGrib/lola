@@ -13,14 +13,6 @@ import           Data.Time.Calendar             ( Day)
 
 class (Show a,FromRow a) => Select a
 
-data TwoIds = TwoIds   {id_1 :: Integer, id_2 :: Integer}
-    deriving (Eq,Show)
-
-instance FromRow TwoIds where
-  fromRow = 
-    TwoIds <$> field <*> field
-    
-instance Select TwoIds
 
 data Auth = Auth  {pwdAu :: Text, admBoolAu :: Bool}
     deriving (Eq,Show)

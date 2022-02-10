@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8b8ab292834d6568b5a00dee6aefee8a009336e1f6f620f462de252059ef85d1
+-- hash: adecf3f8004fca1d22b229a6cd9170f7e49111b95a7bb89dc404f009cf0bcf9e
 
 name:           lola
 version:        0.1.0.0
@@ -122,7 +122,9 @@ test-suite lola-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      SelectTest
+      SpecOld
+      TestDB
+      TestTypes
       Paths_lola
   hs-source-dirs:
       test

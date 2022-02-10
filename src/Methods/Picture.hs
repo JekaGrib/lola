@@ -60,7 +60,7 @@ browsePicture h (BrowsePicture picUrlParam) = do
   let sbs = BSL.toStrict lbs
   picId <- insertByteaInDbE h "pics" "pic_id" ["pic"] sbs
   lift $ logInfo (hLog h) $ "Picture_id: " ++ show picId ++ " uploaded"
-  okHelper $ inPicIdUrl picId 
+  okHelper $ inPicIdUrl (hConf h) picId 
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m  -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic h url = do
