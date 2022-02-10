@@ -19,7 +19,7 @@ import  Conf (Config(..),extractConn)
 
 data Handle m = Handle 
   { hConf              :: Config,
-    selectNum          :: Table -> [Param] -> Where -> [Text] -> m [Id],
+    selectNums          :: Table -> [Param] -> Where -> [Text] -> m [Id],
     deleteFromDb       :: Table -> String -> [Text] -> m ()
     }
 
@@ -36,7 +36,7 @@ deleteAllAboutPost h postId = do
   let postIdTxt = pack . show $ postId
   deletePostsPicsTags h [postId]
   deleteFromDb h "comments" "post_id=?" [postIdTxt]
-  draftsIds <- selectNum h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
+  draftsIds <- selectNums h "drafts" ["draft_id"] "post_id=?" [postIdTxt]  
   deleteAllAboutDrafts h draftsIds
   deleteFromDb h "posts" "post_id=?" [postIdTxt]
 

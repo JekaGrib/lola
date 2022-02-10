@@ -32,8 +32,8 @@ import           Database.PostgreSQL.Simple (withTransaction)
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectNum          :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectUser         :: Table -> [Param] -> Where -> [Text] -> m [User],
+    selectNums          :: Table -> [Param] -> Where -> [Text] -> m [Id],
+    selectUsers         :: Table -> [Param] -> Where -> [Text] -> m [User],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
@@ -78,7 +78,7 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo 
 getUser h usIdNum = do
   let selectParams = ["first_name","last_name","user_pic_id","user_create_date"]
-  User fName lName picId usCreateDate <- checkOneIfExistE (hLog h) (selectUser h) "users" selectParams "user_id=?" (numToTxt usIdNum)
+  User fName lName picId usCreateDate <- checkOneIfExistE (hLog h) (selectUsers h) "users" selectParams "user_id=?" (numToTxt usIdNum)
   okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl (hConf h) picId, user_create_date = pack . showGregorian $ usCreateDate}
 
 deleteUser :: (MonadCatch m) => Handle m -> DeleteUser -> ExceptT ReqError m ResponseInfo 
@@ -87,11 +87,11 @@ deleteUser h (DeleteUser usIdNum) = do
   isExistInDbE h "users" "user_id" "user_id=?" [usIdParam] 
   let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ cDefUsId (hConf h),usIdParam]
   let deleteUs = deleteFromDb h "users" "user_id=?" [usIdParam]
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]
+  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
     Just authorId -> do
       let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId  (hConf h),pack . show $ (authorId :: Integer)]
-      draftsIds <- checkListE (hLog h) $ selectNum h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
+      draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [pack . show $ authorId]  
       let deleteDr = deleteAllAboutDrafts (hDelMany h) draftsIds
       let deleteAu = deleteFromDb h "authors" "author_id=?" [pack . show $ authorId]
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)

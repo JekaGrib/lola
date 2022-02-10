@@ -31,8 +31,8 @@ import           Data.List                      ( intercalate )
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectNum          :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectAuthor       :: Table -> [Param] -> Where -> [Text] -> m [Author],
+    selectNums          :: Table -> [Param] -> Where -> [Text] -> m [Id],
+    selectAuthors       :: Table -> [Param] -> Where -> [Text] -> m [Author],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
@@ -69,7 +69,7 @@ createAuthor h (CreateAuthor usIdNum auInfoParam) = do
 getAuthor :: (MonadCatch m) => Handle m -> GetAuthor -> ExceptT ReqError m ResponseInfo 
 getAuthor h (GetAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
-  Author auId auInfo usId <- checkOneIfExistE (hLog h) (selectAuthor h) "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
+  Author auId auInfo usId <- checkOneIfExistE (hLog h) (selectAuthors h) "authors" ["author_id","author_info","user_id"] "author_id=?" auIdParam
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response." 
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
   
@@ -89,7 +89,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
   let auIdParam = numToTxt auIdNum
   isExistInDbE h "authors" "author_id" "author_id=?" [auIdParam] 
   let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h),auIdParam]
-  draftsIds <- checkListE (hLog h) $ selectNum h "drafts" ["draft_id"] "author_id=?" [auIdParam]
+  draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [auIdParam]
   let deleteDr = deleteAllAboutDrafts (hDelMany h)  draftsIds
   let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
@@ -99,7 +99,7 @@ deleteAuthor h (DeleteAuthor auIdNum) = do
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
 isntUserOtherAuthor h usIdNum auIdNum = do
   let usIdParam = pack . show $ usIdNum
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNum h "authors" ["author_id"] "user_id=?" [usIdParam]
+  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [usIdParam]
   case maybeAuId of
     Just auId -> if auId == auIdNum 
       then return ()

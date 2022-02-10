@@ -24,7 +24,7 @@ import  Conf (Config(..),extractConn)
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectTxt          :: Table -> [String] -> String -> [Text] -> m [Text],
+    selectTxts          :: Table -> [String] -> String -> [Text] -> m [Text],
     insertReturn       :: Table -> String -> [String] -> [Text] -> m Integer,
     getDay             :: m String,
     getTokenKey        :: m String
@@ -43,7 +43,7 @@ makeH conf logH = let conn = extractConn conf in
 createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = do
   let picIdParam = numToTxt picIdNum
-  keys <- checkListE (hLog h) $ selectTxt h "key" ["create_admin_key"] "true" ([]::[Text])  
+  keys <- checkListE (hLog h) $ selectTxts h "key" ["create_admin_key"] "true" ([]::[Text])  
   checkEmptyList keys
   checkKeyE keyParam (last keys)
   day   <- lift $ getDay h

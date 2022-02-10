@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d00bd47dc6c0415ce2bd6d65aae8da3b26b590f0980d9f540064aa9d92ffc49d
+-- hash: f5f670a42d5e416d98b281ccd343f47477f5fe676cad5d01287e2210690ba1d9
 
 name:           lola
 version:        0.1.0.0
@@ -123,6 +123,7 @@ test-suite lola-test
   main-is: Spec.hs
   other-modules:
       ConfTest
+      LoggerTest
       OopsTest
       SpecOld
       TagTest

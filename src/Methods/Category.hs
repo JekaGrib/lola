@@ -14,7 +14,6 @@ import           Logger
 import           Types
 import           Oops
 import           Methods.Common
-import Methods.Common.Select (Cat(..))
 import ParseQueryStr (CreateCategory(..),CreateSubCategory(..),UpdateCategory(..),DeleteCategory(..))
 import           Data.Text                      ( pack,Text)
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -32,8 +31,6 @@ import qualified Methods.Common.MakeCatResp (Handle,makeH)
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectNum          :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectCat          :: Table -> [Param] -> Where -> [Text] -> m [Cat],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
@@ -47,8 +44,6 @@ makeH conf logH = let conn = extractConn conf in
   Handle 
     conf 
     logH 
-    (selectOnly' conn) 
-    (select' conn) 
     (updateInDb' conn) 
     (deleteFromDb' conn) 
     (isExistInDb' conn) 

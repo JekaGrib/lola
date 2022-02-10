@@ -1,6 +1,6 @@
+--{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
---{-# LANGUAGE ScopedTypeVariables #-}
 
 module TestDB where
 
@@ -62,8 +62,10 @@ data JoinTable1 = JoinTable1 { post_idJT1 :: Integer, tags_idJT1 :: [Integer]}
 data JoinTable2 = JoinTable2 { post_idJT2 :: Integer, isintagJT2 :: Bool}
 data JoinTable3 = JoinTable3 { post_idJT3 :: Integer, count_picsJT3 :: Int}
 
+emptyDB :: TestDB
 emptyDB = TestDB [] [] [] [] [] [] [] [] [] [] [] [] []
 
+picsL1,picsL2,picsL3,picsL4,picsL5,picsL6,picsL7,picsL8,picsL9,picsL10 :: PicsL
 picsL1  = PicsL 1  "picture1"
 picsL2  = PicsL 2  "picture2"
 picsL3  = PicsL 3  "picture3"
@@ -75,13 +77,15 @@ picsL8  = PicsL 8  "picture8"
 picsL9  = PicsL 9  "picture9"
 picsL10 = PicsL 10 "picture10"
 
-
+picsT1 :: PicsT
 picsT1 = [picsL1,picsL2,picsL3,picsL4,picsL5,picsL6,picsL7,picsL8,picsL9,picsL10]
 
+keyT1 :: KeyT
 keyT1 = ["lola"]
 
 fG = fromGregorian
 
+usersL1,usersL2,usersL3,usersL4,usersL5,usersL6,usersL7,usersL8,usersL9,usersL10 :: UsersL
 usersL1  = UsersL 1  "12345678" "DELETED" "DELETED"   1 (fG 2018 01 01) True
 usersL2  = UsersL 2  "87654321" "Lidia"   "Klimova"   2 (fG 2018 02 01) False
 usersL3  = UsersL 3  "kukui"    "Ira"     "Medvedeva" 2 (fG 2018 03 01) False

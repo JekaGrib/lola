@@ -26,7 +26,7 @@ import           Database.PostgreSQL.Simple (withTransaction)
 data Handle m = Handle 
   { hConf              :: Config,
     hLog               :: LogHandle m ,
-    selectTxt          :: Table -> [Param] -> Where -> [Text] -> m [Text],
+    selectTxts          :: Table -> [Param] -> Where -> [Text] -> m [Text],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
@@ -54,7 +54,7 @@ createTag h (CreateTag tagNameParam) = do
   
 getTag :: (Monad m,MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo 
 getTag h tagIdNum = do
-  tagName <- checkOneIfExistE (hLog h) (selectTxt h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  tagName <- checkOneIfExistE (hLog h) (selectTxts h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
   

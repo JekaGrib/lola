@@ -68,7 +68,7 @@ parseConf = do
   userDB          <- parseConfDBUser      conf
   dbName          <- parseConfDBname      conf
   pwdDB           <- parseConfDBpwd       conf
-  connDB@(ConnDB conn _) <- tryConnect (ConnectInfo hostDB portDB userDB dbName pwdDB) 
+  connDB@(ConnDB conn _) <- tryConnect (ConnectInfo hostDB portDB userDB pwdDB dbName ) 
   defPicId        <- parseConfDefPicId    conf conn 
   defUsId         <- parseConfDefUsId     conf conn defPicId
   defAuthId       <- parseConfDefAuthId   conf conn defUsId
