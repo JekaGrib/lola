@@ -8,7 +8,7 @@
 module Conf where
 
 import Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat)
-import Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputNum)
+import Conf.ConnectDB (tryConnect,ConnDB(..),ConnectInfo(..),inputString,inputNum)
 import Types
 import           Logger
 import           Data.Text                      ( Text, pack, unpack, intercalate )
@@ -21,7 +21,7 @@ import           Data.Char                      ( toUpper )
 import Methods.Common.ToQuery (toExQ)
 import Data.String (fromString)
 import Network.Wai.Handler.Warp (defaultSettings,setHost,setPort,Settings)
-
+import GHC.Word (Word16)
 
 data Config = Config
   { cServHost    :: String,
@@ -54,8 +54,8 @@ extractSettings conf =
 
 reConnectDB :: Config -> IO Config
 reConnectDB oldConf = do
-  let ConnDB _ connDBInfo = cConnDB oldConf
-  connDB <- tryConnect connDBInfo
+  let ConnDB _ connInfo = cConnDB oldConf
+  connDB <- tryConnect connInfo
   return $ oldConf {cConnDB = connDB}
 
 parseConf :: IO Config
@@ -68,7 +68,7 @@ parseConf = do
   userDB          <- parseConfDBUser      conf
   dbName          <- parseConfDBname      conf
   pwdDB           <- parseConfDBpwd       conf
-  connDB@(ConnDB conn _) <- tryConnect (ConnDBInfo hostDB portDB userDB dbName pwdDB) 
+  connDB@(ConnDB conn _) <- tryConnect (ConnectInfo hostDB portDB userDB dbName pwdDB) 
   defPicId        <- parseConfDefPicId    conf conn 
   defUsId         <- parseConfDefUsId     conf conn defPicId
   defAuthId       <- parseConfDefAuthId   conf conn defUsId
@@ -113,14 +113,14 @@ parseConfDBHost conf = do
     Nothing -> inputString "DataBase.host"
     Just x  -> return x
 
-parseConfDBport :: C.Config -> IO Integer
+parseConfDBport :: C.Config -> IO Word16
 parseConfDBport conf = do
   str <- ((C.lookup conf "DataBase.port") :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
     Nothing -> inputNum "DataBase.port"
-    Just x  -> return x
+    Just x  -> return (fromInteger x)
 
 parseConfDBUser :: C.Config -> IO String
 parseConfDBUser conf = do

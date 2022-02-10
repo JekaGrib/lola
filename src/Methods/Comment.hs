@@ -76,7 +76,7 @@ updateComment h usIdNum (UpdateComment commIdNum txtParam) = do
 
 
 deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode ->  DeleteComment -> ExceptT ReqError m ResponseInfo 
-deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
+deleteComment h@Handle{..} usIdNum accessMode (DeleteComment commIdNum) = do
   let commIdParam = numToTxt commIdNum
   isExistInDbE h "comments" "comment_id" "comment_id=?" [commIdParam] 
   case accessMode of
@@ -84,10 +84,10 @@ deleteComment h usIdNum accessMode (DeleteComment commIdNum) = do
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
       okHelper $ OkResponse { ok = True }
     UserMode -> do
-      postId <- checkOneE (hLog h) $ selectNum h "comments" ["post_id"] "comment_id=?" [commIdParam]  
+      postId <- checkOneE hLog $ selectNum "comments" ["post_id"] "comment_id=?" [commIdParam]  
       isCommOrPostAuthor h commIdNum postId usIdNum 
       deleteFromDbE h "comments" "comment_id=?" [commIdParam]
-      lift $ logInfo (hLog h) $ "Comment_id: " ++ show commIdNum ++ " deleted"
+      lift $ logInfo hLog $ "Comment_id: " ++ show commIdNum ++ " deleted"
       okHelper $ OkResponse {ok = True}      
 
 isCommOrPostAuthor :: (MonadCatch m) => Handle m  -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()

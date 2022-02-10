@@ -4,39 +4,34 @@
 
 
 
-module Conf.ConnectDB (tryConnect,ConnDB(..),ConnDBInfo(..),inputString,inputNum) where
+module Conf.ConnectDB (tryConnect,ConnDB(..),ConnectInfo(..),inputString,inputNum) where
           
 
-import           Database.PostgreSQL.Simple (connectPostgreSQL,Connection)
+import           Database.PostgreSQL.Simple (connect,Connection,ConnectInfo(..))
 import qualified Control.Exception              as E
-import           Data.String                    ( fromString )
 import           Control.Monad.Catch            ( catch)
 
 
-data ConnDB = ConnDB Connection ConnDBInfo
+data ConnDB = ConnDB Connection ConnectInfo
 
-data ConnDBInfo = ConnDBInfo {hostCDB :: String, portCDB :: Integer, userCDB :: String, nameCDB :: String, pwdCDB :: String} 
-
-
-
-tryConnect :: ConnDBInfo -> IO ConnDB
-tryConnect connDBInf@(ConnDBInfo hostDB portDB userDB dbName pwdDB) = do
-  let str = "host='" ++ hostDB ++ "' port=" ++ show portDB ++ " user='" ++ userDB ++ "' dbname='" ++ dbName ++ "' password='" ++ pwdDB ++ "'"
+tryConnect :: ConnectInfo -> IO ConnDB
+tryConnect connInf = do
   (do 
-    conn <- connectPostgreSQL (fromString str) 
-    return $ ConnDB conn connDBInf) `catch` (\e -> do
-      putStrLn $ "Can`t connect to database. Connection parameters: " ++ str ++ ". " ++ show (e :: E.IOException)
-      connDBInf2 <- inputConnDBInfo
-      tryConnect connDBInf2)
+    conn <- connect connInf
+    return $ ConnDB conn connInf) `catch` (\e -> do
+      putStrLn $ "Can`t connect to database. ConnectInfo: " ++ show connInf ++ ". " ++ show (e :: E.IOException)
+      connInf2 <- inputConnectInfo
+      tryConnect connInf2)
 
-inputConnDBInfo :: IO ConnDBInfo
-inputConnDBInfo = do
+inputConnectInfo :: IO ConnectInfo
+inputConnectInfo = do
   hostDB          <- inputString  "DataBase.host"
-  portDB          <- inputNum "DataBase.port"
+  portDBInteger   <- inputNum "DataBase.port"
+  let portDB = fromInteger portDBInteger
   userDB          <- inputString  "DataBase.user"
   dbName          <- inputString  "DataBase.dbname"
   pwdDB           <- inputString  "DataBase.password"
-  return (ConnDBInfo hostDB portDB userDB dbName pwdDB)
+  return (ConnectInfo hostDB portDB userDB dbName pwdDB)
 
 inputNum :: (Num a,Read a) => String -> IO a
 inputNum valueName = do
