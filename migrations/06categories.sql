@@ -1,4 +1,4 @@
-insert into categories (category_name, super_category_id) values ('adipiscing', null);
+insert into categories (category_name, super_category_id) values ('DELETED', null);
 insert into categories (category_name, super_category_id) values ('felis', null);
 insert into categories (category_name, super_category_id) values ('quisque', null);
 insert into categories (category_name, super_category_id) values ('tincidunt', null);

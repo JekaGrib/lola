@@ -1,4 +1,4 @@
-insert into authors (author_info, user_id) values ('Phasellus in felis. Donec semper sapien a libero.', 1);
+insert into authors (author_info, user_id) values ('DELETED', 1);
 insert into authors (author_info, user_id) values ('Morbi ut odio. Cras mi pede, malesuada in, imperdiet et, commodo vulputate, justo. In blandit ultrices enim. Lorem ipsum dolor sit amet, consectetuer adipiscing elit.', 2);
 insert into authors (author_info, user_id) values ('Nullam sit amet turpis elementum ligula vehicula consequat. Morbi a ipsum.', 3);
 insert into authors (author_info, user_id) values ('Cras mi pede, malesuada in, imperdiet et, commodo vulputate, justo.', 4);

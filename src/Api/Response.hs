@@ -91,16 +91,15 @@ data CatResponse
       cat_id             :: Integer
     , cat_name           :: Text
     , one_level_sub_cats :: [Integer]
-    , super_cat          :: Text
     } deriving (Eq,Show)
 
 instance ToJSON CatResponse where
-    toJSON (CatResponse a b c d) =
-        object ["category_id" .= a, "category_name" .= b, "sub_categories" .= c, "super_category" .= d]
+    toJSON (CatResponse a b c) =
+        object ["category_id" .= a, "category_name" .= b, "sub_categories" .= c]
     toJSON (SubCatResponse a b c d) =
         object ["category_id" .= a, "category_name" .= b, "sub_categories" .= c, "super_category" .= d]
-    toEncoding (CatResponse a b c d) =
-        pairs ( "category_id" .= a <> "category_name" .= b <> "sub_categories"  .= c <> "super_category" .= d)
+    toEncoding (CatResponse a b c) =
+        pairs ( "category_id" .= a <> "category_name" .= b <> "sub_categories"  .= c)
     toEncoding (SubCatResponse a b c d) =
         pairs ( "category_id" .= a <> "category_name" .= b <> "sub_categories"  .= c <> "super_category" .= d)
 

@@ -55,7 +55,7 @@ createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqErr
 createCategory h (CreateCategory catNameParam) = do
   catId <-  insertReturnE h "categories" "category_id" ["category_name"] [catNameParam]
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catId ++ " created"
-  okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] , super_cat = "NULL"}
+  okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = [] }
 
 createSubCategory :: (MonadCatch m) => Handle m -> CreateSubCategory -> ExceptT ReqError m ResponseInfo
 createSubCategory h (CreateSubCategory catNameParam superCatIdNum) = do
@@ -120,7 +120,7 @@ findAllSubCats h catId = do
 
 fromCatResp :: CatResponse -> CategoryId
 fromCatResp (SubCatResponse a _ _ _) = a
-fromCatResp (CatResponse a _ _ _) = a
+fromCatResp (CatResponse a _ _ ) = a
 
 updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values

@@ -1,2 +1,0 @@
-#!/bin/bash
-curl "http://localhost:3000/createUser?password=12345&first_name=Lilu&last_name=Dalos&user_pic_url=https://cdn.pixabay.com/photo/2016/04/25/18/07/halcyon-1352522_960_720.jpg"
