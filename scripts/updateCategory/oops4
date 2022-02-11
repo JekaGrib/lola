@@ -1,0 +1,2 @@
+#!/bin/bash
+curl "http://localhost:3000/updateCategory?category_id=14&super_category_id&category_name=dim&token=123"
