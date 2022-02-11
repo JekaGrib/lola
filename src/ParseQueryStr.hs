@@ -10,7 +10,7 @@ module ParseQueryStr   where
 --(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Types
-import TryRead (tryReadNum)
+import TryRead (tryReadNumKey)
 import           Data.Text                      ( unpack, Text )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -30,7 +30,7 @@ data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
 instance ParseQueryStr LogIn where
   parseQueryStr req = LogIn 
     <$> parseNumParam req "user_id"
-    <*> parseTxtParam req "password"
+    <*> parseSecretLengTxtParam req 50 "password"
 
 newtype Token = Token Text
  deriving Show
@@ -38,16 +38,16 @@ newtype Token = Token Text
 
 instance ParseQueryStr Token where
   parseQueryStr req = Token
-    <$>  parseTxtParam req "token"
+    <$>  parseSecretLengTxtParam req 50 "token"
 
 data CreateUser = CreateUser {pwdCU :: Text, fNameCU :: Text, lNameCU :: Text, picIdCU :: PictureId}
  deriving Show
 
 instance ParseQueryStr CreateUser where
   parseQueryStr req = CreateUser
-    <$> parseTxtParam req "password"
-    <*> parseTxtParam req "first_name"
-    <*> parseTxtParam req "last_name"
+    <$> parseTxtParam req 50 "password"
+    <*> parseTxtParam req 50 "first_name"
+    <*> parseTxtParam req 50 "last_name"
     <*> parseNumParam req "user_pic_id"
 
 newtype DeleteUser = DeleteUser Id
@@ -62,10 +62,10 @@ data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text
 
 instance ParseQueryStr CreateAdmin where
   parseQueryStr req = CreateAdmin
-    <$> parseTxtParam req "create_admin_key"
-    <*> parseTxtParam req "password"
-    <*> parseTxtParam req "first_name"
-    <*> parseTxtParam req "last_name"
+    <$> parseTxtParam req 50 "create_admin_key"
+    <*> parseTxtParam req 50 "password"
+    <*> parseTxtParam req 50 "first_name"
+    <*> parseTxtParam req 50 "last_name"
     <*> parseNumParam req "user_pic_id"
 
 data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
@@ -74,7 +74,7 @@ data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
 instance ParseQueryStr CreateAuthor where
   parseQueryStr req = CreateAuthor 
     <$> parseNumParam req "user_id"
-    <*> parseTxtParam req "author_info"
+    <*> parseTxtParam req 1000 "author_info"
 
 newtype GetAuthor = GetAuthor Id
  deriving Show
@@ -90,7 +90,7 @@ instance ParseQueryStr UpdateAuthor where
   parseQueryStr req = UpdateAuthor
     <$> parseNumParam req "author_id"
     <*> parseNumParam req "user_id"
-    <*> parseTxtParam req "author_info"
+    <*> parseTxtParam req 1000 "author_info"
 
 newtype DeleteAuthor = DeleteAuthor Id
  deriving Show
@@ -104,14 +104,14 @@ newtype CreateCategory = CreateCategory Text
 
 instance ParseQueryStr CreateCategory where
   parseQueryStr req = CreateCategory
-    <$> parseTxtParam req "category_name"
+    <$> parseTxtParam req 50 "category_name"
 
 data CreateSubCategory = CreateSubCategory Text Id
  deriving Show
 
 instance ParseQueryStr CreateSubCategory where
   parseQueryStr req = CreateSubCategory
-    <$> parseTxtParam req "category_name"
+    <$> parseTxtParam req 50 "category_name"
     <*> parseNumParam req "super_category_id"
 
 data UpdateCategory = UpdateCategory Id Text Id
@@ -120,7 +120,7 @@ data UpdateCategory = UpdateCategory Id Text Id
 instance ParseQueryStr UpdateCategory where
   parseQueryStr req = UpdateCategory
     <$> parseNumParam req "category_id"
-    <*> parseTxtParam req "category_name"
+    <*> parseTxtParam req 50 "category_name"
     <*> parseNumParam req "super_category_id"
 
 newtype DeleteCategory = DeleteCategory Id
@@ -135,7 +135,7 @@ newtype CreateTag = CreateTag Text
 
 instance ParseQueryStr CreateTag where
   parseQueryStr req = CreateTag
-    <$> parseTxtParam req "tag_name"
+    <$> parseTxtParam req 50 "tag_name"
 
 data UpdateTag = UpdateTag Id Text
  deriving Show
@@ -143,7 +143,7 @@ data UpdateTag = UpdateTag Id Text
 instance ParseQueryStr UpdateTag where
   parseQueryStr req = UpdateTag 
     <$> parseNumParam req "tag_id"
-    <*> parseTxtParam req "tag_name"
+    <*> parseTxtParam req 50 "tag_name"
 
 newtype DeleteTag = DeleteTag Id
  deriving Show
@@ -200,7 +200,7 @@ data CreateComment = CreateComment Id Text
 instance ParseQueryStr CreateComment where
   parseQueryStr req = CreateComment
     <$> parseNumParam req "post_id"
-    <*> parseTxtParam req "comment_text"
+    <*> parseTxtParam req 1000 "comment_text"
 
 data GetComments = GetComments Id Integer 
  deriving Show
@@ -216,7 +216,7 @@ data UpdateComment = UpdateComment Id Text
 instance ParseQueryStr UpdateComment where
   parseQueryStr req = UpdateComment
     <$> parseNumParam req "comment_id"
-    <*> parseTxtParam req "comment_text"
+    <*> parseTxtParam req 1000 "comment_text"
 
 newtype DeleteComment = DeleteComment Id
  deriving Show
@@ -230,23 +230,43 @@ newtype BrowsePicture = BrowsePicture Text
 
 instance ParseQueryStr BrowsePicture where
   parseQueryStr req = BrowsePicture
-    <$>  parseTxtParam req "pic_url"
+    <$>  parseTxtParam req 500 "pic_url"
 
-parseTxtParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
-parseTxtParam   = checkParam  
+
+
+parseTxtParam :: (Monad m) =>  Request -> Int -> QueryParamKey -> ExceptT ReqError m Text
+parseTxtParam req leng paramKey = do
+  paramTxt <- checkParam req paramKey
+  checkLength leng paramKey paramTxt
+
+parseSecretLengTxtParam :: (Monad m) => Request -> Int -> QueryParamKey -> ExceptT ReqError m Text
+parseSecretLengTxtParam req leng paramKey = do
+  paramTxt <- checkParam req paramKey
+  checkSecretLength leng paramKey paramTxt
 
 parseNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
 parseNumParam req paramKey = do
   paramTxt <- checkParam req paramKey
-  tryReadNum paramTxt
+  tryReadNumKey paramTxt paramKey
 
 
-checkParam :: (Monad m) => Request -> Text -> ExceptT ReqError m Text
+checkParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
 checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
     Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
-    Just (Just x)  -> case lookup paramKey . delete (paramKey,Just x) $ queryToQueryText $ queryString req of
-      Nothing -> return x
+    Just (Just txt)  -> case lookup paramKey . delete (paramKey,Just txt) $ queryToQueryText $ queryString req of
+      Nothing -> return txt
       Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
     Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack paramKey
 
+checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
+checkLength leng paramKey txt = do
+  if (length . unpack $ txt) > leng 
+    then throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
+    else return txt
+
+checkSecretLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
+checkSecretLength leng paramKey txt = do
+  if (length . unpack $ txt) > leng 
+    then throwE $ SimpleError $ "INVALID " ++ unpack paramKey
+    else return txt

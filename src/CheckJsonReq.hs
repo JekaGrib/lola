@@ -16,6 +16,7 @@ import qualified Data.ByteString.Lazy           as BSL
 import           Control.Monad.Catch            ( MonadCatch)
 import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
+import ParseQueryStr (checkLength,checkSecretLength)
 
 checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson json =  
@@ -23,25 +24,45 @@ checkDraftReqJson json =
     Just body -> return body
     Nothing   -> case (decode json :: Maybe Object) of
       Just obj -> do
-        catIdVal <- isExistInObj obj "draft_category_id"
-        picIdVal <- isExistInObj obj "draft_main_pic_id"
-        tokenVal <- isExistInObj obj "token"
-        nameVal <- isExistInObj obj "draft_name"
-        txtVal <- isExistInObj obj "draft_text"
-        tagsIdsVal <- isExistInObj obj "draft_tags_ids"
-        picsIdsVal <- isExistInObj obj "draft_pics_ids"
-        mapM_ checkNumVal [catIdVal,picIdVal]
-        mapM_ checkStrVal [tokenVal,nameVal,txtVal]
-        mapM_ checkNumArrVal [tagsIdsVal,picsIdsVal]
+        checkSecretLengTxt obj 50 "token"
+        checkTxt obj 50 "draft_name"
+        checkTxt obj 10000 "draft_text"
+        mapM_ (checkNum obj) ["draft_category_id","draft_main_pic_id"]
+        mapM_ (checkNumArr obj) ["draft_tags_ids","draft_pics_ids"]
         throwE $ SimpleError  "Can`t parse request body"
       Nothing -> throwE $ SimpleError  "Invalid request body"
 
+checkNum :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
+checkNum obj paramKey = do
+  val <- isExistInObj obj paramKey
+  checkNumVal val
+
+checkNumArr :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
+checkNumArr obj paramKey = do
+  val <- isExistInObj obj paramKey
+  checkNumArrVal val
+
+checkTxt :: (MonadCatch m) => Object -> Int ->  Text -> ExceptT ReqError m ()
+checkTxt obj leng paramKey = do
+  val <- isExistInObj obj paramKey
+  txt <- checkTxtVal val
+  _ <- checkLength leng paramKey txt
+  return ()
+
+
+checkSecretLengTxt ::  (MonadCatch m) => Object -> Int ->  Text -> ExceptT ReqError m ()
+checkSecretLengTxt obj leng paramKey = do
+  val <- isExistInObj obj paramKey
+  txt <- checkTxtVal val
+  _ <- checkSecretLength leng paramKey txt
+  return ()
+
 
 isExistInObj :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
-isExistInObj obj param = 
-  case lookup param . toList $ obj of
+isExistInObj obj paramKey = 
+  case lookup paramKey . toList $ obj of
     Just val -> return val
-    Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack param
+    Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack paramKey
 
 checkNumVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
 checkNumVal val = 
@@ -49,11 +70,12 @@ checkNumVal val =
     Number _ -> return ()
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be number"
 
-checkStrVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
-checkStrVal val = 
+checkTxtVal :: (MonadCatch m) => Value -> ExceptT ReqError m Text
+checkTxtVal val = 
   case val of
-    String _ -> return ()
+    String txt -> return txt
     _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be text"
+
 
 checkNumArrVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
 checkNumArrVal values = 

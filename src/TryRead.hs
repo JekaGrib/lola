@@ -8,6 +8,7 @@
 module TryRead where
           
 import           Oops
+import Types
 import           Data.Time.Calendar             ( Day, fromGregorianValid)
 import           Data.Text                      ( pack, unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE,catchE)
@@ -41,3 +42,9 @@ tryReadDay xs = case filter (' ' /=) . unpack $ xs of
       Just x -> return x
       Nothing -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Invalid day, month, year combination. Date must have format (yyyy-mm-dd). Example: 2020-12-12"     
   _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+
+tryReadNumKey :: (Monad m) => Text -> QueryParamKey -> ExceptT ReqError m Integer
+tryReadNumKey "" paramKey = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
+tryReadNumKey xs paramKey = case reads . unpack $ xs of
+  [(a,"")] -> return a
+  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". It must be number"

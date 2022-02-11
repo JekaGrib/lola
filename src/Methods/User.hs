@@ -67,6 +67,7 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
   day <- lift $ getDay h
   tokenKey <- lift $ getTokenKey h
   let hashPwdParam = txtSha1 pwdParam
+  isExistInDbE h "pics" "pic_id" "pic_id=?" [picIdParam] 
   let insNames  = ["password"    ,"first_name","last_name","user_pic_id"  ,"user_create_date","admin","token_key"]
   let insValues = [ hashPwdParam ,fNameParam  ,lNameParam ,picIdParam   ,pack day          ,"FALSE",pack tokenKey]
   usId <-  insertReturnE h "users" "user_id" insNames insValues

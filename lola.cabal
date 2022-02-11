@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f5f670a42d5e416d98b281ccd343f47477f5fe676cad5d01287e2210690ba1d9
+-- hash: 697897b45555cd947de4c9d66e2743850978956dbd682c077c31cbc332f074a9
 
 name:           lola
 version:        0.1.0.0
@@ -34,6 +34,7 @@ library
       Conf
       Conf.ConnectDB
       Conf.CreateDefault
+      ConnectDB
       Logger
       Methods
       Methods.Admin

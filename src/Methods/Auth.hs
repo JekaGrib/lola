@@ -64,10 +64,10 @@ type UserAccessMode = (UserId,AccessMode)
 data AccessMode = UserMode | AdminMode
 
 tokenAdminAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ()
-tokenAdminAuth h req = do
+tokenAdminAuth h req = hideErr $ do
   Token tokenParam <- parseQueryStr req
   lift $ logInfo (hLog h) "Token parsed"
-  hideErr $ checkAdminTokenParam h tokenParam
+  checkAdminTokenParam h tokenParam
 
 checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
 checkAdminTokenParam h tokenParam =
@@ -128,7 +128,7 @@ checkUserTokenParam h tokenParam =
 checkPwd :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m ()
 checkPwd pwdParam pwd 
   | pwd == hashPwdParam = return ()
-  | otherwise       = throwE . SimpleError $ "INVALID password"
+  | otherwise       = throwE . SimpleError $ "INVALID password or user_id"
     where
       hashPwdParam = txtSha1 pwdParam
 

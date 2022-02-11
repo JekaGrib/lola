@@ -1,0 +1,2 @@
+#!/bin/bash
+curl "http://localhost:3000/logIn?user_id=7&password=1234567"

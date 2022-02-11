@@ -41,7 +41,7 @@ makeH conf logH = let conn = extractConn conf in
     getTokenKey'
 
 createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
-createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = do
+createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdNum) = hideErr $ do
   let picIdParam = numToTxt picIdNum
   keys <- checkListE (hLog h) $ selectTxts h "key" ["create_admin_key"] "true" ([]::[Text])  
   checkEmptyList keys
