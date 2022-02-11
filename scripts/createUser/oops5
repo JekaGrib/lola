@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/createUser?password=12345&first_name=Lilu&last_name=Dalos&user_pic_id=lola"
+curl "http://localhost:3000/createUser?password=12345&first_name=Lilurrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr&last_name=Dalos&user_pic_id=20"

@@ -11,7 +11,7 @@ import           Api.Response (OkInfoResponse(..))
 import           Api.Request (DraftRequest(..))
 import           Logger
 import           Types
-import           Oops (ReqError(..),logOnErr)
+import           Oops (ReqError(..),logOnErr,hideLogInErr,hideErr)
 import           Methods.Admin (createAdmin)
 import           Methods.Auth (logIn,tokenUserAuth,tokenAdminAuth,checkUserTokenParam)
 import           Methods.Author (createAuthor,getAuthor,updateAuthor,deleteAuthor)
@@ -28,7 +28,7 @@ import Methods (hAdm,hAuth,hAu,hCat,hCom,hDr,hPic,hPost,hTag,hUs)
 import           Conf (Config(..),reConnectDB)
 import ParseQueryStr  (parseQueryStr,ParseQueryStr)
 import TryRead (tryReadNum)
-import CheckJsonReq (checkDraftReqJson)
+import CheckJsonReq (checkDraftReqJson,pullTokenDraftReqJson)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404 )
 import           Data.Aeson (encode)
@@ -64,16 +64,20 @@ fromE respE = case respE of
   Right a                  -> a
   Left (SimpleError str)   -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
                                 (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+  Left (SecretLogInError _) -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
+                                (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
+  Left (SecretTokenError _) -> ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")]
+                                (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
   Left (SecretError _)   -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status200 [] "Internal server error"
-
+  
 
 chooseRespEx :: (MonadCatch m) => Handle m  -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx h req = do
   let methH = hMeth h
   lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
   case pathInfo req of
-    ["logIn"] -> do
+    ["logIn"] -> hideLogInErr $ do
       lift $ logInfo (hLog h) "Login command"
       preParseQueryStr h req $ logIn (hAuth methH) 
     ["createUser"] -> do
@@ -88,7 +92,7 @@ chooseRespEx h req = do
       lift $ logInfo (hLog h) "Delete user command"
       tokenAdminAuth (hAuth methH)  req
       preParseQueryStr h req $ deleteUser (hUs methH) 
-    ["createAdmin"]        -> do
+    ["createAdmin"]        -> hideErr $ do
       lift $ logInfo (hLog h) "Create admin command"
       preParseQueryStr h req $ createAdmin (hAdm methH) 
     ["createAuthor"]        -> do
@@ -224,8 +228,8 @@ preParseQueryStr h req foo = do
 getBodyAndCheckUserToken :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m (UserId,DraftRequest)
 getBodyAndCheckUserToken h req = do
   json <- lift $ getBody h req
-  body <- checkDraftReqJson json
-  let tokenParam   = tokenDR    body
+  tokenParam <- pullTokenDraftReqJson json
   (usIdNum,_) <- checkUserTokenParam (hAuth . hMeth $ h) tokenParam
+  body <- checkDraftReqJson json
   return (usIdNum,body)
 

@@ -4,7 +4,7 @@
 
 
 
-module Oops (ReqError(..),logOnErr,hideErr,catchDbErr,UnexpectedDbOutPutException(..)) where
+module Oops (ReqError(..),logOnErr,hideErr,hideLogInErr,hideTokenErr,catchDbErr,UnexpectedDbOutPutException(..)) where
 
 import Logger (LogHandle(..), logWarning)
 import qualified Control.Exception              as E
@@ -14,7 +14,7 @@ import           Control.Monad.Catch            ( catch, MonadCatch,Exception)
 import           Control.Monad.Trans            ( lift )
 
 
-data ReqError = SecretError String | SimpleError String | DatabaseError String 
+data ReqError = SecretError String | SimpleError String | DatabaseError String | SecretLogInError String | SecretTokenError String
   deriving (Eq,Show)
 
 data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
@@ -32,6 +32,11 @@ logOnErr logH m = m `catchE` (\e -> do
 hideErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideErr m = m `catchE` (throwE . toSecret)
 
+hideLogInErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideLogInErr m = m `catchE` (throwE . simpleToSecretLogIn)
+
+hideTokenErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideTokenErr m = m `catchE` (throwE . simpleToSecretToken)
 
 catchDbErr ::  (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr  
@@ -59,6 +64,14 @@ toSecret :: ReqError -> ReqError
 toSecret (SimpleError str) = SecretError str
 toSecret (SecretError str) = SecretError str
 toSecret (DatabaseError str) = SecretError str
+toSecret (SecretLogInError str) = SecretError str
+toSecret (SecretTokenError str) = SecretError str
 
 
+simpleToSecretLogIn :: ReqError -> ReqError
+simpleToSecretLogIn (SimpleError str) = SecretLogInError str
+simpleToSecretLogIn e = e
 
+simpleToSecretToken :: ReqError -> ReqError
+simpleToSecretToken (SimpleError str) = SecretTokenError str
+simpleToSecretToken e = e

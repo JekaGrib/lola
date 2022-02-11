@@ -30,7 +30,7 @@ data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
 instance ParseQueryStr LogIn where
   parseQueryStr req = LogIn 
     <$> parseNumParam req "user_id"
-    <*> parseSecretLengTxtParam req 50 "password"
+    <*> parseTxtParam req 50 "password"
 
 newtype Token = Token Text
  deriving Show
@@ -38,7 +38,7 @@ newtype Token = Token Text
 
 instance ParseQueryStr Token where
   parseQueryStr req = Token
-    <$>  parseSecretLengTxtParam req 50 "token"
+    <$>  parseTxtParam req 100 "token"
 
 data CreateUser = CreateUser {pwdCU :: Text, fNameCU :: Text, lNameCU :: Text, picIdCU :: PictureId}
  deriving Show
@@ -114,14 +114,14 @@ instance ParseQueryStr CreateSubCategory where
     <$> parseTxtParam req 50 "category_name"
     <*> parseNumParam req "super_category_id"
 
-data UpdateCategory = UpdateCategory Id Text Id
+data UpdateCategory = UpdateCategory Id Text (Maybe Id)
  deriving Show
 
 instance ParseQueryStr UpdateCategory where
   parseQueryStr req = UpdateCategory
     <$> parseNumParam req "category_id"
     <*> parseTxtParam req 50 "category_name"
-    <*> parseNumParam req "super_category_id"
+    <*> parseMaybeNumParam req "super_category_id"
 
 newtype DeleteCategory = DeleteCategory Id
  deriving Show
@@ -239,16 +239,20 @@ parseTxtParam req leng paramKey = do
   paramTxt <- checkParam req paramKey
   checkLength leng paramKey paramTxt
 
-parseSecretLengTxtParam :: (Monad m) => Request -> Int -> QueryParamKey -> ExceptT ReqError m Text
-parseSecretLengTxtParam req leng paramKey = do
-  paramTxt <- checkParam req paramKey
-  checkSecretLength leng paramKey paramTxt
 
 parseNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
 parseNumParam req paramKey = do
   paramTxt <- checkParam req paramKey
   tryReadNumKey paramTxt paramKey
 
+parseMaybeNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
+parseMaybeNumParam req paramKey = do
+  maybeParamTxt <- checkMaybeParam req paramKey
+  case maybeParamTxt of
+    Just paramTxt -> do
+      num <- tryReadNumKey paramTxt paramKey
+      return (Just num)
+    Nothing -> return Nothing
 
 checkParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
 checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
@@ -259,14 +263,18 @@ checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString 
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
     Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack paramKey
 
+checkMaybeParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
+checkMaybeParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
+    Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
+    Just (Just txt)  -> case lookup paramKey . delete (paramKey,Just txt) $ queryToQueryText $ queryString req of
+      Nothing -> return (Just txt)
+      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
+    Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
+    Nothing        -> return Nothing
+
 checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
 checkLength leng paramKey txt = do
   if (length . unpack $ txt) > leng 
     then throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
     else return txt
 
-checkSecretLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
-checkSecretLength leng paramKey txt = do
-  if (length . unpack $ txt) > leng 
-    then throwE $ SimpleError $ "INVALID " ++ unpack paramKey
-    else return txt

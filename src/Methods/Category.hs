@@ -74,13 +74,20 @@ getCategory h catIdNum = do
   okHelper catResp
   
 updateCategory :: (MonadCatch m) => Handle m -> UpdateCategory -> ExceptT ReqError m ResponseInfo 
-updateCategory h (UpdateCategory catIdNum catNameParam superCatIdNum) = do
+updateCategory h (UpdateCategory catIdNum catNameParam (Just superCatIdNum)) = do
   let catIdParam = numToTxt catIdNum
   let superCatIdParam = numToTxt superCatIdNum
   isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]      
   isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam] 
   checkRelationCats h  catIdNum superCatIdNum
   updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam,superCatIdParam,catIdParam]
+  catResp <- makeCatResp (hCatResp h)  catIdNum
+  lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdNum ++ " updated." 
+  okHelper catResp
+updateCategory h (UpdateCategory catIdNum catNameParam Nothing) = do
+  let catIdParam = numToTxt catIdNum
+  isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]      
+  updateInDbE h "categories" "category_name=?" "category_id=?" [catNameParam,catIdParam]
   catResp <- makeCatResp (hCatResp h)  catIdNum
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdNum ++ " updated." 
   okHelper catResp

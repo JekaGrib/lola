@@ -1,0 +1,2 @@
+#!/bin/bash
+curl "http://localhost:3000/updateAuthor?author_id=100&user_id=420&author_info=ddd&token=7.16ed76fae6c345cbc032bf73169c6c7ae55ef166.stu.5bcd0f041b39a70ffdacf5b61a80bde92d8f9647"

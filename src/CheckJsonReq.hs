@@ -5,9 +5,9 @@
 
 
 
-module CheckJsonReq (checkDraftReqJson) where
+module CheckJsonReq (checkDraftReqJson,pullTokenDraftReqJson) where
           
-import           Api.Request (DraftRequest)
+import           Api.Request (DraftRequest(..))
 import           Oops (ReqError(..))
 import           Data.Aeson (Object,Value(..),decode)
 import           Data.Text                      (  unpack, Text )
@@ -16,21 +16,47 @@ import qualified Data.ByteString.Lazy           as BSL
 import           Control.Monad.Catch            ( MonadCatch)
 import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
-import ParseQueryStr (checkLength,checkSecretLength)
+import ParseQueryStr (checkLength)
+
+
+
 
 checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson json =  
   case (decode json :: Maybe DraftRequest) of
-    Just body -> return body
-    Nothing   -> case (decode json :: Maybe Object) of
+    Just body@(DraftRequest token nameParam _ txtParam _ _ _) -> do
+      checkTokenLength 100 token
+      _ <- checkLength 50 "draft_name" nameParam
+      _ <- checkLength 10000 "draft_text" txtParam
+      return body
+    Nothing -> whyBadDraftReq json
+
+whyBadDraftReq :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m a
+whyBadDraftReq json =  
+  case (decode json :: Maybe Object) of
       Just obj -> do
-        checkSecretLengTxt obj 50 "token"
-        checkTxt obj 50 "draft_name"
-        checkTxt obj 10000 "draft_text"
+        mapM_ (checkTxt obj) ["token","draft_name","draft_text"]
         mapM_ (checkNum obj) ["draft_category_id","draft_main_pic_id"]
         mapM_ (checkNumArr obj) ["draft_tags_ids","draft_pics_ids"]
         throwE $ SimpleError  "Can`t parse request body"
       Nothing -> throwE $ SimpleError  "Invalid request body"
+
+pullTokenDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
+pullTokenDraftReqJson json =
+  case (decode json :: Maybe DraftRequest) of
+    Just (DraftRequest token _ _ _ _ _ _) -> do
+      checkTokenLength 100 token
+      return token
+    Nothing -> pullTokenJson json
+
+pullTokenJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
+pullTokenJson json =
+  case (decode json :: Maybe Object) of
+    Just obj -> do
+      token <- checkTxt obj "token"
+      checkTokenLength 100 token
+      return token
+    Nothing -> throwE $ SimpleError  "Invalid request body"
 
 checkNum :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
 checkNum obj paramKey = do
@@ -42,20 +68,11 @@ checkNumArr obj paramKey = do
   val <- isExistInObj obj paramKey
   checkNumArrVal val
 
-checkTxt :: (MonadCatch m) => Object -> Int ->  Text -> ExceptT ReqError m ()
-checkTxt obj leng paramKey = do
+checkTxt :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Text
+checkTxt obj paramKey = do
   val <- isExistInObj obj paramKey
-  txt <- checkTxtVal val
-  _ <- checkLength leng paramKey txt
-  return ()
+  checkTxtVal val
 
-
-checkSecretLengTxt ::  (MonadCatch m) => Object -> Int ->  Text -> ExceptT ReqError m ()
-checkSecretLengTxt obj leng paramKey = do
-  val <- isExistInObj obj paramKey
-  txt <- checkTxtVal val
-  _ <- checkSecretLength leng paramKey txt
-  return ()
 
 
 isExistInObj :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
@@ -85,3 +102,9 @@ checkNumArrVal values =
       (Number _ : _) -> return ()
       _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"
     _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"
+
+checkTokenLength :: (Monad m) => Int -> Text -> ExceptT ReqError m ()
+checkTokenLength leng txt = do
+  if (length . unpack $ txt) > leng
+    then throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
+    else return ()

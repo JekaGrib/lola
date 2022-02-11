@@ -70,7 +70,7 @@ tokenAdminAuth h req = hideErr $ do
   checkAdminTokenParam h tokenParam
 
 checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
-checkAdminTokenParam h tokenParam =
+checkAdminTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
@@ -89,13 +89,13 @@ checkAdminTokenParam h tokenParam =
     _        -> throwE . SimpleError $ "INVALID token"
 
 tokenUserAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
-tokenUserAuth h req = do
+tokenUserAuth h req = hideTokenErr $ do
   Token tokenParam <- parseQueryStr req
   lift $ logInfo (hLog h) "Token parsed"
   checkUserTokenParam h tokenParam
 
 checkUserTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode    
-checkUserTokenParam h tokenParam =
+checkUserTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
@@ -128,7 +128,7 @@ checkUserTokenParam h tokenParam =
 checkPwd :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m ()
 checkPwd pwdParam pwd 
   | pwd == hashPwdParam = return ()
-  | otherwise       = throwE . SimpleError $ "INVALID password or user_id"
+  | otherwise       = throwE . SimpleError $ "INVALID password"
     where
       hashPwdParam = txtSha1 pwdParam
 
