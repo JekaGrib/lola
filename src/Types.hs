@@ -19,6 +19,7 @@ type CategoryId = Id
 type TagId = Id
 
 type QueryParamKey = Text
+type JsonParamKey = Text
 type QueryTxtParam = Text
 
 

@@ -18,6 +18,7 @@ import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
 import ParseQueryStr (checkLength)
 import TryRead (checkBigInt)
+import Types
 
 
 
@@ -63,50 +64,50 @@ pullTokenJson json =
       return token
     Nothing -> throwE $ SecretTokenError "Can`t parse token from request body"
 
-checkNum :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
+checkNum :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkNum obj paramKey = do
   val <- isExistInObj obj paramKey
-  checkNumVal val
+  checkNumVal paramKey val 
 
-checkNumArr :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
+checkNumArr :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkNumArr obj paramKey = do
   val <- isExistInObj obj paramKey
-  checkNumArrVal val
+  checkNumArrVal paramKey val
 
-checkTxt :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Text
+checkTxt :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m Text
 checkTxt obj paramKey = do
   val <- isExistInObj obj paramKey
-  checkTxtVal val
+  checkTxtVal paramKey val
 
 
 
-isExistInObj :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m Value
+isExistInObj :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m Value
 isExistInObj obj paramKey = 
   case lookup paramKey . toList $ obj of
     Just val -> return val
     Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack paramKey
 
-checkNumVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumVal val = 
+checkNumVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m ()
+checkNumVal paramKey val = 
   case val of
     Number _ -> return ()
-    _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be number"
+    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number"
 
-checkTxtVal :: (MonadCatch m) => Value -> ExceptT ReqError m Text
-checkTxtVal val = 
+checkTxtVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m Text
+checkTxtVal paramKey val = 
   case val of
     String txt -> return txt
-    _ -> throwE $ SimpleError $ "Can`t parse parameter value: " ++ show val ++ ". It should be text"
+    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be text"
 
 
-checkNumArrVal :: (MonadCatch m) => Value -> ExceptT ReqError m ()
-checkNumArrVal values = 
+checkNumArrVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m ()
+checkNumArrVal paramKey values = 
   case values of
     Array arr -> case V.toList arr of
       [] -> return ()
       (Number _ : _) -> return ()
-      _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"
-    _ -> throwE $ SimpleError $ "Can`t parse parameter values: " ++ show values ++ ". It should be number array"
+      _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
+    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
 
 checkTokenLength :: (Monad m) => Int -> Text -> ExceptT ReqError m ()
 checkTokenLength leng txt = do

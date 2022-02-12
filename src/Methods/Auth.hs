@@ -51,11 +51,11 @@ logIn h (LogIn usIdNum pwdParam) = do
   updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey,usIdParam]
   if admBool
     then do 
-      let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
+      let usToken = pack $ show usIdNum ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
       lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " successfully logIn as admin."
       okHelper $ TokenResponse {tokenTR = usToken}  
     else do
-      let usToken = pack $ show usIdNum ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
+      let usToken = pack $ show usIdNum ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
       lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " successfully logIn as user."
       okHelper $ TokenResponse {tokenTR = usToken}
 
@@ -72,21 +72,19 @@ tokenAdminAuth h req = hideErr $ do
 checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
 checkAdminTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
-    (usIdParam, _:xs) -> case break (== '.') xs of
-      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadId "user_id" (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
+    (usIdParam,'.':'h':'i':'j':'.':xs) -> do
+      usIdNum <- tryReadId "user_id" (pack usIdParam)
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+      case maybeTokenKey of
           Just tokenKey ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("hij" ++ unpack tokenKey) == ys
+            if strSha1 ("hij" ++ unpack tokenKey) == xs
               then do
                 lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode. Admin_id: " ++ show usIdNum
                 return ()
-              else throwE . SecretTokenError $ "INVALID token. Wrong token key"
+              else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
           Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist" 
-      _ -> throwE . SecretTokenError $ "INVALID token"
-    _        -> throwE . SecretTokenError $ "INVALID token"
+    _ -> throwE . SecretTokenError $ "INVALID token"
+
 
 tokenUserAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
 tokenUserAuth h req = hideTokenErr $ do
@@ -97,33 +95,31 @@ tokenUserAuth h req = hideTokenErr $ do
 checkUserTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode    
 checkUserTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
-    (usIdParam, _:xs) -> case break (== '.') xs of
-      (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
-        usIdNum <- tryReadId "user_id" (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
+    (usIdParam,'.':'h':'i':'j':'.':xs) -> do
+      usIdNum <- tryReadId "user_id" (pack usIdParam)
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+      case maybeTokenKey of
           Just tokenKey ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("stu" ++ unpack tokenKey) == ys 
+            if strSha1 ("hij" ++ unpack tokenKey) == xs
               then do
-                lift $ logInfo (hLog h) "Token valid, user in UserAccessMode"
+                lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode. Admin_id: " ++ show usIdNum
+                return (usIdNum, AdminMode)
+              else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
+          Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist" 
+    (usIdParam,'.':'s':'t':'u':'.':xs) -> do
+      usIdNum <- tryReadId "user_id" (pack usIdParam)
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
+      case maybeTokenKey of
+          Just tokenKey ->  
+            if strSha1 ("stu" ++ unpack tokenKey) == xs
+              then do
+                lift $ logInfo (hLog h) $ "Token valid, user in UserAccessMode. User_id: " ++ show usIdNum
                 return (usIdNum, UserMode)
               else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
           Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist" 
-      (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadId "user_id" (pack usIdParam)
-        maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
-        case maybeTokenKey of
-          Just tokenKey ->  
-            if strSha1 (unpack tokenKey) == tokenKeyParam 
-                 && strSha1 ("hij" ++ unpack tokenKey) == ys
-              then do
-                lift $ logInfo (hLog h) "Token valid, user in AdminAccessMode"
-                return (usIdNum, AdminMode)
-              else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
-          Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"  
-      _ -> throwE . SecretTokenError $ "INVALID token"
-    _        -> throwE . SecretTokenError $ "INVALID token"
+    _ -> throwE . SecretTokenError $ "INVALID token"
+  
+  
 
 checkPwd :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m ()
 checkPwd pwdParam pwd 
