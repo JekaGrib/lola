@@ -67,9 +67,9 @@ catchDbOutputErr m = m `catch` (\e ->
 toSecret :: ReqError -> ReqError
 toSecret (SimpleError str) = SecretError str
 toSecret (SecretError str) = SecretError str
-toSecret (DatabaseError str) = SecretError str
-toSecret (SecretLogInError str) = SecretError str
-toSecret (SecretTokenError str) = SecretError str
+toSecret (DatabaseError str) = SecretError ("DatabaseError. " ++ str)
+toSecret (SecretLogInError str) = SecretError ("LogInError. " ++ str)
+toSecret (SecretTokenError str) = SecretError ("TokenError. " ++ str)
 
 
 simpleToSecretLogIn :: ReqError -> ReqError

@@ -1,0 +1,2 @@
+#!/bin/bash
+curl -H "Content-Type: application/json" -X POST -d @createNewDraft/oops8.json http://localhost:3000/createNewDraft

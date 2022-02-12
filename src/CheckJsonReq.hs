@@ -44,7 +44,7 @@ whyBadDraftReq json =
         mapM_ (checkTxt obj) ["token","draft_name","draft_text"]
         mapM_ (checkNum obj) ["draft_category_id","draft_main_pic_id"]
         mapM_ (checkNumArr obj) ["draft_tags_ids","draft_pics_ids"]
-        throwE $ SimpleError  "Can`t parse request body"
+        throwE $ SimpleError  "Invalid request body"
       Nothing -> throwE $ SimpleError  "Invalid request body"
 
 pullTokenDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
@@ -62,7 +62,7 @@ pullTokenJson json =
       token <- hideTokenErr $ checkTxt obj "token"
       checkTokenLength 100 token
       return token
-    Nothing -> throwE $ SecretTokenError "Can`t parse token from request body"
+    Nothing -> throwE $ SimpleError "Invalid request body"
 
 checkNum :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkNum obj paramKey = do
