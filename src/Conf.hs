@@ -151,30 +151,36 @@ parseConfDBpwd conf = do
 
 parseConfCommLimit :: C.Config -> IO Limit
 parseConfCommLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Limit))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
+  str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputNum "commentNumberLimit"
-    Just x  -> return x
+    Nothing -> do
+      num <- inputNum "commentNumberLimit"
+      checkLimitOr num (inputNum "commentNumberLimit")
+    Just num  -> checkLimitOr num (inputNum "commentNumberLimit")
 
 parseConfDraftsLimit :: C.Config -> IO Limit
 parseConfDraftsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.draftNumberLimit") :: IO (Maybe Limit))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
+  str <- ((C.lookup conf "LimitNumbers.draftNumberLimit") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputNum "draftNumberLimit"
-    Just x  -> return x
+    Nothing -> do
+      num <- inputNum "draftNumberLimit"
+      checkLimitOr num (inputNum "draftNumberLimit")
+    Just num  -> checkLimitOr num (inputNum "draftNumberLimit")
 
 parseConfPostsLimit :: C.Config -> IO Limit
 parseConfPostsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.postNumberLimit") :: IO (Maybe Limit))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
+  str <- ((C.lookup conf "LimitNumbers.postNumberLimit") :: IO (Maybe Integer))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
-    Nothing -> inputNum "postNumberLimit"
-    Just x  -> return x
+    Nothing -> do
+      num <- inputNum "postNumberLimit"
+      checkLimitOr num (inputNum "postNumberLimit")
+    Just num  -> checkLimitOr num (inputNum "postNumberLimit")
 
 parseConfPrio :: C.Config -> IO Priority
 parseConfPrio conf = do
@@ -286,3 +292,15 @@ checkExistId conn table checkname where' values ifTrue ifFalse = do
     _ -> do
       putStrLn $ "Something in DB went wrong with " ++ checkname ++ ": " ++ (unpack . intercalate "; " $ values)
       ifFalse
+
+checkLimitOr :: Integer -> IO Integer -> IO Page
+checkLimitOr num action
+  | num <= 0 = do
+    putStrLn "Limit should be greater then 0"
+    newNum <- action
+    checkLimitOr newNum action
+  | num > 100 = do
+    putStrLn  "Limit should be less then 100"
+    newNum <- action
+    checkLimitOr newNum action
+  | otherwise = return (fromInteger num)

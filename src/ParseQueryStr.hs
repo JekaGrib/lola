@@ -277,7 +277,6 @@ checkMaybeParam req paramKey = case lookup paramKey $ queryToQueryText $ querySt
     Nothing        -> return Nothing
 
 checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
-checkLength leng paramKey txt = do
-  if (length . unpack $ txt) > leng 
-    then throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
-    else return txt
+checkLength leng paramKey txt = case splitAt leng (unpack txt) of
+    (_,[]) -> return txt
+    _ -> throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng

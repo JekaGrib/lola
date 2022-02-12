@@ -83,10 +83,10 @@ checkAdminTokenParam h tokenParam = hideTokenErr $ do
               then do
                 lift $ logInfo (hLog h) $ "Token valid, user in AdminAccessMode. Admin_id: " ++ show usIdNum
                 return ()
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"
-      _ -> throwE . SimpleError $ "INVALID token"
-    _        -> throwE . SimpleError $ "INVALID token"
+              else throwE . SecretTokenError $ "INVALID token. Wrong token key"
+          Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist" 
+      _ -> throwE . SecretTokenError $ "INVALID token"
+    _        -> throwE . SecretTokenError $ "INVALID token"
 
 tokenUserAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
 tokenUserAuth h req = hideTokenErr $ do
@@ -108,8 +108,8 @@ checkUserTokenParam h tokenParam = hideTokenErr $ do
               then do
                 lift $ logInfo (hLog h) "Token valid, user in UserAccessMode"
                 return (usIdNum, UserMode)
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"
+              else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
+          Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist" 
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
         usIdNum <- tryReadId "user_id" (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
@@ -120,15 +120,15 @@ checkUserTokenParam h tokenParam = hideTokenErr $ do
               then do
                 lift $ logInfo (hLog h) "Token valid, user in AdminAccessMode"
                 return (usIdNum, AdminMode)
-              else throwE . SimpleError $ "INVALID token"
-          Nothing -> throwE . SimpleError $ "INVALID token"  
-      _ -> throwE . SimpleError $ "INVALID token"
-    _        -> throwE . SimpleError $ "INVALID token"
+              else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
+          Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"  
+      _ -> throwE . SecretTokenError $ "INVALID token"
+    _        -> throwE . SecretTokenError $ "INVALID token"
 
 checkPwd :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m ()
 checkPwd pwdParam pwd 
   | pwd == hashPwdParam = return ()
-  | otherwise       = throwE . SimpleError $ "INVALID password"
+  | otherwise       = throwE . SecretLogInError $ "INVALID password"
     where
       hashPwdParam = txtSha1 pwdParam
 

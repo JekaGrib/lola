@@ -4,7 +4,7 @@
 
 
 
-module Oops (ReqError(..),logOnErr,hideErr,hideLogInErr,hideTokenErr,catchDbErr,UnexpectedDbOutPutException(..)) where
+module Oops (ReqError(..),logOnErr,hideErr,hideLogInErr,hideTokenErr,catchDbErr,UnexpectedDbOutPutException(..),addToSimpleErr) where
 
 import Logger (LogHandle(..), logWarning)
 import qualified Control.Exception              as E
@@ -23,25 +23,29 @@ data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | Unexpected
 
 instance Exception UnexpectedDbOutPutException
 
-logOnErr :: (Monad m, MonadCatch m) => LogHandle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
+logOnErr :: (MonadCatch m) => LogHandle m  -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr logH m = m `catchE` (\e -> do
   lift $ logWarning logH $ show e
   throwE e)
 
 
-hideErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideErr m = m `catchE` (throwE . toSecret)
 
-hideLogInErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideLogInErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideLogInErr m = m `catchE` (throwE . simpleToSecretLogIn)
 
-hideTokenErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideTokenErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideTokenErr m = m `catchE` (throwE . simpleToSecretToken)
 
-catchDbErr ::  (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+addToSimpleErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
+addToSimpleErr str2 (SimpleError str1) = throwE $ SimpleError $ str1 ++ str2
+addToSimpleErr _ e = throwE e
+
+catchDbErr ::  (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr  
 
-cathSqlErr,cathFormatErr,cathQueryErr,cathResultErr, catchIOErr, catchDbOutputErr :: (Monad m, MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+cathSqlErr,cathFormatErr,cathQueryErr,cathResultErr, catchIOErr, catchDbOutputErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 cathSqlErr m = m `catch` (\e -> 
   throwE . DatabaseError $ show (e :: SqlError) )
 
@@ -75,3 +79,4 @@ simpleToSecretLogIn e = e
 simpleToSecretToken :: ReqError -> ReqError
 simpleToSecretToken (SimpleError str) = SecretTokenError str
 simpleToSecretToken e = e
+

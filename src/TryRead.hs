@@ -17,9 +17,9 @@ import           Control.Monad (when)
 
 tryReadNum :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Integer
 tryReadNum paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
-tryReadNum paramKey xs = case reads . unpack $ xs of
+tryReadNum paramKey txt = case reads . unpack $ txt of
   [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". It must be number"
+  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be number"
 
 tryReadId :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Id
 tryReadId paramKey txt = do
@@ -48,23 +48,23 @@ tryReadDay paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unp
 tryReadDay paramKey xs = case filter (' ' /=) . unpack $ xs of
   [] -> throwE $ SimpleError "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
   [a, b, c, d, '-', e, f, '-', g, h] -> do
-    year  <- tryReadNum paramKey (pack [a, b, c, d]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
-    month <- tryReadNum paramKey (pack [e, f]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    year  <- tryReadNum paramKey (pack [a, b, c, d]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
+    month <- tryReadNum paramKey (pack [e, f]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
     when (month `notElem` [1..12]) $ throwE $ SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Month must be a number from 1 to 12. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    day  <- tryReadNum paramKey (pack [g, h]) `catchE` (\(SimpleError str) -> throwE $ SimpleError (str ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"))
+    day  <- tryReadNum paramKey (pack [g, h]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
     when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Day of month must be a number from 1 to 31. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
     case fromGregorianValid year (fromInteger month) (fromInteger day) of
       Just x -> return x
       Nothing -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". Invalid day, month, year combination. Date must have format (yyyy-mm-dd). Example: 2020-12-12"     
-  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
 
 
 
 
 checkBigInt :: (Monad m) => QueryParamKey -> Id -> ExceptT ReqError m Id
 checkBigInt paramKey num 
-  | num <= 0 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " . Value should be greater then 0"
-  | num > 9223372036854775805 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ ". Value should be less then 9223372036854775805"
+  | num <= 0 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " . Id should be greater then 0"
+  | num > 9223372036854775805 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ ". Id should be less then 9223372036854775805"
   | otherwise = return num
 
 checkPage :: (Monad m) => Integer -> ExceptT ReqError m Page
@@ -72,6 +72,12 @@ checkPage num
   | num <= 0 = throwE $ SimpleError $ "Page should be greater then 0"
   | num > 100000 = throwE $ SimpleError $ "Page should be less then 100000"
   | otherwise = return (fromInteger num)
+
+getTxtstart :: Text -> String
+getTxtstart txt = case splitAt 20 (unpack txt) of
+    (str,[]) -> str
+    (str,_) -> str ++ "... "
+
 
 {-
 tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
