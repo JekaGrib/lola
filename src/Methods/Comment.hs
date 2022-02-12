@@ -96,7 +96,7 @@ isCommOrPostAuthor Handle{..} commIdNum postId usIdNum = do
   usPostId <- checkOneE hLog $ selectNums table ["user_id"] "post_id=?" [pack . show $ postId] 
   usComId <- checkOneE hLog $ selectNums "comments" ["user_id"] "comment_id=?" [pack . show $ commIdNum]
   unless (usPostId == usIdNum || usComId == usIdNum) $
-    throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ "and not author of post_id: " ++ show postId
+    throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdNum ++ " and not author of post_id: " ++ show postId
 
 isCommAuthorIfExist :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isCommAuthorIfExist Handle{..} commIdParam usIdNum = do

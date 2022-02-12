@@ -146,6 +146,7 @@ getDrafts h usIdNum (GetDrafts pageNum) = do
 updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds)  = do
   let draftIdParam = numToTxt draftIdNum
+  isDraftAuthor h draftIdParam usIdNum
   DraftInfo auResp tagResps catResp <- getDraftInfo h usIdNum drReq
   postId <- checkOneE (hLog h) $ selectNums h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [draftIdParam] 
   withTransactionDBE h $ do
