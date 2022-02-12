@@ -8,7 +8,7 @@
 module CheckJsonReq (checkDraftReqJson,pullTokenDraftReqJson) where
           
 import           Api.Request (DraftRequest(..))
-import           Oops (ReqError(..))
+import           Oops (ReqError(..),hideTokenErr)
 import           Data.Aeson (Object,Value(..),decode)
 import           Data.Text                      (  unpack, Text )
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -17,6 +17,7 @@ import           Control.Monad.Catch            ( MonadCatch)
 import           Data.HashMap.Strict            ( toList )
 import qualified Data.Vector                    as V
 import ParseQueryStr (checkLength)
+import TryRead (checkBigInt)
 
 
 
@@ -24,10 +25,14 @@ import ParseQueryStr (checkLength)
 checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson json =  
   case (decode json :: Maybe DraftRequest) of
-    Just body@(DraftRequest token nameParam _ txtParam _ _ _) -> do
+    Just body@(DraftRequest token nameParam catIdParam txtParam picId picsIds tagsIds) -> do
       checkTokenLength 100 token
       _ <- checkLength 50 "draft_name" nameParam
       _ <- checkLength 10000 "draft_text" txtParam
+      _ <- checkBigInt "draft_category_id" catIdParam
+      _ <- checkBigInt "draft_main_pic_id" picId
+      mapM_ (checkBigInt "draft_tags_ids") tagsIds
+      mapM_ (checkBigInt "draft_pics_ids") picsIds
       return body
     Nothing -> whyBadDraftReq json
 
@@ -42,7 +47,7 @@ whyBadDraftReq json =
       Nothing -> throwE $ SimpleError  "Invalid request body"
 
 pullTokenDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
-pullTokenDraftReqJson json =
+pullTokenDraftReqJson json = 
   case (decode json :: Maybe DraftRequest) of
     Just (DraftRequest token _ _ _ _ _ _) -> do
       checkTokenLength 100 token
@@ -50,13 +55,13 @@ pullTokenDraftReqJson json =
     Nothing -> pullTokenJson json
 
 pullTokenJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
-pullTokenJson json =
+pullTokenJson json = 
   case (decode json :: Maybe Object) of
     Just obj -> do
-      token <- checkTxt obj "token"
+      token <- hideTokenErr $ checkTxt obj "token"
       checkTokenLength 100 token
       return token
-    Nothing -> throwE $ SimpleError  "Invalid request body"
+    Nothing -> throwE $ SecretTokenError "Can`t parse token from request body"
 
 checkNum :: (MonadCatch m) => Object -> Text -> ExceptT ReqError m ()
 checkNum obj paramKey = do

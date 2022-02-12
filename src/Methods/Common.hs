@@ -153,7 +153,7 @@ selectBS' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap (fromBinary . fromOnly) xs  
 
-selectLimit' :: (Select a) => Connection -> Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
+selectLimit' :: (Select a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
   let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
   let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs

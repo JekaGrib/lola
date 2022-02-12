@@ -29,7 +29,7 @@ data Handle m = Handle
   { hConf              :: Config,
     hLog               :: LogHandle m ,
     selectNums          :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectLimitComments :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
+    selectLimitComments :: Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Comment],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,

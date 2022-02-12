@@ -27,7 +27,7 @@ import qualified Methods (Handle,makeH)
 import Methods (hAdm,hAuth,hAu,hCat,hCom,hDr,hPic,hPost,hTag,hUs)
 import           Conf (Config(..),reConnectDB)
 import ParseQueryStr  (parseQueryStr,ParseQueryStr)
-import TryRead (tryReadNum)
+import TryRead (tryReadId,tryReadPage)
 import CheckJsonReq (checkDraftReqJson,pullTokenDraftReqJson)
 import           Network.Wai (Request,ResponseReceived,Response,responseBuilder,strictRequestBody,pathInfo)
 import           Network.HTTP.Types             ( status200, status404 )
@@ -85,7 +85,7 @@ chooseRespEx h req = do
       preParseQueryStr h req $ createUser (hUs methH) 
     ["getUser", usId] -> do
       lift $ logInfo (hLog h) "Get user command"
-      usIdNum <- tryReadNum usId
+      usIdNum <- tryReadId "user_id" usId
       lift $ logInfo (hLog h) $ "User_id parameter parsed:" ++ show usIdNum
       getUser (hUs methH) usIdNum
     ["deleteUser"] -> do
@@ -121,7 +121,7 @@ chooseRespEx h req = do
       preParseQueryStr h req $ createSubCategory (hCat methH) 
     ["getCategory", catId] -> do
       lift $ logInfo (hLog h) "Get category command"
-      catIdNum <- tryReadNum catId
+      catIdNum <- tryReadId "category_id" catId
       getCategory (hCat methH) catIdNum 
     ["updateCategory"] -> do
       lift $ logInfo (hLog h) "Update category command"
@@ -137,7 +137,7 @@ chooseRespEx h req = do
       preParseQueryStr h req $ createTag (hTag methH)   
     ["getTag",tagId]  -> do
       lift $ logInfo (hLog h) "Get tag command"
-      tagIdNum <- tryReadNum tagId
+      tagIdNum <- tryReadId "tag_id" tagId 
       getTag (hTag methH) tagIdNum
     ["updateTag"]        -> do
       lift $ logInfo (hLog h) "Update tag command"
@@ -165,7 +165,7 @@ chooseRespEx h req = do
       preParseQueryStr h req $ getDrafts (hDr methH) usIdNum    
     ["updateDraft",draftId]  -> do
       lift $ logInfo (hLog h) "Update draft command"
-      draftIdNum <- tryReadNum draftId
+      draftIdNum <- tryReadId "draft_id" draftId 
       (usIdNum,body) <- getBodyAndCheckUserToken h req 
       updateDraft (hDr methH) usIdNum draftIdNum body
     ["deleteDraft"]  -> do
@@ -178,11 +178,11 @@ chooseRespEx h req = do
       preParseQueryStr h req $ publishDraft (hDr methH) usIdNum    
     ["getPost",postId]  -> do
       lift $ logInfo (hLog h) "Get post command"
-      postIdNum <- tryReadNum postId
+      postIdNum <- tryReadId "post_id" postId 
       getPost (hPost methH) postIdNum
     ["getPosts", page] -> do
       lift $ logInfo (hLog h) "Get posts command"
-      pageNum <- tryReadNum page
+      pageNum <- tryReadPage page 
       getPosts (hPost methH) req pageNum
     ["deletePost"]  -> do
       lift $ logInfo (hLog h) "Delete post command"
@@ -209,7 +209,7 @@ chooseRespEx h req = do
       preParseQueryStr h req $ browsePicture (hPic methH)                  
     ["picture",picId]  -> do
       lift $ logInfo (hLog h) "Picture command"
-      picIdNum <- tryReadNum picId
+      picIdNum <- tryReadId "picture_id" picId 
       sendPicture (hPic methH) picIdNum
     _ -> throwE $ SecretError "Unknown response" 
        

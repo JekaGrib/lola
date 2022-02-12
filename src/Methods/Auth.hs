@@ -13,7 +13,7 @@ import           Types
 import           Oops
 import           Methods.Common
 import Methods.Common.Select (Auth(..))
-import TryRead (tryReadNum)
+import TryRead (tryReadId)
 import ParseQueryStr (Token(..),LogIn(..),parseQueryStr)
 import           Network.Wai (Request)
 import           Data.Text                      ( pack, unpack, Text )
@@ -74,7 +74,7 @@ checkAdminTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
+        usIdNum <- tryReadId "user_id" (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  
@@ -99,7 +99,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $ do
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, _:xs) -> case break (== '.') xs of
       (tokenKeyParam, '.':'s':'t':'u':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
+        usIdNum <- tryReadId "user_id" (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  
@@ -111,7 +111,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $ do
               else throwE . SimpleError $ "INVALID token"
           Nothing -> throwE . SimpleError $ "INVALID token"
       (tokenKeyParam, '.':'h':'i':'j':'.':ys) -> do
-        usIdNum <- tryReadNum (pack usIdParam)
+        usIdNum <- tryReadId "user_id" (pack usIdParam)
         maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam] 
         case maybeTokenKey of
           Just tokenKey ->  

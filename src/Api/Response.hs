@@ -8,7 +8,7 @@ module Api.Response where
 
 import           Data.Aeson                     (ToJSON(toJSON,toEncoding),object,pairs,(.=))
 import           Data.Text                      (  Text )
-
+import Types
 
 data UserResponse = UserResponse {
       user_id      :: Integer
@@ -150,7 +150,7 @@ instance ToJSON PicIdUrl where
 
 
 data DraftsResponse = DraftsResponse {
-      page9     :: Integer
+      page9     :: Page
     , drafts9 :: [DraftResponse]
     } deriving (Eq,Show)
 
@@ -182,7 +182,7 @@ instance ToJSON PostResponse where
 
 
 data PostsResponse = PostsResponse {
-      page10     :: Integer
+      page10     :: Page
     , posts10 :: [PostResponse]
     } deriving (Eq,Show)
 
@@ -233,7 +233,7 @@ instance ToJSON CommentIdTextUserResponse where
 
 
 data CommentsResponse = CommentsResponse {
-      pageCR     :: Integer
+      pageCR     :: Page
     , post_id9 :: Integer
     , comments :: [CommentIdTextUserResponse]
     } deriving (Eq,Show)

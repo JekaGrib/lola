@@ -28,13 +28,13 @@ data Config = Config
     cServPort    :: Int,
     cConnDB      :: ConnDB,
     cPriority :: Priority,    
-    cDefPicId    :: Integer,
+    cDefPicId    :: PictureId,
     cDefUsId     :: UserId,
-    cDefAuthId   :: Integer,
-    cDefCatId    :: Integer,
-    cCommLimit   :: Integer,
-    cDraftsLimit :: Integer,
-    cPostsLimit  :: Integer
+    cDefAuthId   :: AuthorId,
+    cDefCatId    :: CategoryId,
+    cCommLimit   :: Limit,
+    cDraftsLimit :: Limit,
+    cPostsLimit  :: Limit
     }
 
 
@@ -149,29 +149,29 @@ parseConfDBpwd conf = do
     Nothing -> inputString "DataBase.password"
     Just x  -> return x
 
-parseConfCommLimit :: C.Config -> IO Integer
+parseConfCommLimit :: C.Config -> IO Limit
 parseConfCommLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Integer))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Limit))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
   case str of
     Nothing -> inputNum "commentNumberLimit"
     Just x  -> return x
 
-parseConfDraftsLimit :: C.Config -> IO Integer
+parseConfDraftsLimit :: C.Config -> IO Limit
 parseConfDraftsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.draftNumberLimit") :: IO (Maybe Integer))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  str <- ((C.lookup conf "LimitNumbers.draftNumberLimit") :: IO (Maybe Limit))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
   case str of
     Nothing -> inputNum "draftNumberLimit"
     Just x  -> return x
 
-parseConfPostsLimit :: C.Config -> IO Integer
+parseConfPostsLimit :: C.Config -> IO Limit
 parseConfPostsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.postNumberLimit") :: IO (Maybe Integer))
-    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
-    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
+  str <- ((C.lookup conf "LimitNumbers.postNumberLimit") :: IO (Maybe Limit))
+    `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Limit) )
+    `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Limit) ) 
   case str of
     Nothing -> inputNum "postNumberLimit"
     Just x  -> return x

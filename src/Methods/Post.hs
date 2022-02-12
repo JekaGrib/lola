@@ -40,7 +40,7 @@ data Handle m = Handle
     selectNums          :: Table -> [Param] -> Where -> [Text] -> m [Id],
     selectTags          :: Table -> [Param] -> Where -> [Text] -> m [Tag],
     selectPosts         :: Table -> [Param] -> Where -> [Text] -> m [Post],
-    selectLimitPosts    :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
+    selectLimitPosts    :: Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,
@@ -77,7 +77,7 @@ getPost h postIdNum = do
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response" 
   okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName , post_create_date = pack . showGregorian $ pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl (hConf h) picId, post_pics = fmap (inPicIdUrl (hConf h)) picsIds, post_tags = fmap inTagResp tagS}
 
-getPosts :: (MonadCatch m) => Handle m -> Request -> Integer -> ExceptT ReqError m ResponseInfo 
+getPosts :: (MonadCatch m) => Handle m -> Request -> Page -> ExceptT ReqError m ResponseInfo 
 getPosts h req pageNum = do
   let extractParams = ["posts.post_id","posts.author_id","author_info","authors.user_id","post_name","post_create_date","post_category_id","post_text","post_main_pic_id"]
   LimitArg filterArgs sortArgs <- chooseArgs req 

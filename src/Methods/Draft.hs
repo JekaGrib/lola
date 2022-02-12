@@ -44,7 +44,7 @@ data Handle m = Handle
     selectAuthors       :: Table -> [Param] -> Where -> [Text] -> m [Author],
     selectPostInfos     :: Table -> [Param] -> Where -> [Text] -> m [PostInfo],
     selectDrafts        :: Table -> [Param] -> Where -> [Text] -> m [Draft],
-    selectLimitDrafts   :: Table -> String -> Integer -> Integer -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
+    selectLimitDrafts   :: Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
     updateInDb         :: Table -> String -> String -> [Text] -> m (),
     deleteFromDb       :: Table -> String -> [Text] -> m (),
     isExistInDb        :: Table -> String -> String -> [Text] -> m Bool,

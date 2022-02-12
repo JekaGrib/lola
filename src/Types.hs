@@ -30,8 +30,8 @@ type CheckParam = Param
 type Where = String
 type Set = String
 type OrderBy = String
-type Page = Integer
-type Limit = Integer
+type Page = Int
+type Limit = Int
 
 
 

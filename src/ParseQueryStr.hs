@@ -10,7 +10,7 @@ module ParseQueryStr   where
 --(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Types
-import TryRead (tryReadNumKey)
+import TryRead (tryReadId,tryReadPage)
 import           Data.Text                      ( unpack, Text )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
@@ -29,7 +29,7 @@ data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
 
 instance ParseQueryStr LogIn where
   parseQueryStr req = LogIn 
-    <$> parseNumParam req "user_id"
+    <$> parseIdParam req "user_id"
     <*> parseTxtParam req 50 "password"
 
 newtype Token = Token Text
@@ -48,14 +48,14 @@ instance ParseQueryStr CreateUser where
     <$> parseTxtParam req 50 "password"
     <*> parseTxtParam req 50 "first_name"
     <*> parseTxtParam req 50 "last_name"
-    <*> parseNumParam req "user_pic_id"
+    <*> parseIdParam req "user_pic_id"
 
 newtype DeleteUser = DeleteUser Id
  deriving Show
 
 instance ParseQueryStr DeleteUser where
   parseQueryStr req = DeleteUser
-    <$>  parseNumParam req "user_id"
+    <$>  parseIdParam req "user_id"
 
 data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId }
  deriving Show
@@ -66,14 +66,14 @@ instance ParseQueryStr CreateAdmin where
     <*> parseTxtParam req 50 "password"
     <*> parseTxtParam req 50 "first_name"
     <*> parseTxtParam req 50 "last_name"
-    <*> parseNumParam req "user_pic_id"
+    <*> parseIdParam req "user_pic_id"
 
 data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
  deriving Show
 
 instance ParseQueryStr CreateAuthor where
   parseQueryStr req = CreateAuthor 
-    <$> parseNumParam req "user_id"
+    <$> parseIdParam req "user_id"
     <*> parseTxtParam req 1000 "author_info"
 
 newtype GetAuthor = GetAuthor Id
@@ -81,15 +81,15 @@ newtype GetAuthor = GetAuthor Id
 
 instance ParseQueryStr GetAuthor where
   parseQueryStr req = GetAuthor
-    <$>  parseNumParam req "author_id"
+    <$>  parseIdParam req "author_id"
 
 data UpdateAuthor = UpdateAuthor {author_idUA :: Id, user_idUA :: Id, author_infoUA :: Text}
  deriving Show
 
 instance ParseQueryStr UpdateAuthor where
   parseQueryStr req = UpdateAuthor
-    <$> parseNumParam req "author_id"
-    <*> parseNumParam req "user_id"
+    <$> parseIdParam req "author_id"
+    <*> parseIdParam req "user_id"
     <*> parseTxtParam req 1000 "author_info"
 
 newtype DeleteAuthor = DeleteAuthor Id
@@ -97,7 +97,7 @@ newtype DeleteAuthor = DeleteAuthor Id
 
 instance ParseQueryStr DeleteAuthor where
   parseQueryStr req = DeleteAuthor
-    <$> parseNumParam req "author_id"
+    <$> parseIdParam req "author_id"
 
 newtype CreateCategory = CreateCategory Text
  deriving Show
@@ -112,23 +112,23 @@ data CreateSubCategory = CreateSubCategory Text Id
 instance ParseQueryStr CreateSubCategory where
   parseQueryStr req = CreateSubCategory
     <$> parseTxtParam req 50 "category_name"
-    <*> parseNumParam req "super_category_id"
+    <*> parseIdParam req "super_category_id"
 
 data UpdateCategory = UpdateCategory Id Text (Maybe Id)
  deriving Show
 
 instance ParseQueryStr UpdateCategory where
   parseQueryStr req = UpdateCategory
-    <$> parseNumParam req "category_id"
+    <$> parseIdParam req "category_id"
     <*> parseTxtParam req 50 "category_name"
-    <*> parseMaybeNumParam req "super_category_id"
+    <*> parseMaybeIdParam req "super_category_id"
 
 newtype DeleteCategory = DeleteCategory Id
  deriving Show
 
 instance ParseQueryStr DeleteCategory where
   parseQueryStr req = DeleteCategory
-    <$> parseNumParam req "category_id"
+    <$> parseIdParam req "category_id"
 
 newtype CreateTag = CreateTag Text
  deriving Show
@@ -142,7 +142,7 @@ data UpdateTag = UpdateTag Id Text
 
 instance ParseQueryStr UpdateTag where
   parseQueryStr req = UpdateTag 
-    <$> parseNumParam req "tag_id"
+    <$> parseIdParam req "tag_id"
     <*> parseTxtParam req 50 "tag_name"
 
 newtype DeleteTag = DeleteTag Id
@@ -150,72 +150,72 @@ newtype DeleteTag = DeleteTag Id
 
 instance ParseQueryStr DeleteTag where
   parseQueryStr req = DeleteTag
-    <$> parseNumParam req "tag_id"
+    <$> parseIdParam req "tag_id"
 
 newtype CreatePostsDraft = CreatePostsDraft Id
  deriving Show
 
 instance ParseQueryStr CreatePostsDraft where
   parseQueryStr req = CreatePostsDraft
-    <$> parseNumParam req "post_id"
+    <$> parseIdParam req "post_id"
 
 newtype GetDraft = GetDraft Id
  deriving Show
 
 instance ParseQueryStr GetDraft where
   parseQueryStr req = GetDraft
-    <$>  parseNumParam req "draft_id"
+    <$>  parseIdParam req "draft_id"
 
-newtype GetDrafts = GetDrafts Integer
+newtype GetDrafts = GetDrafts Page
  deriving Show
 
 instance ParseQueryStr GetDrafts where
   parseQueryStr req = GetDrafts
-    <$>  parseNumParam req "page"
+    <$>  parsePageParam req "page"
 
 newtype DeleteDraft = DeleteDraft Id
  deriving Show
 
 instance ParseQueryStr DeleteDraft where
   parseQueryStr req = DeleteDraft
-    <$>  parseNumParam req "draft_id"
+    <$>  parseIdParam req "draft_id"
 
 newtype PublishDraft = PublishDraft Id
  deriving Show
 
 instance ParseQueryStr PublishDraft where
   parseQueryStr req = PublishDraft
-    <$>  parseNumParam req "draft_id"
+    <$>  parseIdParam req "draft_id"
 
 newtype DeletePost = DeletePost Id
  deriving Show
 
 instance ParseQueryStr DeletePost where
   parseQueryStr req = DeletePost
-    <$>  parseNumParam req "post_id"
+    <$>  parseIdParam req "post_id"
 
 data CreateComment = CreateComment Id Text 
  deriving Show
 
 instance ParseQueryStr CreateComment where
   parseQueryStr req = CreateComment
-    <$> parseNumParam req "post_id"
+    <$> parseIdParam req "post_id"
     <*> parseTxtParam req 1000 "comment_text"
 
-data GetComments = GetComments Id Integer 
+data GetComments = GetComments Id Page 
  deriving Show
 
 instance ParseQueryStr GetComments where
   parseQueryStr req = GetComments
-    <$> parseNumParam req "post_id"
-    <*> parseNumParam req "page"
+    <$> parseIdParam req "post_id"
+    <*> parsePageParam req "page"
 
 data UpdateComment = UpdateComment Id Text 
  deriving Show
 
 instance ParseQueryStr UpdateComment where
   parseQueryStr req = UpdateComment
-    <$> parseNumParam req "comment_id"
+    <$> parseIdParam req "comment_id"
     <*> parseTxtParam req 1000 "comment_text"
 
 newtype DeleteComment = DeleteComment Id
@@ -223,7 +223,7 @@ newtype DeleteComment = DeleteComment Id
 
 instance ParseQueryStr DeleteComment where
   parseQueryStr req = DeleteComment
-    <$>  parseNumParam req "comment_id"
+    <$>  parseIdParam req "comment_id"
 
 newtype BrowsePicture = BrowsePicture Text
  deriving Show
@@ -239,18 +239,22 @@ parseTxtParam req leng paramKey = do
   paramTxt <- checkParam req paramKey
   checkLength leng paramKey paramTxt
 
-
-parseNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
-parseNumParam req paramKey = do
+parseIdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
+parseIdParam req paramKey = do
   paramTxt <- checkParam req paramKey
-  tryReadNumKey paramTxt paramKey
+  tryReadId paramKey paramTxt 
 
-parseMaybeNumParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
-parseMaybeNumParam req paramKey = do
+parsePageParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Page
+parsePageParam req paramKey = do
+  paramTxt <- checkParam req paramKey
+  tryReadPage paramTxt 
+
+parseMaybeIdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
+parseMaybeIdParam req paramKey = do
   maybeParamTxt <- checkMaybeParam req paramKey
   case maybeParamTxt of
     Just paramTxt -> do
-      num <- tryReadNumKey paramTxt paramKey
+      num <- tryReadId paramKey paramTxt 
       return (Just num)
     Nothing -> return Nothing
 
@@ -277,4 +281,3 @@ checkLength leng paramKey txt = do
   if (length . unpack $ txt) > leng 
     then throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
     else return txt
-

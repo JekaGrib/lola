@@ -8,12 +8,13 @@
 module Methods.Post.LimitArg (LimitArg(..), FilterArg(..), SortArg(..), chooseArgs, isDateASC) where
           
 
-import TryRead (tryReadNum,tryReadDay,tryReadNumArray)
+import TryRead (tryReadId,tryReadDay,tryReadIdArray)
 import           Data.Text                      ( pack, unpack, Text, concat, toUpper )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Network.Wai (Request(..))
 import           Network.HTTP.Types.URI         ( queryToQueryText )
+import ParseQueryStr (checkLength)
 import Data.Foldable (toList)
 
 
@@ -60,70 +61,74 @@ chooseFilterArgsPreCheck req param = case findParam req param of
     Just _ ->  throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
 
 chooseFilterArgs :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgs x param = case param of
+chooseFilterArgs x paramKey = case paramKey of
   "created_at" -> do
-    _ <- tryReadDay x
+    _ <- tryReadDay paramKey x
     let table   = ""
     let where'  = "post_create_date = ?"
     let values  = ([],[x])
     return . Just $ FilterArg table where' values
   "created_at_lt" -> do
-    _ <- tryReadDay x
+    _ <- tryReadDay paramKey x
     let table   = ""
     let where'  = "post_create_date < ?"
     let values  = ([],[x])
     return . Just $ FilterArg table where' values
   "created_at_gt" -> do
-    _ <- tryReadDay x
+    _ <- tryReadDay paramKey x
     let table   = ""
     let where'  = "post_create_date > ?"
     let values  = ([],[x])
     return . Just $ FilterArg table where' values
   "category_id" -> do
-    _ <- tryReadNum x
+    _ <- tryReadId paramKey x
     let table   = ""
     let where'  = "post_category_id = ?"
     let values  = ([],[x])
     return . Just $ FilterArg table where' values
   "tag" -> do
-    _ <- tryReadNum x
+    _ <- tryReadId paramKey x
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([x],[])
     return . Just $ FilterArg table where' values
   "tags_in" -> do
-    xs <- tryReadNumArray x
+    xs <- tryReadIdArray paramKey x
     let table   = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . show $ xs) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "true"
     let values  = ([],[])
     return . Just $ FilterArg table where' values
   "tags_all" -> do
-    xs <- tryReadNumArray x
+    xs <- tryReadIdArray paramKey x
     let table   = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where'  = "tags_id @> ARRAY" ++ show xs ++ "::bigint[]"
     let values  = ([],[])
     return . Just $ FilterArg table where' values
-  "name_in" -> do 
+  "name_in" -> do
+    _ <- checkLength 50 paramKey x 
     let table   = ""
     let where'  = "post_name ILIKE ?"
     let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
     return . Just $ FilterArg table where' values
   "text_in" -> do
+    _ <- checkLength 50 paramKey x 
     let table   = ""
     let where'  = "post_text ILIKE ?"
     let values  = ([],[Data.Text.concat ["%",escape x,"%"]])          
     return . Just $ FilterArg table where' values
   "everywhere_in" -> do
+    _ <- checkLength 50 paramKey x 
     let table   = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
     let where'  = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
     let values  = ([Data.Text.concat ["%",escape x,"%"]],replicate 4 $ Data.Text.concat ["%",escape x,"%"])
     return . Just $ FilterArg table where' values
   "author_name" -> do
+    _ <- checkLength 50 paramKey x 
     let table   = "JOIN users AS us ON authors.user_id=us.user_id"
     let where'  = "us.first_name = ?"
     let values  = ([],[x])
     return . Just $ FilterArg table where' values     
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack param
+  _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack paramKey
 
  
 
