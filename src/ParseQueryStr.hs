@@ -261,20 +261,23 @@ parseMaybeIdParam req paramKey = do
 checkParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
 checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
     Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
-    Just (Just txt)  -> case lookup paramKey . delete (paramKey,Just txt) $ queryToQueryText $ queryString req of
-      Nothing -> return txt
-      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
+    Just (Just txt)  -> checkSingleParam req paramKey txt
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
     Nothing        -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack paramKey
 
 checkMaybeParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
 checkMaybeParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
     Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
-    Just (Just txt)  -> case lookup paramKey . delete (paramKey,Just txt) $ queryToQueryText $ queryString req of
-      Nothing -> return (Just txt)
-      Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
+    Just (Just txt)  -> do
+      txt1 <- checkSingleParam req paramKey txt
+      return (Just txt1)
     Just Nothing   -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
     Nothing        -> return Nothing
+
+checkSingleParam :: (Monad m) => Request -> QueryParamKey -> Text -> ExceptT ReqError m Text
+checkSingleParam req paramKey txt = case lookup paramKey . delete (paramKey,Just txt) $ queryToQueryText $ queryString req of
+  Nothing -> return txt
+  Just _  -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
 
 checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
 checkLength leng paramKey txt = case splitAt leng (unpack txt) of

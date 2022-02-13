@@ -1,0 +1,2 @@
+#!/bin/bash
+curl "http://localhost:3000/getPosts/1?created_at_lt=2018-02-03"

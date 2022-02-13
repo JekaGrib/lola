@@ -8,13 +8,14 @@
 module Methods.Post.LimitArg (LimitArg(..), FilterArg(..), SortArg(..), chooseArgs, isDateASC) where
           
 
+import Types
 import TryRead (tryReadId,tryReadDay,tryReadIdArray)
 import           Data.Text                      ( pack, unpack, Text, concat, toUpper )
 import Oops (ReqError(..))
 import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Network.Wai (Request(..))
 import           Network.HTTP.Types.URI         ( queryToQueryText )
-import ParseQueryStr (checkLength)
+import ParseQueryStr (checkLength,checkMaybeParam)
 import Data.Foldable (toList)
 
 
@@ -54,14 +55,16 @@ checkComb req list = case fmap (isExistParam req) list of
      (True:_:True:_) -> throwE $ SimpleError "Invalid combination of filter parameters"
      _               -> return ()
 
-chooseFilterArgsPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgsPreCheck req param = case findParam req param of
+chooseFilterArgsPreCheck :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe FilterArg)
+chooseFilterArgsPreCheck req paramKey = do
+  maybeParam <- checkMaybeParam req paramKey
+  case maybeParam of
+    Just txt -> chooseFilterArgs paramKey txt
     Nothing -> return Nothing
-    Just (Just txt) -> chooseFilterArgs txt param
-    Just _ ->  throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
 
-chooseFilterArgs :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgs x paramKey = case paramKey of
+
+chooseFilterArgs :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
+chooseFilterArgs paramKey x = case paramKey of
   "created_at" -> do
     _ <- tryReadDay paramKey x
     let table   = ""
@@ -133,13 +136,14 @@ chooseFilterArgs x paramKey = case paramKey of
  
 
 chooseSortArgsPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe SortArg)
-chooseSortArgsPreCheck req param = case findParam req param of
+chooseSortArgsPreCheck req paramKey = do
+  maybeParam <- checkMaybeParam req paramKey
+  case maybeParam of
+    Just txt -> chooseSortArgs paramKey txt
     Nothing -> return Nothing
-    Just (Just txt) -> chooseSortArgs txt param
-    Just _ ->  throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack param
 
 chooseSortArgs :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe SortArg)
-chooseSortArgs "DESC" param = case param of
+chooseSortArgs paramKey "DESC" = case paramKey of
   "sort_by_pics_number" -> do
     let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
     let orderBy = "count_pics DESC"
@@ -156,8 +160,8 @@ chooseSortArgs "DESC" param = case param of
     let joinTable = ""
     let orderBy = "true"
     return . Just $ SortArg joinTable orderBy DateDESC
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
-chooseSortArgs "ASC" param = case param of
+  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey 
+chooseSortArgs paramKey "ASC"  = case paramKey of
   "sort_by_pics_number" -> do
     let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
     let orderBy = "count_pics ASC"
@@ -174,10 +178,10 @@ chooseSortArgs "ASC" param = case param of
     let joinTable = ""
     let orderBy = "true"
     return . Just $ SortArg joinTable orderBy DateASC
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack param 
-chooseSortArgs txt param  
-  | Data.Text.toUpper txt == "ASC"  = chooseSortArgs "ASC"  param
-  | Data.Text.toUpper txt == "DESC" = chooseSortArgs "DESC" param
+  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey 
+chooseSortArgs paramKey txt   
+  | Data.Text.toUpper txt == "ASC"  = chooseSortArgs paramKey "ASC"  
+  | Data.Text.toUpper txt == "DESC" = chooseSortArgs paramKey "DESC" 
   | otherwise                       = throwE $ SimpleError $ "Invalid sort value: " ++ unpack txt ++ ". It should be only 'ASC' or 'DESC'"
 
 
