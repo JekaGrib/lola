@@ -17,6 +17,8 @@ import           Network.Wai (Request(..))
 import           Network.HTTP.Types.URI         ( queryToQueryText )
 import ParseQueryStr (checkLength,checkMaybeParam)
 import Data.Foldable (toList)
+import Data.Function (on)
+import Data.List (sortBy,elemIndex)
 
 
 
@@ -24,9 +26,12 @@ data LimitArg = LimitArg [FilterArg] [SortArg]
 
 data FilterArg = FilterArg {tableFil  :: String, whereFil    :: String, valuesFil :: ([Text],[Text])}
 data SortArg   = SortArg   {tableSort :: String, orderBySort :: String, sortDate  :: SortDate}
+data SortArgPriority = SortArgPriority {sortArgSAP :: SortArg, sortPrioSAP :: SortPriority}
 
 data SortDate = DateASC | DateDESC 
  deriving (Eq,Show,Read)
+
+type SortPriority = Int
 
 defDateSort :: SortDate
 defDateSort = DateDESC 
@@ -36,16 +41,17 @@ isDateASC = foldr (\(SortArg _ _ c) cont -> (c == DateASC) || cont) False
 
 chooseArgs :: (Monad m) => Request -> ExceptT ReqError m LimitArg
 chooseArgs req = do
+  checkReqLength req
   let filterDateList   = ["created_at","created_at_lt","created_at_gt"] 
   let filterTagList    = ["tag","tags_in","tags_all"] 
   let filterInList     = ["name_in","text_in","everywhere_in"] 
   let filterParamsList = filterDateList ++ ["category_id","author_name"] ++ filterTagList ++ filterInList 
   let sortList         = ["sort_by_pics_number","sort_by_category","sort_by_author","sort_by_date"] 
   mapM_ (checkComb req) [filterDateList,filterTagList,filterInList]
-  maybeFilterArgs <- mapM (chooseFilterArgsPreCheck req) filterParamsList
+  maybeFilterArgs <- mapM (chooseFilterArgPreCheck req) filterParamsList
   let filterArgs = concatMap toList maybeFilterArgs
-  maybeSortArgs <- mapM (chooseSortArgsPreCheck req) sortList
-  let sortArgs = concatMap toList maybeSortArgs
+  maybeSortArgPrios <- mapM (chooseSortArgPrioPreCheck req) sortList
+  let sortArgs = sortArsInOrder maybeSortArgPrios
   return $ LimitArg filterArgs sortArgs
 
 checkComb :: (Monad m) => Request -> [Text] -> ExceptT ReqError m ()
@@ -55,16 +61,16 @@ checkComb req list = case fmap (isExistParam req) list of
      (True:_:True:_) -> throwE $ SimpleError "Invalid combination of filter parameters"
      _               -> return ()
 
-chooseFilterArgsPreCheck :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgsPreCheck req paramKey = do
+chooseFilterArgPreCheck :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe FilterArg)
+chooseFilterArgPreCheck req paramKey = do
   maybeParam <- checkMaybeParam req paramKey
   case maybeParam of
-    Just txt -> chooseFilterArgs paramKey txt
+    Just txt -> chooseFilterArg paramKey txt
     Nothing -> return Nothing
 
 
-chooseFilterArgs :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgs paramKey x = case paramKey of
+chooseFilterArg :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
+chooseFilterArg paramKey x = case paramKey of
   "created_at" -> do
     _ <- tryReadDay paramKey x
     let table   = ""
@@ -135,15 +141,17 @@ chooseFilterArgs paramKey x = case paramKey of
 
  
 
-chooseSortArgsPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe SortArg)
-chooseSortArgsPreCheck req paramKey = do
+chooseSortArgPrioPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe SortArgPriority)
+chooseSortArgPrioPreCheck req paramKey = do
   maybeParam <- checkMaybeParam req paramKey
   case maybeParam of
-    Just txt -> chooseSortArgs paramKey txt
+    Just txt -> do
+      maybeSortArg <- chooseSortArg paramKey txt
+      return $ addSortPriority req paramKey maybeSortArg
     Nothing -> return Nothing
 
-chooseSortArgs :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe SortArg)
-chooseSortArgs paramKey "DESC" = case paramKey of
+chooseSortArg :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe SortArg)
+chooseSortArg paramKey "DESC" = case paramKey of
   "sort_by_pics_number" -> do
     let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
     let orderBy = "count_pics DESC"
@@ -158,10 +166,10 @@ chooseSortArgs paramKey "DESC" = case paramKey of
     return . Just $ SortArg joinTable orderBy defDateSort
   "sort_by_date" -> do
     let joinTable = ""
-    let orderBy = "true"
+    let orderBy = "post_create_date DESC"
     return . Just $ SortArg joinTable orderBy DateDESC
   _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey 
-chooseSortArgs paramKey "ASC"  = case paramKey of
+chooseSortArg paramKey "ASC"  = case paramKey of
   "sort_by_pics_number" -> do
     let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
     let orderBy = "count_pics ASC"
@@ -176,23 +184,40 @@ chooseSortArgs paramKey "ASC"  = case paramKey of
     return . Just $ SortArg joinTable orderBy defDateSort
   "sort_by_date" -> do 
     let joinTable = ""
-    let orderBy = "true"
+    let orderBy = "post_create_date ASC"
     return . Just $ SortArg joinTable orderBy DateASC
   _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey 
-chooseSortArgs paramKey txt   
-  | Data.Text.toUpper txt == "ASC"  = chooseSortArgs paramKey "ASC"  
-  | Data.Text.toUpper txt == "DESC" = chooseSortArgs paramKey "DESC" 
+chooseSortArg paramKey txt   
+  | Data.Text.toUpper txt == "ASC"  = chooseSortArg paramKey "ASC"  
+  | Data.Text.toUpper txt == "DESC" = chooseSortArg paramKey "DESC" 
   | otherwise                       = throwE $ SimpleError $ "Invalid sort value: " ++ unpack txt ++ ". It should be only 'ASC' or 'DESC'"
 
+checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
+checkReqLength req = case splitAt 20 $ queryString req of
+  (_,[]) -> return ()
+  _ -> throwE $ SimpleError $ "There is should be less then 20 query string parameters"
+
+sortArsInOrder :: [Maybe SortArgPriority] -> [SortArg]
+sortArsInOrder = map sortArgSAP . sortBy (compare `on` sortPrioSAP) . concatMap toList 
+
+addSortPriority :: Request -> QueryParamKey -> Maybe SortArg -> Maybe SortArgPriority
+addSortPriority req paramKey maybeSortArg = do
+  sortArg <- maybeSortArg 
+  num <- findParamIndex req paramKey 
+  return $ SortArgPriority sortArg num
 
 
 findParam :: Request -> Text -> Maybe (Maybe Text)
-findParam req txt = lookup txt $ queryToQueryText $ queryString req 
+findParam req txt = lookup txt . queryToQueryText $ queryString req 
+
+findParamIndex :: Request -> QueryParamKey -> Maybe Int
+findParamIndex req paramKey = elemIndex paramKey . fmap fst . queryToQueryText $ queryString req 
 
 isExistParam :: Request -> Text -> Bool
 isExistParam req txt = case findParam req txt of
   Just _  -> True
   Nothing -> False
+
 
 escape :: Text -> Text
 escape xs = pack $ concatMap escapeChar (unpack xs)
