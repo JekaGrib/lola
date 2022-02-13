@@ -1,13 +1,14 @@
 {-# OPTIONS_GHC -Werror #-}
 {-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module TagTest where
 
 
 import           Test.Hspec (hspec,shouldBe,it,describe)
-import           Control.Monad.State (StateT(..),evalStateT,execStateT)           
+import           Control.Monad.State (StateT(..),evalStateT,execStateT,withStateT)           
 import TestDB
 import TypesTest (MockAction(..))
 import ConfTest (defConf)
@@ -19,7 +20,7 @@ import           Logger (Priority(..))
 import           Data.Text                      ( unpack, Text )
 import           Data.ByteString.Builder        ( toLazyByteString )
 import           Control.Monad.Trans.Except (runExceptT)
-import           Control.Monad.Catch            ( throwM)
+import           Control.Monad.Catch            ( throwM, SomeException,catch)
 import Methods.Tag
 import Types 
 
@@ -34,10 +35,13 @@ handle =
     deleteFromDbTest 
     isExistInDbTest 
     insertReturnTest 
-    id
+    withTransactionDBTest
 
----withTransactionDBTest :: StateT (TestDB,[MockAction]) IO a -> StateT (TestDB,[MockAction]) IO a
----withTransactionDBTest m = m `catch` (\(e :: SomeException) -> )
+withTransactionDBTest :: StateT (TestDB,[MockAction]) IO a -> StateT (TestDB,[MockAction]) IO a
+withTransactionDBTest m = do
+  StateT $ \(db,acts) -> return (() , (db,TRANSACTIONOPEN:acts))
+  a <- m `catch` (\(e :: SomeException) -> withStateT id m >> throwM e)
+  StateT $ \(db,acts) -> return (a , (db,TRANSACTIONCLOSE:acts))
 
 insertReturnTest :: String -> String -> [String] -> [Text] -> StateT (TestDB,[MockAction]) IO Integer
 insertReturnTest "tags" "tag_id" ["tag_name"] [insValue] = StateT $ \(db,acts) -> 
@@ -145,7 +149,7 @@ testTag = hspec $
     it "work" $ do  
       state <- execStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1,[])
       (reverse . snd $ state) `shouldBe`
-        [LOG DEBUG,EXISTCHEK,LOG INFO,LOG DEBUG,DELETEDATA,DELETEDATA,DELETEDATA,LOG INFO,LOG INFO]
+        [LOG DEBUG,EXISTCHEK,LOG INFO,LOG DEBUG,TRANSACTIONOPEN,DELETEDATA,DELETEDATA,DELETEDATA,TRANSACTIONCLOSE,LOG INFO,LOG INFO]
       respE <- evalStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1,[])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE `shouldBe` 
