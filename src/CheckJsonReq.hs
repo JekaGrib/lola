@@ -110,7 +110,6 @@ checkNumArrVal paramKey values =
     _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
 
 checkTokenLength :: (Monad m) => Int -> Text -> ExceptT ReqError m ()
-checkTokenLength leng txt = do
-  if (length . unpack $ txt) > leng
-    then throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
-    else return ()
+checkTokenLength leng txt = case splitAt leng (unpack txt) of
+  (_,[]) -> return ()
+  _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng

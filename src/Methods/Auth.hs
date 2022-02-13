@@ -70,7 +70,7 @@ tokenAdminAuth h req = hideErr $ do
   checkAdminTokenParam h tokenParam
 
 checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()  
-checkAdminTokenParam h tokenParam = hideTokenErr $ do
+checkAdminTokenParam h tokenParam = hideTokenErr $ 
   case break (== '.') . unpack $ tokenParam of
     (usIdParam,'.':'h':'i':'j':'.':xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
@@ -93,7 +93,7 @@ tokenUserAuth h req = hideTokenErr $ do
   checkUserTokenParam h tokenParam
 
 checkUserTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode    
-checkUserTokenParam h tokenParam = hideTokenErr $ do
+checkUserTokenParam h tokenParam = hideTokenErr $ 
   case break (== '.') . unpack $ tokenParam of
     (usIdParam,'.':'h':'i':'j':'.':xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)

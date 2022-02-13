@@ -45,18 +45,20 @@ tryReadIdArray paramKey xs = do
 
 tryReadDay :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Day
 tryReadDay paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ " Empty input."
-tryReadDay paramKey xs = case filter (' ' /=) . unpack $ xs of
-  [] -> throwE $ SimpleError "Empty input. Date must have format (yyyy-mm-dd). Example: 2020-12-12"
-  [a, b, c, d, '-', e, f, '-', g, h] -> do
-    year  <- tryReadNum paramKey (pack [a, b, c, d]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    month <- tryReadNum paramKey (pack [e, f]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    when (month `notElem` [1..12]) $ throwE $ SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Month must be a number from 1 to 12. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    day  <- tryReadNum paramKey (pack [g, h]) `catchE` (addToSimpleErr ". Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Day of month must be a number from 1 to 31. Date must have format (yyyy-mm-dd). Example: 2020-12-12")
-    case fromGregorianValid year (fromInteger month) (fromInteger day) of
-      Just x -> return x
-      Nothing -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". Invalid day, month, year combination. Date must have format (yyyy-mm-dd). Example: 2020-12-12"     
-  _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
+tryReadDay paramKey xs = do
+  let infoErrStr = ". Date must have format (yyyy-mm-dd). Example: 2020-12-12" 
+  case filter (' ' /=) . unpack $ xs of
+    [] -> throwE $ SimpleError $ "Empty input." ++ infoErrStr
+    [a, b, c, d, '-', e, f, '-', g, h] -> do
+      year  <- tryReadNum paramKey (pack [a, b, c, d]) `catchE` addToSimpleErr infoErrStr
+      month <- tryReadNum paramKey (pack [e, f]) `catchE` addToSimpleErr infoErrStr
+      when (month `notElem` [1..12]) $ throwE $  SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Month must be a number from 1 to 12."  ++ infoErrStr)
+      day  <- tryReadNum paramKey (pack [g, h]) `catchE` addToSimpleErr infoErrStr
+      when (day `notElem` [1..31]) $ throwE $ SimpleError ("Can`t parse parameter: " ++ unpack paramKey ++ ". Day of month must be a number from 1 to 31." ++ infoErrStr)
+      case fromGregorianValid year (fromInteger month) (fromInteger day) of
+        Just x -> return x
+        Nothing -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". Invalid day, month, year combination." ++ infoErrStr
+    _        -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ infoErrStr
 
 
 
@@ -69,8 +71,8 @@ checkBigInt paramKey num
 
 checkPage :: (Monad m) => Integer -> ExceptT ReqError m Page
 checkPage num 
-  | num <= 0 = throwE $ SimpleError $ "Page should be greater then 0"
-  | num > 100000 = throwE $ SimpleError $ "Page should be less then 100000"
+  | num <= 0 = throwE $ SimpleError "Page should be greater then 0"
+  | num > 100000 = throwE $ SimpleError "Page should be less then 100000"
   | otherwise = return (fromInteger num)
 
 getTxtstart :: Text -> String

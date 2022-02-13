@@ -41,7 +41,7 @@ instance ToJSON UserTokenResponse where
     toEncoding (UserTokenResponse a b c d e f g) =
         pairs ("token" .= a <> "user_id" .= b <> "first_name" .= c <> "last_name" .= d <> "user_pic_id" .= e <> "user_pic_url" .= f <> "user_create_date" .= g)
 
-data TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq,Show)
+newtype TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq,Show)
 
 instance ToJSON TokenResponse where
     toJSON (TokenResponse a) =
@@ -49,7 +49,7 @@ instance ToJSON TokenResponse where
     toEncoding (TokenResponse a) =
         pairs ("token" .= a )
 
-data OkResponse = OkResponse {ok :: Bool} deriving (Eq,Show)
+newtype OkResponse = OkResponse {ok :: Bool} deriving (Eq,Show)
 
 instance ToJSON OkResponse where
     toJSON (OkResponse a) =
@@ -110,11 +110,11 @@ data PostIdOrNull = PostIdExist Integer | PostIdNull
 
 instance Show PostIdOrNull where
   show (PostIdExist a) = show a
-  show (PostIdNull) = "NULL"
+  show PostIdNull = "NULL"
 
 instance ToJSON PostIdOrNull where
   toJSON (PostIdExist a) = toJSON a
-  toJSON (PostIdNull) = toJSON ("NULL" :: Text)
+  toJSON PostIdNull = toJSON ("NULL" :: Text)
   
 
 data DraftResponse = DraftResponse {

@@ -15,8 +15,7 @@ import           Control.Monad.Catch            ( catch)
 data ConnDB = ConnDB Connection ConnectInfo
 
 tryConnect :: ConnectInfo -> IO ConnDB
-tryConnect connInf = do
-  (do 
+tryConnect connInf = (do 
     conn <- connect connInf
     return $ ConnDB conn connInf) `catch` (\e -> do
       putStrLn $ "Can`t connect to database. ConnectInfo: " ++ show connInf ++ ". " ++ show (e :: E.IOException)

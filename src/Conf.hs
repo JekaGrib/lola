@@ -39,9 +39,7 @@ data Config = Config
 
 
 getTime :: IO String
-getTime = do
-  time    <- getZonedTime
-  return $ show time     
+getTime = show <$> getZonedTime    
 
 extractConn :: Config -> Connection
 extractConn conf = let ConnDB conn _ = cConnDB conf in conn
@@ -80,15 +78,15 @@ parseConf = do
   return $ Config (fromString servHost) servPort connDB prio defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit 
 
 pullConfig :: IO C.Config
-pullConfig = do
+pullConfig = 
   C.load [C.Required "./postApp.config"] 
-    `E.catch` (\e -> putStrLn (show (e :: C.ConfigError)) >> return C.empty)
-    `E.catch` (\e -> putStrLn (show (e :: C.KeyError   )) >> return C.empty)
-    `E.catch` (\e -> putStrLn (show (e :: E.IOException  )) >> return C.empty)
+    `E.catch` (\e -> print (e :: C.ConfigError) >> return C.empty)
+    `E.catch` (\e -> print (e :: C.KeyError   ) >> return C.empty)
+    `E.catch` (\e -> print (e :: E.IOException  ) >> return C.empty)
 
 parseConfServHost :: C.Config -> IO String
 parseConfServHost conf = do
-  str <- ((C.lookup conf "Server.host") :: IO (Maybe String))
+  str <- (C.lookup conf "Server.host" :: IO (Maybe String))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
   case str of
@@ -97,7 +95,7 @@ parseConfServHost conf = do
 
 parseConfServPort :: C.Config -> IO Port
 parseConfServPort conf = do
-  str <- ((C.lookup conf "Server.port") :: IO (Maybe Port))
+  str <- (C.lookup conf "Server.port" :: IO (Maybe Port))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Port) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Port) ) 
   case str of
@@ -106,7 +104,7 @@ parseConfServPort conf = do
 
 parseConfDBHost :: C.Config -> IO String
 parseConfDBHost conf = do
-  str <- ((C.lookup conf "DataBase.host") :: IO (Maybe String))
+  str <- (C.lookup conf "DataBase.host" :: IO (Maybe String))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
   case str of
@@ -115,7 +113,7 @@ parseConfDBHost conf = do
 
 parseConfDBport :: C.Config -> IO Word16
 parseConfDBport conf = do
-  str <- ((C.lookup conf "DataBase.port") :: IO (Maybe Integer))
+  str <- (C.lookup conf "DataBase.port" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -124,7 +122,7 @@ parseConfDBport conf = do
 
 parseConfDBUser :: C.Config -> IO String
 parseConfDBUser conf = do
-  str <- ((C.lookup conf "DataBase.user") :: IO (Maybe String))
+  str <- (C.lookup conf "DataBase.user" :: IO (Maybe String))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
   case str of
@@ -133,7 +131,7 @@ parseConfDBUser conf = do
 
 parseConfDBname :: C.Config -> IO String
 parseConfDBname conf = do
-  str <- ((C.lookup conf "DataBase.dbname") :: IO (Maybe String))
+  str <- (C.lookup conf "DataBase.dbname" :: IO (Maybe String))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
   case str of
@@ -142,7 +140,7 @@ parseConfDBname conf = do
 
 parseConfDBpwd :: C.Config -> IO String
 parseConfDBpwd conf = do
-  str <- ((C.lookup conf "DataBase.password") :: IO (Maybe String))
+  str <- (C.lookup conf "DataBase.password" :: IO (Maybe String))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe String) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe String) ) 
   case str of
@@ -151,7 +149,7 @@ parseConfDBpwd conf = do
 
 parseConfCommLimit :: C.Config -> IO Limit
 parseConfCommLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.commentNumberLimit") :: IO (Maybe Integer))
+  str <- (C.lookup conf "LimitNumbers.commentNumberLimit" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -162,7 +160,7 @@ parseConfCommLimit conf = do
 
 parseConfDraftsLimit :: C.Config -> IO Limit
 parseConfDraftsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.draftNumberLimit") :: IO (Maybe Integer))
+  str <- (C.lookup conf "LimitNumbers.draftNumberLimit" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -173,7 +171,7 @@ parseConfDraftsLimit conf = do
 
 parseConfPostsLimit :: C.Config -> IO Limit
 parseConfPostsLimit conf = do
-  str <- ((C.lookup conf "LimitNumbers.postNumberLimit") :: IO (Maybe Integer))
+  str <- (C.lookup conf "LimitNumbers.postNumberLimit" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -199,7 +197,7 @@ inputLogLevel :: IO Priority
 inputLogLevel = do
   putStrLn "Can`t parse value \"logLevel\" from configuration file or command line\nPlease, enter logging level (logs of this level and higher will be recorded)\nAvailable levels: DEBUG ; INFO ; WARNING ; ERROR (without quotes)"
   input <- getLine
-  case (map toUpper input) of
+  case map toUpper input of
     "DEBUG"   -> return DEBUG
     "INFO"    -> return INFO
     "WARNING" -> return WARNING
@@ -211,7 +209,7 @@ inputIntegerOr :: String -> IO Integer -> IO Integer
 inputIntegerOr valueName action = do
   putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName ++ "\nOr enter  `NEW`  to create a new " ++ valueName 
   input <- getLine
-  case (map toUpper input) of
+  case map toUpper input of
     "NEW" -> action
     _     -> case reads input of
       [(a,"")] -> return a
@@ -219,7 +217,7 @@ inputIntegerOr valueName action = do
 
 parseConfDefPicId :: C.Config -> Connection -> IO Integer
 parseConfDefPicId conf conn = do
-  str <- ((C.lookup conf "defaultValues.defaultPictureId") :: IO (Maybe Integer))
+  str <- (C.lookup conf "defaultValues.defaultPictureId" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -228,14 +226,14 @@ parseConfDefPicId conf conn = do
       checkExistId conn "pics" "pic_id" "pic_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
-    Just x  -> do
+    Just x  -> 
       checkExistId conn "pics" "pic_id" "pic_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
 
 parseConfDefUsId :: C.Config -> Connection -> Integer -> IO Integer
 parseConfDefUsId conf conn defPicId = do
-  str <- ((C.lookup conf "defaultValues.defaultUserId") :: IO (Maybe Integer))
+  str <- (C.lookup conf "defaultValues.defaultUserId" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -244,14 +242,14 @@ parseConfDefUsId conf conn defPicId = do
       checkExistId conn "users" "user_id" "user_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
-    Just x  -> do
+    Just x  -> 
       checkExistId conn "users" "user_id" "user_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
 
 parseConfDefAuthId :: C.Config -> Connection -> Integer -> IO Integer
 parseConfDefAuthId conf conn defUsId = do
-  str <- ((C.lookup conf "defaultValues.defaultAuthorId") :: IO (Maybe Integer))
+  str <- (C.lookup conf "defaultValues.defaultAuthorId" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -260,14 +258,14 @@ parseConfDefAuthId conf conn defUsId = do
       checkExistId conn "authors" "author_id" "author_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
-    Just x  -> do
+    Just x  -> 
       checkExistId conn "authors" "author_id" "author_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
 
 parseConfDefCatId :: C.Config -> Connection -> IO Integer
 parseConfDefCatId conf conn = do
-  str <- ((C.lookup conf "defaultValues.defaultCategoryId") :: IO (Maybe Integer))
+  str <- (C.lookup conf "defaultValues.defaultCategoryId" :: IO (Maybe Integer))
     `E.catch` ( (\_ -> return Nothing) :: C.KeyError  -> IO (Maybe Integer) )
     `E.catch` ( (\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer) ) 
   case str of
@@ -276,7 +274,7 @@ parseConfDefCatId conf conn = do
       checkExistId conn "categories" "category_id" "category_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))
-    Just x  -> do
+    Just x  -> 
       checkExistId conn "categories" "category_id" "category_id=?" [pack . show $ x] 
         (return x) 
         (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))

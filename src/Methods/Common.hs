@@ -44,25 +44,25 @@ okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/js
 
 checkOneE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
 checkOneE logH m = do
-  lift $ logDebug logH $ "Select data from DB." 
+  lift $ logDebug logH "Select data from DB." 
   xs <- catchDbErr $ lift m
   case xs of
     []           -> throwE $ DatabaseError "Empty output"
     [x] -> do
-      lift $ logInfo logH $ "Data received from DB"
+      lift $ logInfo logH "Data received from DB"
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
 checkMaybeOneE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
 checkMaybeOneE logH m = do
-  lift $ logDebug logH $ "Select data from DB." 
+  lift $ logDebug logH "Select data from DB." 
   xs <- catchDbErr $ lift m
   case xs of
     []           -> do
-      lift $ logInfo logH $ "Received empty data from DB"
+      lift $ logInfo logH "Received empty data from DB"
       return Nothing
     [x] -> do
-      lift $ logInfo logH $ "Data received from DB"
+      lift $ logInfo logH "Data received from DB"
       return (Just x)
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
@@ -74,8 +74,8 @@ checkOneIfExistE logH func table params where' value = do
   xs <- catchDbErr $ lift $ func table params where' [value]
   case xs of
     []           -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
-    (x:[]) -> do
-      lift $ logInfo logH $ "Data received from DB"
+    [x] -> do
+      lift $ logInfo logH "Data received from DB"
       return x
     _            -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
@@ -102,17 +102,22 @@ checkIsExistE :: (MonadCatch m) => LogHandle m ->
 checkIsExistE logH func table checkName where' values = do
   lift $ logDebug logH $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   isExist  <- catchDbErrE $ func table checkName where' values 
-  case isExist of
-    True -> do
-      lift $ logInfo logH $ "Entity (" ++ checkName ++ ") exist"
-      return ()
-    False -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+  if isExist then
+    (do lift $ logInfo logH $ "Entity (" ++ checkName ++ ") exist"
+        return ())
+    else
+    throwE $
+      SimpleError $
+        checkName ++
+          ": " ++
+            (intercalate "," . fmap unpack $ values) ++ " doesn`t exist."
+
 
 checkInsRetE :: (MonadCatch m) => LogHandle m ->
   (Table -> String -> [String] -> a -> m Integer) -> 
    Table -> String -> [String] -> a -> ExceptT ReqError m Integer
 checkInsRetE logH func table returnName insNames insValues = do
-  lift $ logDebug logH $ "Insert data in the DB"
+  lift $ logDebug logH "Insert data in the DB"
   i <- catchDbErrE $ func table returnName insNames insValues
   lift $ logInfo logH $ "DB return " ++ returnName ++ ": " ++ show i
   return i
@@ -127,7 +132,7 @@ checkTransactE logH m = do
 checkOneM :: (MonadCatch m) => [a] -> m a
 checkOneM xs = case xs of
   [] -> throwM UnexpectedEmptyDbOutPutException
-  (x:[]) -> return x
+  [x] -> return x
   _ -> throwM UnexpectedMultipleDbOutPutException
 
 -- common IO handle functions:
@@ -139,9 +144,8 @@ getDay' = do
   return day
 
 select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
-select' conn table params where' values = do
-  xs <- query conn (toSelQ table params where') values
-  return xs
+select' conn table params where' = 
+  query conn (toSelQ table params where')
 
 selectOnly' :: (FromField a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
 selectOnly' conn table params where' values = do
@@ -155,12 +159,11 @@ selectBS' conn table params where' values = do
 
 selectLimit' :: (Select a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
-  let table   = intercalate " "     $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
-  let where'  = intercalate " AND " $ [defWhere] ++ fmap whereFil filterArgs
+  let table   = unwords             $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
+  let where'  = intercalate " AND " $ defWhere : fmap whereFil filterArgs
   let orderBy = intercalate ","     $ fmap orderBySort sortArgs ++ [defOrderBy]
   let values  = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
-  xs <- query conn (toSelLimQ table orderBy page limitNumber params where') values
-  return xs
+  query conn (toSelLimQ table orderBy page limitNumber params where') values
 
 updateInDb' :: Connection -> String -> String -> String -> [Text] -> IO ()
 updateInDb' conn table set where' values = do

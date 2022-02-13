@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+
 --{-# LANGUAGE ScopedTypeVariables #-}
 
 module SpecOld () where

@@ -22,7 +22,6 @@ import           Control.Monad.Trans.Except (ExceptT,throwE)
 import           Control.Monad.Trans            ( lift )
 import           Control.Monad.Catch            (  MonadCatch)
 import           Data.List                      ( intercalate, zip4)
-import           Data.Time.Calendar             ( showGregorian)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle,makeH)
 import Methods.Common.DeleteMany ( deletePostsPicsTags, deleteAllAboutDrafts,deleteDraftsPicsTags)
@@ -31,7 +30,7 @@ import           Control.Monad (unless)
 import  Conf (Config(..),extractConn)
 import           Database.PostgreSQL.Simple (withTransaction)
 import Methods.Post.LimitArg (FilterArg, SortArg)
-import           Data.Time.Calendar             ( Day)
+import           Data.Time.Calendar             ( showGregorian,Day)
 import Methods.Category (fromCatResp)
 
 
@@ -87,10 +86,7 @@ createNewDraft h usIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam pic
   draftId <- withTransactionDBE h $ do
     let insNames  = ["author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
     let insValues = [numToTxt auId,nameParam,numToTxt catIdParam,txtParam,numToTxt picId]
-    draftId <-  insertReturn h "drafts" "draft_id" insNames insValues           
-    insertMany h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
-    insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
-    return draftId  
+    insertReturnDraft h picsIds tagsIds insNames insValues 
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created"
   okHelper $ DraftResponse { draft_id2 = draftId, post_id2 = PostIdNull , author2 = auResp, draft_name2 = nameParam , draft_cat2 = catResp , draft_text2 = txtParam , draft_main_pic_id2 =  picId , draft_main_pic_url2 = makeMyPicUrl (hConf h) picId , draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
@@ -110,10 +106,7 @@ createPostsDraft h usIdNum (CreatePostsDraft postIdNum) = do
   draftId <- withTransactionDBE h $ do
     let insNames  = ["post_id","author_id","draft_name","draft_category_id","draft_text","draft_main_pic_id"]
     let insValues = [postIdParam,pack . show $ auId,postName,pack . show $ postCatId,postTxt,pack . show $ mPicId]
-    draftId <-  insertReturn h "drafts" "draft_id" insNames insValues
-    insertMany h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
-    insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
-    return draftId
+    insertReturnDraft h picsIds tagsIds insNames insValues
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postIdNum
   okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdNum, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName , draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId , draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
@@ -218,6 +211,13 @@ getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = d
   tagS <- checkListE (hLog h) $ selectTags h "tags" ["tag_id","tag_name"] where' (fmap (pack . show) tagsIds)
   catResp <- makeCatResp (hCatResp h) catIdParam
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp
+
+insertReturnDraft :: (MonadCatch m) => Handle m -> [PictureId] -> [TagId] -> [Param] -> [Text] -> m DraftId
+insertReturnDraft h picsIds tagsIds insNames insValues = do
+  draftId <-  insertReturn h "drafts" "draft_id" insNames insValues           
+  insertMany h "draftspics" ["draft_id","pic_id"] (zip (repeat draftId) picsIds)
+  insertMany h "draftstags" ["draft_id","tag_id"] (zip (repeat draftId) tagsIds)
+  return draftId 
 
 isDraftAuthor :: (MonadCatch m) => Handle m  -> Text -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h  draftIdParam usIdNum = do

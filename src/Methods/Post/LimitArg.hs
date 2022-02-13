@@ -195,7 +195,7 @@ chooseSortArg paramKey txt
 checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
 checkReqLength req = case splitAt 20 $ queryString req of
   (_,[]) -> return ()
-  _ -> throwE $ SimpleError $ "There is should be less then 20 query string parameters"
+  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"
 
 sortArsInOrder :: [Maybe SortArgPriority] -> [SortArg]
 sortArsInOrder = map sortArgSAP . sortBy (compare `on` sortPrioSAP) . concatMap toList 

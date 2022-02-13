@@ -113,11 +113,17 @@ ifExistInDbThrowE :: (MonadCatch m) => Handle m  -> String -> String -> String -
 ifExistInDbThrowE h table checkName where' values = do
   lift $ logDebug (hLog h) $ "Checking existence entity (" ++ checkName ++ ") in the DB"
   isExist  <- catchDbErr $ lift $ isExistInDb h table checkName where' values 
-  case isExist of
-    True -> throwE $ SimpleError $ checkName ++ ": " ++ (intercalate "," . fmap unpack $ values) ++ " already exist in " ++ table
-    False -> do
-      lift $ logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
-      return ()
+  if isExist then
+    throwE $ SimpleError $
+        checkName ++
+          ": " ++
+            (intercalate "," . fmap unpack $ values) ++
+              " already exist in " ++ table
+    else
+    (do lift $
+          logInfo (hLog h) $ "Entity (" ++ checkName ++ ") doesn`t exist"
+        return ())
+
 
 updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
