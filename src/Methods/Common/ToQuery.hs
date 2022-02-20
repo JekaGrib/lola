@@ -1,33 +1,24 @@
+{-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
-{-# OPTIONS_GHC  -Wall  #-}
 
+module Methods.Common.ToQuery (toSelQ, toSelLimQ, toUpdQ, toDelQ, toExQ, toInsRetQ, toInsManyQ) where
 
-
-
-module Methods.Common.ToQuery (toSelQ,toSelLimQ,toUpdQ,toDelQ,toExQ,toInsRetQ,toInsManyQ) where
-          
-
-import           Types
-
-import           Database.PostgreSQL.Simple (Query)
-
-import           Data.String                    ( fromString )
-import           Data.List                      ( intercalate )
-
-
-
+import Data.List (intercalate)
+import Data.String (fromString)
+import Database.PostgreSQL.Simple (Query)
+import Types
 
 toSelQ :: Table -> [Param] -> Where -> Query
-toSelQ table params where' = 
+toSelQ table params where' =
   fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where'
 
 toSelLimQ :: Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
-toSelLimQ table orderBy page limitNumber params where' = 
-  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1)*limitNumber) ++ " LIMIT " ++ show (page*limitNumber)
+toSelLimQ table orderBy page limitNumber params where' =
+  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1) * limitNumber) ++ " LIMIT " ++ show (page * limitNumber)
 
 toUpdQ :: Table -> Set -> Where -> Query
-toUpdQ table set where' = 
-  fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where' 
+toUpdQ table set where' =
+  fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where'
 
 toDelQ :: Table -> Where -> Query
 toDelQ table where' =

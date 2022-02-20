@@ -1,12 +1,7 @@
+{-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
-{-# OPTIONS_GHC  -Wall  #-}
 
-
-
-
-import           TagTest
-
-
+import TagTest
 
 main :: IO ()
 main = testTag
