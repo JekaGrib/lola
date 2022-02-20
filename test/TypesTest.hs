@@ -1,9 +1,0 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
-module TypesTest where
-
-import Logger
-
-data MockAction = EXISTCHEK | LOG Priority | INSERTDATA | SELECTDATA | UPDATEDATA | DELETEDATA | INSERTMANYDATA | SELECTLIMITDATA | TRANSACTIONOPEN | TRANSACTIONCLOSE
-  deriving (Eq, Show)

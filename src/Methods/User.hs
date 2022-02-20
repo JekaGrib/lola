@@ -25,11 +25,11 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectNums :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectUsers :: Table -> [Param] -> Where -> [Text] -> m [User],
-    updateInDb :: Table -> String -> String -> [Text] -> m (),
-    deleteFromDb :: Table -> String -> [Text] -> m (),
-    isExistInDb :: Table -> String -> String -> [Text] -> m Bool,
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
+    selectUsers :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [User],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
+    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
     insertReturn :: Table -> String -> [String] -> [Text] -> m Integer,
     getDay :: m String,
     getTokenKey :: m String,
@@ -60,7 +60,7 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdNum) = do
   day <- lift $ getDay h
   tokenKey <- lift $ getTokenKey h
   let hashPwdParam = txtSha1 pwdParam
-  isExistInDbE h "pics" "pic_id" "pic_id=?" [picIdParam]
+  isExistInDbE h "pics" "pic_id=?" picIdParam
   let insNames = ["password", "first_name", "last_name", "user_pic_id", "user_create_date", "admin", "token_key"]
   let insValues = [hashPwdParam, fNameParam, lNameParam, picIdParam, pack day, "FALSE", pack tokenKey]
   usId <- insertReturnE h "users" "user_id" insNames insValues
@@ -78,7 +78,7 @@ getUser h usIdNum = do
 deleteUser :: (MonadCatch m) => Handle m -> DeleteUser -> ExceptT ReqError m ResponseInfo
 deleteUser h (DeleteUser usIdNum) = do
   let usIdParam = pack . show $ usIdNum
-  isExistInDbE h "users" "user_id" "user_id=?" [usIdParam]
+  isExistInDbE h "users" "user_id=?" usIdParam
   let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [pack . show $ cDefUsId (hConf h), usIdParam]
   let deleteUs = deleteFromDb h "users" "user_id=?" [usIdParam]
   maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [usIdParam]
@@ -94,7 +94,7 @@ deleteUser h (DeleteUser usIdNum) = do
   lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
-isExistInDbE :: (MonadCatch m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
 insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer

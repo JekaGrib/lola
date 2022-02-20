@@ -1,12 +1,12 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module LoggerTest where
+module Spec.Log where
 
 import Control.Monad.State (StateT (..))
 import Logger
-import TestDB (TestDB)
-import TypesTest
+import Spec.TestDB (TestDB)
+import Spec.Types
 
 handLogDebug :: LogHandle (StateT (TestDB, [MockAction]) IO)
 handLogDebug = LogHandle (LogConfig DEBUG) logTest

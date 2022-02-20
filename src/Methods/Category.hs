@@ -25,10 +25,10 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    updateInDb :: Table -> String -> String -> [Text] -> m (),
-    deleteFromDb :: Table -> String -> [Text] -> m (),
-    isExistInDb :: Table -> String -> String -> [Text] -> m Bool,
-    insertReturn :: Table -> String -> [String] -> [Text] -> m Integer,
+    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
+    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m
   }
@@ -55,7 +55,7 @@ createCategory h (CreateCategory catNameParam) = do
 createSubCategory :: (MonadCatch m) => Handle m -> CreateSubCategory -> ExceptT ReqError m ResponseInfo
 createSubCategory h (CreateSubCategory catNameParam superCatIdNum) = do
   let superCatIdParam = numToTxt superCatIdNum
-  isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam]
+  isExistInDbE h "categories"  "category_id=?" superCatIdParam
   catId <- insertReturnE h "categories" "category_id" ["category_name", "super_category_id"] [catNameParam, superCatIdParam]
   catResp <- makeCatResp (hCatResp h) catId
   lift $ logInfo (hLog h) $ "Sub_Category_id: " ++ show catId ++ " created"
@@ -63,7 +63,7 @@ createSubCategory h (CreateSubCategory catNameParam superCatIdNum) = do
 
 getCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
 getCategory h catIdNum = do
-  isExistInDbE h "categories" "category_id" "category_id=?" [numToTxt catIdNum]
+  isExistInDbE h "categories"  "category_id=?" (numToTxt catIdNum)
   catResp <- makeCatResp (hCatResp h) catIdNum
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdNum ++ " sending in response"
   okHelper catResp
@@ -74,12 +74,12 @@ updateCategory h (UpdateCategory catIdNum catNameParam maybeSuperCatIdNum) = do
   case maybeSuperCatIdNum of
     Just superCatIdNum -> do
       let superCatIdParam = numToTxt superCatIdNum
-      isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]
-      isExistInDbE h "categories" "category_id" "category_id=?" [superCatIdParam]
+      isExistInDbE h "categories"  "category_id=?" catIdParam
+      isExistInDbE h "categories"  "category_id=?" superCatIdParam
       checkRelationCats h catIdNum superCatIdNum
       updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [catNameParam, superCatIdParam, catIdParam]
     Nothing -> do
-      isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]
+      isExistInDbE h "categories"  "category_id=?" catIdParam
       updateInDbE h "categories" "category_name=?" "category_id=?" [catNameParam, catIdParam]
   catResp <- makeCatResp (hCatResp h) catIdNum
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdNum ++ " updated."
@@ -88,7 +88,7 @@ updateCategory h (UpdateCategory catIdNum catNameParam maybeSuperCatIdNum) = do
 deleteCategory :: (MonadCatch m) => Handle m -> DeleteCategory -> ExceptT ReqError m ResponseInfo
 deleteCategory h (DeleteCategory catIdNum) = do
   let catIdParam = numToTxt catIdNum
-  isExistInDbE h "categories" "category_id" "category_id=?" [catIdParam]
+  isExistInDbE h "categories"  "category_id=?" catIdParam
   allSubCats <- findAllSubCats h catIdNum
   let values = fmap (pack . show) (cDefCatId (hConf h) : allSubCats)
   let where' = intercalate " OR " . fmap (const "post_category_id=?") $ allSubCats
@@ -127,7 +127,7 @@ fromCatResp (CatResponse a _ _) = a
 updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
 
-isExistInDbE :: (MonadCatch m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
 insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer

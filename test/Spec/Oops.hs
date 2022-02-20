@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module OopsTest where
+module Spec.Oops where
 
 import Control.Monad.Catch (Exception)
 

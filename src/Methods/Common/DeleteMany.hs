@@ -8,14 +8,14 @@ module Methods.Common.DeleteMany where
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Data.List (intercalate)
-import Data.Text (Text, pack)
+import Data.Text ( pack)
 import Methods.Common
 import Types
 
 data Handle m = Handle
   { hConf :: Config,
-    selectNums :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    deleteFromDb :: Table -> String -> [Text] -> m ()
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
+    deleteFromDb :: Table -> Where -> [DbParamValue] -> m ()
   }
 
 makeH :: Config -> Handle IO

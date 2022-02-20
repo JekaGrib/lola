@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-import TagTest
+import Spec.Tag
 
 main :: IO ()
 main = testTag

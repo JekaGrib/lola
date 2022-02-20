@@ -11,7 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT)
 import Data.List (zip4)
-import Data.Text (Text, pack)
+import Data.Text (pack)
 import Data.Time.Calendar (showGregorian)
 import Database.PostgreSQL.Simple (withTransaction)
 import Logger
@@ -30,13 +30,13 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectNums :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectTags :: Table -> [Param] -> Where -> [Text] -> m [Tag],
-    selectPosts :: Table -> [Param] -> Where -> [Text] -> m [Post],
-    selectLimitPosts :: Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Post],
-    updateInDb :: Table -> String -> String -> [Text] -> m (),
-    deleteFromDb :: Table -> String -> [Text] -> m (),
-    isExistInDb :: Table -> String -> String -> [Text] -> m Bool,
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
+    selectTags :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Tag],
+    selectPosts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Post],
+    selectLimitPosts :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbParamValue] -> [FilterArg] -> [SortArg] -> m [Post],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
+    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m,
     hDelMany :: Methods.Common.DeleteMany.Handle m
@@ -90,12 +90,12 @@ getPosts h req pageNum = do
 deletePost :: (MonadCatch m) => Handle m -> DeletePost -> ExceptT ReqError m ResponseInfo
 deletePost h (DeletePost postIdNum) = do
   let postIdParam = numToTxt postIdNum
-  isExistInDbE h "posts" "post_id" "post_id=?" [postIdParam]
+  isExistInDbE h "posts"  "post_id=?" postIdParam
   withTransactionDBE h $ deleteAllAboutPost (hDelMany h) postIdNum
   lift $ logInfo (hLog h) $ "Post_id: " ++ show postIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
-isExistInDbE :: (MonadCatch m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

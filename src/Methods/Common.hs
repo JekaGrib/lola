@@ -99,27 +99,26 @@ checkUpdE logH m = do
 checkIsExistE ::
   (MonadCatch m) =>
   LogHandle m ->
-  (String -> String -> String -> [Text] -> m Bool) ->
-  String ->
-  String ->
-  String ->
-  [Text] ->
+  (Table -> Where -> DbParamValue -> m Bool) ->
+  Table ->
+  Where ->
+  DbParamValue ->
   ExceptT ReqError m ()
-checkIsExistE logH func table checkName where' values = do
-  lift $ logDebug logH $ "Checking existence entity (" ++ checkName ++ ") in the DB"
-  isExist <- catchDbErrE $ func table checkName where' values
+checkIsExistE logH func table where' value = do
+  lift $ logDebug logH $ "Checking existence " ++ where' ++ unpack value ++ " in the DB"
+  isExist <- catchDbErrE $ func table where' value
   if isExist
     then
       ( do
-          lift $ logInfo logH $ "Entity (" ++ checkName ++ ") exist"
+          lift $ logInfo logH $ "Entity (" ++ where' ++ unpack value ++ ") exist"
           return ()
       )
     else
       throwE
         $ SimpleError
-        $ checkName
+        $ (where' \\ "=?") 
           ++ ": "
-          ++ (intercalate "," . fmap unpack $ values)
+          ++ unpack value
           ++ " doesn`t exist."
 
 checkInsRetE ::
@@ -190,9 +189,9 @@ deleteFromDb' conn table where' values = do
   _ <- execute conn (toDelQ table where') values
   return ()
 
-isExistInDb' :: Connection -> String -> String -> String -> [Text] -> IO Bool
-isExistInDb' conn table checkName where' values = do
-  onlyChecks <- query conn (toExQ table checkName where') values
+isExistInDb' :: Connection -> Table -> Where -> DbParamValue -> IO Bool
+isExistInDb' conn table where' value = do
+  onlyChecks <- query conn (toExQ table where') [value]
   Only isExist <- checkOneM onlyChecks
   return isExist
 

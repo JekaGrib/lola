@@ -9,7 +9,7 @@ import Api.Response (CatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
-import Data.Text (Text, pack)
+import Data.Text ( pack)
 import Logger (LogHandle (..))
 import Methods.Common
 import Methods.Common.Select (Cat (..))
@@ -19,8 +19,8 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectNums :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectCats :: Table -> [Param] -> Where -> [Text] -> m [Cat]
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
+    selectCats :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Cat]
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO

@@ -32,17 +32,17 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectDays :: Table -> [Param] -> Where -> [Text] -> m [Day],
-    selectNums :: Table -> [Param] -> Where -> [Text] -> m [Id],
-    selectTags :: Table -> [Param] -> Where -> [Text] -> m [Tag],
-    selectAuthors :: Table -> [Param] -> Where -> [Text] -> m [Author],
-    selectPostInfos :: Table -> [Param] -> Where -> [Text] -> m [PostInfo],
-    selectDrafts :: Table -> [Param] -> Where -> [Text] -> m [Draft],
-    selectLimitDrafts :: Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> m [Draft],
-    updateInDb :: Table -> String -> String -> [Text] -> m (),
-    deleteFromDb :: Table -> String -> [Text] -> m (),
-    isExistInDb :: Table -> String -> String -> [Text] -> m Bool,
-    insertReturn :: Table -> String -> [String] -> [Text] -> m Integer,
+    selectDays :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Day],
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
+    selectTags :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Tag],
+    selectAuthors :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Author],
+    selectPostInfos :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [PostInfo],
+    selectDrafts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue]-> m [Draft],
+    selectLimitDrafts :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbParamValue] -> [FilterArg] -> [SortArg] -> m [Draft],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
+    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
     insertMany :: Table -> [String] -> [(Integer, Integer)] -> m (),
     getDay :: m String,
     withTransactionDB :: forall a. m a -> m a,
@@ -147,7 +147,7 @@ updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtP
 deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DeleteDraft -> ExceptT ReqError m ResponseInfo
 deleteDraft h usIdNum (DeleteDraft draftIdNum) = do
   let draftIdParam = numToTxt draftIdNum
-  isExistInDbE h "drafts" "draft_id" "draft_id=?" [draftIdParam]
+  isExistInDbE h "drafts" "draft_id=?" draftIdParam
   isUserAuthorE_ h usIdNum
   isDraftAuthor h draftIdParam usIdNum
   withTransactionDBE h $ deleteAllAboutDrafts (hDelMany h) [draftIdNum]
@@ -196,9 +196,9 @@ data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 
 getDraftInfo :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m DraftInfo
 getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = do
-  isExistInDbE h "categories" "category_id" "category_id=?" [pack . show $ catIdParam]
-  mapM_ (isExistInDbE h "tags" "tag_id" "tag_id=?") $ fmap ((: []) . pack . show) tagsIds
-  mapM_ (isExistInDbE h "pics" "pic_id" "pic_id=?") $ fmap ((: []) . pack . show) (picId : picsIds)
+  isExistInDbE h "categories"  "category_id=?" (numToTxt catIdParam)
+  mapM_ (isExistInDbE h "tags"  "tag_id=?") $ fmap numToTxt tagsIds
+  mapM_ (isExistInDbE h "pics"  "pic_id=?") $ fmap numToTxt (picId : picsIds)
   (Author auId auInfo usId) <- isUserAuthorE h usIdNum
   let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
   tagS <- checkListE (hLog h) $ selectTags h "tags" ["tag_id", "tag_name"] where' (fmap (pack . show) tagsIds)
@@ -250,5 +250,5 @@ isNULL postId = PostIdExist postId
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
 
-isExistInDbE :: (MonadCatch m) => Handle m -> String -> String -> String -> [Text] -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)

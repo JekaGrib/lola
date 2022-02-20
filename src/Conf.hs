@@ -10,8 +10,9 @@ import qualified Control.Exception as E
 import Data.Char (toUpper)
 import qualified Data.Configurator as C
 import qualified Data.Configurator.Types as C
+import Data.List ((\\))
 import Data.String (fromString)
-import Data.Text (Text, intercalate, pack, unpack)
+import Data.Text (Text, pack, unpack)
 import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
@@ -233,18 +234,16 @@ parseConfDefPicId conf conn = do
       checkExistId
         conn
         "pics"
-        "pic_id"
         "pic_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
     Just x ->
       checkExistId
         conn
         "pics"
-        "pic_id"
         "pic_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
 
@@ -260,18 +259,16 @@ parseConfDefUsId conf conn defPicId = do
       checkExistId
         conn
         "users"
-        "user_id"
         "user_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
     Just x ->
       checkExistId
         conn
         "users"
-        "user_id"
         "user_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
 
@@ -287,18 +284,16 @@ parseConfDefAuthId conf conn defUsId = do
       checkExistId
         conn
         "authors"
-        "author_id"
         "author_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
     Just x ->
       checkExistId
         conn
         "authors"
-        "author_id"
         "author_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
 
@@ -314,31 +309,29 @@ parseConfDefCatId conf conn = do
       checkExistId
         conn
         "categories"
-        "category_id"
         "category_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))
     Just x ->
       checkExistId
         conn
         "categories"
-        "category_id"
         "category_id=?"
-        [pack . show $ x]
+        (pack . show $ x)
         (return x)
         (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))
 
-checkExistId :: Connection -> String -> String -> String -> [Text] -> IO b -> IO b -> IO b
-checkExistId conn table checkname where' values ifTrue ifFalse = do
-  onlyChecks <- query conn (toExQ table checkname where') values
+checkExistId :: Connection -> String -> String -> Text -> IO b -> IO b -> IO b
+checkExistId conn table where' value ifTrue ifFalse = do
+  onlyChecks <- query conn (toExQ table where') [value]
   case onlyChecks of
     [Only True] -> ifTrue
     [Only False] -> do
-      putStrLn $ checkname ++ ": " ++ (unpack . intercalate "; " $ values) ++ " doesn`t exist"
+      putStrLn $ (where' \\ "=?") ++ ": " ++ unpack  value ++ " doesn`t exist"
       ifFalse
     _ -> do
-      putStrLn $ "Something in DB went wrong with " ++ checkname ++ ": " ++ (unpack . intercalate "; " $ values)
+      putStrLn $ "Something in DB went wrong with " ++ (where' \\ "=?") ++ ": " ++ unpack  value
       ifFalse
 
 checkLimitOr :: Integer -> IO Integer -> IO Page

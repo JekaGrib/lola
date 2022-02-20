@@ -34,6 +34,20 @@ type Port = Int
 
 type Table = String
 
+type DbParamKey = String
+
+type DbReturnParamKey = DbParamKey
+
+type DbCheckParamKey = DbParamKey
+
+type DbSelectParamKey = DbParamKey
+
+type DbInsertParamKey = DbParamKey
+
+type DbParamValue = Text
+
+type ToUpdate = String
+
 type Param = String
 
 type ReturnParam = Param

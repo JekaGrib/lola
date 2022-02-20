@@ -83,7 +83,7 @@ chooseRespEx h req = do
   lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
   case pathInfo req of
     ["logIn"] -> hideLogInErr $ do
-      lift $ logInfo (hLog h) "Login command"
+      lift $ logInfo (hLog h) "LogIn command"
       preParseQueryStr h req $ logIn (hAuth methH)
     ["createUser"] -> do
       lift $ logInfo (hLog h) "Create user command"

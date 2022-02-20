@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module ConfTest where
+module Spec.Conf where
 
 import Conf
 import Conf.ConnectDB (ConnDB (..), ConnectInfo (..))

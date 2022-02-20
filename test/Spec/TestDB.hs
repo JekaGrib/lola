@@ -2,7 +2,7 @@
 --{-# OPTIONS_GHC  -Wall  #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module TestDB where
+module Spec.TestDB where
 
 import Data.Text (Text)
 import Data.Time.Calendar (Day, fromGregorian)

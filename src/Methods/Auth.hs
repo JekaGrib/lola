@@ -22,9 +22,9 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectTxts :: Table -> [Param] -> Where -> [Text] -> m [Text],
-    selectAuths :: Table -> [Param] -> Where -> [Text] -> m [Auth],
-    updateInDb :: Table -> String -> String -> [Text] -> m (),
+    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Text],
+    selectAuths :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Auth],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
     getTokenKey :: m String
   }
 

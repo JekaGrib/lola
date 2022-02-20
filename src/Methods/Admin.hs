@@ -19,8 +19,8 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectTxts :: Table -> [String] -> String -> [Text] -> m [Text],
-    insertReturn :: Table -> String -> [String] -> [Text] -> m Integer,
+    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Text],
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
     getDay :: m String,
     getTokenKey :: m String
   }

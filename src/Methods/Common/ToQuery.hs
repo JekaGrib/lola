@@ -24,9 +24,9 @@ toDelQ :: Table -> Where -> Query
 toDelQ table where' =
   fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where'
 
-toExQ :: Table -> CheckParam -> Where -> Query
-toExQ table checkName where' =
-  fromString $ "SELECT EXISTS (SELECT " ++ checkName ++ " FROM " ++ table ++ " WHERE " ++ where' ++ ")"
+toExQ :: Table -> Where -> Query
+toExQ table where' =
+  fromString $ "SELECT EXISTS (SELECT 1 FROM " ++ table ++ " WHERE " ++ where' ++ ")"
 
 toInsRetQ :: Table -> ReturnParam -> [Param] -> Query
 toInsRetQ table returnName insNames =
