@@ -43,7 +43,7 @@ data Handle m = Handle
     deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
     isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
     insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
-    insertMany :: Table -> [String] -> [(Integer, Integer)] -> m (),
+    insertMany :: Table -> [DbInsertParamKey] -> [(DbNumValue, DbNumValue)] -> m (),
     getDay :: m String,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m,

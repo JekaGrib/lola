@@ -30,7 +30,12 @@ testTag = hspec
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createTag handle (CreateTag "cats")) (testDB1, [])
       (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, INSERTDATA, LOG INFO, LOG INFO]
+        `shouldBe` 
+        [LOG DEBUG
+        , INSERTDATA "tags" "tag_id" ["tag_name"] ["cats"]
+        , LOG INFO
+        , LOG INFO
+        ]
       respE <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) (testDB1, [])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE
@@ -38,7 +43,7 @@ testTag = hspec
     it "work" $ do
       state <- execStateT (runExceptT $ getTag handle 4) (testDB1, [])
       (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, SELECTDATA, LOG INFO, LOG INFO]
+        `shouldBe` [LOG DEBUG, LOG INFO, LOG INFO]
       respE <- evalStateT (runExceptT $ getTag handle 4) (testDB1, [])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE
@@ -46,7 +51,7 @@ testTag = hspec
     it "work" $ do
       state <- execStateT (runExceptT $ updateTag handle (UpdateTag 2 "Salad")) (testDB1, [])
       (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, EXISTCHEK, LOG INFO, LOG DEBUG, UPDATEDATA, LOG INFO, LOG INFO]
+        `shouldBe` [LOG DEBUG, LOG INFO, LOG DEBUG, LOG INFO, LOG INFO]
       respE <- evalStateT (runExceptT $ updateTag handle (UpdateTag 2 "Salad")) (testDB1, [])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE
@@ -54,7 +59,7 @@ testTag = hspec
     it "work" $ do
       state <- execStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1, [])
       (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, EXISTCHEK, LOG INFO, LOG DEBUG, TRANSACTIONOPEN, DELETEDATA, DELETEDATA, DELETEDATA, TRANSACTIONCLOSE, LOG INFO, LOG INFO]
+        `shouldBe` [LOG DEBUG, LOG INFO, LOG DEBUG, TRANSACTIONOPEN,  TRANSACTIONCLOSE, LOG INFO, LOG INFO]
       respE <- evalStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1, [])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE

@@ -207,7 +207,7 @@ insertByteaInDb' conn table returnName insNames bs = do
   Only num <- checkOneM onlyXs
   return num
 
-insertMany' :: Connection -> String -> [String] -> [(Integer, Integer)] -> IO ()
+insertMany' :: Connection -> Table -> [DbInsertParamKey] -> [(DbNumValue, DbNumValue)] -> IO ()
 insertMany' conn table insNames insValues = do
   _ <- executeMany conn (toInsManyQ table insNames) insValues
   return ()

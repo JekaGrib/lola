@@ -46,6 +46,8 @@ type DbInsertParamKey = DbParamKey
 
 type DbParamValue = Text
 
+type DbNumValue = Integer
+
 type ToUpdate = String
 
 type Param = String
