@@ -42,6 +42,7 @@ dependencies:
 - configurator
 - cryptonite
 - random
+- scientific
 
 library:
   source-dirs: src

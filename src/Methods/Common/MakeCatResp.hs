@@ -33,7 +33,7 @@ makeH conf logH =
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h catId = do
-  Cat catName superCatId <- checkOneE (hLog h) $ selectCats h "categories" ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [Num catId]
+  Cat catName superCatId <- checkOneE (hLog h) $ selectCats h "categories" ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [Id catId]
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
     0 -> return $ CatResponse {cat_id = catId, cat_name = catName, one_level_sub_cats = subCatsIds}
@@ -41,6 +41,6 @@ makeCatResp h catId = do
       superCatResp <- makeCatResp h superCatId
       return $ SubCatResponse {subCat_id = catId, subCat_name = catName, one_level_sub_categories = subCatsIds, super_category = superCatResp}
 
-findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [Integer]
+findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
 findOneLevelSubCats h catId =
-  checkListE (hLog h) $ selectNums h "categories" ["category_id"] "super_category_id=?" [Num catId]
+  checkListE (hLog h) $ selectNums h "categories" ["category_id"] "super_category_id=?" [Id catId]

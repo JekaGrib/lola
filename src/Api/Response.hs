@@ -9,10 +9,10 @@ import Data.Text (Text)
 import Types
 
 data UserResponse = UserResponse
-  { user_id :: Integer,
+  { user_id :: UserId,
     first_name :: Text,
     last_name :: Text,
-    user_pic_id :: Integer,
+    user_pic_id :: PictureId,
     user_pic_url :: Text,
     user_create_date :: Text
   }
@@ -26,10 +26,10 @@ instance ToJSON UserResponse where
 
 data UserTokenResponse = UserTokenResponse
   { tokenUTR :: Text,
-    user_idUTR :: Integer,
+    user_idUTR :: UserId,
     first_nameUTR :: Text,
     last_nameUTR :: Text,
-    user_pic_idUTR :: Integer,
+    user_pic_idUTR :: PictureId,
     user_pic_urlUTR :: Text,
     user_create_dateUTR :: Text
   }
@@ -66,9 +66,9 @@ instance ToJSON OkInfoResponse where
     pairs ("ok" .= a <> "info" .= b)
 
 data AuthorResponse = AuthorResponse
-  { author_id :: Integer,
+  { author_id :: AuthorId,
     author_info :: Text,
-    auth_user_id :: Integer
+    auth_user_id :: UserId
   }
   deriving (Eq, Show)
 
@@ -80,15 +80,15 @@ instance ToJSON AuthorResponse where
 
 data CatResponse
   = SubCatResponse
-      { subCat_id :: Integer,
+      { subCat_id :: CategoryId,
         subCat_name :: Text,
-        one_level_sub_categories :: [Integer],
+        one_level_sub_categories :: [CategoryId],
         super_category :: CatResponse
       }
   | CatResponse
-      { cat_id :: Integer,
+      { cat_id :: CategoryId,
         cat_name :: Text,
-        one_level_sub_cats :: [Integer]
+        one_level_sub_cats :: [CategoryId]
       }
   deriving (Eq, Show)
 
@@ -102,7 +102,7 @@ instance ToJSON CatResponse where
   toEncoding (SubCatResponse a b c d) =
     pairs ("category_id" .= a <> "category_name" .= b <> "sub_categories" .= c <> "super_category" .= d)
 
-data PostIdOrNull = PostIdExist Integer | PostIdNull
+data PostIdOrNull = PostIdExist PostId | PostIdNull
   deriving (Eq)
 
 instance Show PostIdOrNull where
@@ -114,13 +114,13 @@ instance ToJSON PostIdOrNull where
   toJSON PostIdNull = toJSON ("NULL" :: Text)
 
 data DraftResponse = DraftResponse
-  { draft_id2 :: Integer,
+  { draft_id2 :: DraftId,
     post_id2 :: PostIdOrNull,
     author2 :: AuthorResponse,
     draft_name2 :: Text,
     draft_cat2 :: CatResponse,
     draft_text2 :: Text,
-    draft_main_pic_id2 :: Integer,
+    draft_main_pic_id2 :: PictureId,
     draft_main_pic_url2 :: Text,
     draft_pics2 :: [PicIdUrl],
     draft_tags2 :: [TagResponse]
@@ -134,7 +134,7 @@ instance ToJSON DraftResponse where
     pairs ("draft_id" .= a <> "post_id" .= b <> "author" .= c <> "draft_name" .= d <> "draft_category" .= e <> "draft_text" .= f <> "draft_main_pic_id" .= g <> "draft_main_pic_url" .= h <> "draft_pics" .= i <> "draft_tags" .= j)
 
 data PicIdUrl = PicIdUrl
-  { pic_idPU :: Integer,
+  { pic_idPU :: PictureId,
     pic_urlPU :: Text
   }
   deriving (Eq, Show)
@@ -158,13 +158,13 @@ instance ToJSON DraftsResponse where
     pairs ("page" .= a <> "drafts" .= b)
 
 data PostResponse = PostResponse
-  { post_id :: Integer,
+  { post_id :: PostId,
     author4 :: AuthorResponse,
     post_name :: Text,
     post_create_date :: Text,
     post_cat :: CatResponse,
     post_text :: Text,
-    post_main_pic_id :: Integer,
+    post_main_pic_id :: PictureId,
     post_main_pic_url :: Text,
     post_pics :: [PicIdUrl],
     post_tags :: [TagResponse]
@@ -190,7 +190,7 @@ instance ToJSON PostsResponse where
     pairs ("page" .= a <> "posts" .= b)
 
 data TagResponse = TagResponse
-  { tag_idTR :: Integer,
+  { tag_idTR :: TagId,
     tag_nameTR :: Text
   }
   deriving (Eq, Show)
@@ -202,10 +202,10 @@ instance ToJSON TagResponse where
     pairs ("tag_id" .= a <> "tag_name" .= b)
 
 data CommentResponse = CommentResponse
-  { comment_id :: Integer,
+  { comment_id :: CommentId,
     comment_text :: Text,
-    post_id6 :: Integer,
-    user_id6 :: Integer
+    post_id6 :: PostId,
+    user_id6 :: UserId
   }
   deriving (Eq, Show)
 
@@ -216,9 +216,9 @@ instance ToJSON CommentResponse where
     pairs ("comment_id" .= a <> "comment_text" .= b <> "post_id" .= c <> "user_id" .= d)
 
 data CommentIdTextUserResponse = CommentIdTextUserResponse
-  { comment_id8 :: Integer,
+  { comment_id8 :: CommentId,
     comment_text8 :: Text,
-    user_id8 :: Integer
+    user_id8 :: UserId
   }
   deriving (Eq, Show)
 
@@ -230,7 +230,7 @@ instance ToJSON CommentIdTextUserResponse where
 
 data CommentsResponse = CommentsResponse
   { pageCR :: Page,
-    post_id9 :: Integer,
+    post_id9 :: PostId,
     comments :: [CommentIdTextUserResponse]
   }
   deriving (Eq, Show)

@@ -41,10 +41,10 @@ makeH conf logH =
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn h (LogIn usIdParam pwdParam) = do
-  Auth pwd admBool <- checkOneIfExistE (hLog h) (selectAuths h) "users" ["password", "admin"] "user_id=?" (Num usIdParam)
+  Auth pwd admBool <- checkOneIfExistE (hLog h) (selectAuths h) "users" ["password", "admin"] "user_id=?" (Id usIdParam)
   checkPwd pwdParam pwd
   tokenKey <- lift $ getTokenKey h
-  updateInDbE h "users" "token_key=?" "user_id=?" [Txt (pack tokenKey), Num usIdParam]
+  updateInDbE h "users" "token_key=?" "user_id=?" [Txt (pack tokenKey), Id usIdParam]
   if admBool
     then do
       let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
@@ -70,7 +70,7 @@ checkAdminTokenParam h tokenParam = hideTokenErr $
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Id usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ unpack tokenKey) == xs
@@ -92,7 +92,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Id usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ unpack tokenKey) == xs
@@ -103,7 +103,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $
         Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"
     (usIdParam, '.' : 's' : 't' : 'u' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Id usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("stu" ++ unpack tokenKey) == xs

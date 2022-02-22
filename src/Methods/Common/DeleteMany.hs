@@ -28,15 +28,15 @@ makeH conf =
 deleteAllAboutPost :: (MonadCatch m) => Handle m -> PostId -> m ()
 deleteAllAboutPost h postId = do
   deletePostsPicsTags h [postId]
-  deleteFromDb h "comments" "post_id=?" [Num postId]
-  draftsIds <- selectNums h "drafts" ["draft_id"] "post_id=?" [Num postId]
+  deleteFromDb h "comments" "post_id=?" [Id postId]
+  draftsIds <- selectNums h "drafts" ["draft_id"] "post_id=?" [Id postId]
   deleteAllAboutDrafts h draftsIds
-  deleteFromDb h "posts" "post_id=?" [Num postId]
+  deleteFromDb h "posts" "post_id=?" [Id postId]
 
 deletePostsPicsTags :: (MonadCatch m) => Handle m -> [PostId] -> m ()
 deletePostsPicsTags _ [] = return ()
 deletePostsPicsTags h postsIds = do
-  let values = fmap Num postsIds
+  let values = fmap Id postsIds
   let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
   deleteFromDb h "postspics" where' values
   deleteFromDb h "poststags" where' values
@@ -44,7 +44,7 @@ deletePostsPicsTags h postsIds = do
 deleteAllAboutDrafts :: (MonadCatch m) => Handle m -> [DraftId] -> m ()
 deleteAllAboutDrafts _ [] = return ()
 deleteAllAboutDrafts h draftsIds = do
-  let values = fmap Num draftsIds
+  let values = fmap Id draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
   deleteDraftsPicsTags h draftsIds
   deleteFromDb h "drafts" where' values
@@ -52,7 +52,7 @@ deleteAllAboutDrafts h draftsIds = do
 deleteDraftsPicsTags :: (MonadCatch m) => Handle m -> [DraftId] -> m ()
 deleteDraftsPicsTags _ [] = return ()
 deleteDraftsPicsTags h draftsIds = do
-  let values = fmap Num draftsIds
+  let values = fmap Id draftsIds
   let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
   deleteFromDb h "draftspics" where' values
   deleteFromDb h "draftstags" where' values

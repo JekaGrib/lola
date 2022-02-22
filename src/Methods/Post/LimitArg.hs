@@ -15,6 +15,9 @@ import Oops (ReqError (..))
 import ParseQueryStr (checkLength, checkMaybeParam)
 import TryRead (tryReadDay, tryReadId, tryReadIdArray)
 import Types
+import Database.PostgreSQL.Simple.Types (PGArray(..),In(..))
+
+
 
 data LimitArg = LimitArg [FilterArg] [SortArg]
 
@@ -98,15 +101,15 @@ chooseFilterArg paramKey x = let val = Txt x in case paramKey of
     return . Just $ FilterArg table where' values
   "tags_in" -> do
     xs <- tryReadIdArray paramKey x
-    let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN (" ++ (init . tail . show $ xs) ++ ") GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+    let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where' = "true"
-    let values = ([], [])
+    let values = ([IdIn (In xs)], [])
     return . Just $ FilterArg table where' values
   "tags_all" -> do
     xs <- tryReadIdArray paramKey x
-    let table = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where' = "tags_id @> ARRAY" ++ show xs ++ "::bigint[]"
-    let values = ([], [])
+    let table = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]::bigint[]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
+    let where' = "tags_id @> ?"
+    let values = ([], [IdArray (PGArray xs)])
     return . Just $ FilterArg table where' values
   "name_in" -> do
     _ <- checkLength 50 paramKey x

@@ -20,7 +20,7 @@ data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
     selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Text],
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
     getDay :: m String,
     getTokenKey :: m String
   }
@@ -45,7 +45,7 @@ createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) =
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
   tokenKey <- lift $ getTokenKey h
   let insNames = ["password", "first_name", "last_name", "user_pic_id", "user_create_date", "admin", "token_key"]
-  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam,Num picIdParam, Txt (pack day), Txt "TRUE", Txt (pack tokenKey)]
+  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam,Id picIdParam, Txt (pack day), Txt "TRUE", Txt (pack tokenKey)]
   admId <- insertReturnE h "users" "user_id" insNames insValues
   let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
   lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"
@@ -60,5 +60,5 @@ checkEmptyList :: (MonadCatch m) => [Text] -> ExceptT ReqError m ()
 checkEmptyList [] = throwE $ SimpleError "DatabaseError.Empty output"
 checkEmptyList _ = return ()
 
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
 insertReturnE h = checkInsRetE (hLog h) (insertReturn h)

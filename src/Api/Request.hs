@@ -6,15 +6,16 @@ module Api.Request where
 
 import Data.Aeson ((.:), FromJSON (parseJSON), withObject)
 import Data.Text (Text)
+import Types
 
 data DraftRequest = DraftRequest
   { tokenDR :: Text,
     draft_name :: Text,
-    draft_cat_id :: Integer,
+    draft_cat_id :: CategoryId,
     draft_textDR :: Text,
-    draft_main_pic_id :: Integer,
-    draft_pics_ids :: [Integer],
-    draft_tags_ids :: [Integer]
+    draft_main_pic_id :: PictureId,
+    draft_pics_ids :: [PictureId],
+    draft_tags_ids :: [TagId]
   }
   deriving (Eq, Show)
 

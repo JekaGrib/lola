@@ -27,7 +27,7 @@ data Handle m = Handle
     updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
     deleteFromDb :: Table -> Where -> [DbValue] -> m (),
     isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m
   }
@@ -53,15 +53,15 @@ createCategory h (CreateCategory catNameParam) = do
 
 createSubCategory :: (MonadCatch m) => Handle m -> CreateSubCategory -> ExceptT ReqError m ResponseInfo
 createSubCategory h (CreateSubCategory catNameParam superCatIdParam) = do
-  isExistInDbE h "categories"  "category_id=?" (Num superCatIdParam)
-  catId <- insertReturnE h "categories" "category_id" ["category_name", "super_category_id"] [Txt catNameParam, Num superCatIdParam]
+  isExistInDbE h "categories"  "category_id=?" (Id superCatIdParam)
+  catId <- insertReturnE h "categories" "category_id" ["category_name", "super_category_id"] [Txt catNameParam, Id superCatIdParam]
   catResp <- makeCatResp (hCatResp h) catId
   lift $ logInfo (hLog h) $ "Sub_Category_id: " ++ show catId ++ " created"
   okHelper catResp
 
 getCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
 getCategory h catId = do
-  isExistInDbE h "categories"  "category_id=?" (Num catId)
+  isExistInDbE h "categories"  "category_id=?" (Id catId)
   catResp <- makeCatResp (hCatResp h) catId
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catId ++ " sending in response"
   okHelper catResp
@@ -70,28 +70,28 @@ updateCategory :: (MonadCatch m) => Handle m -> UpdateCategory -> ExceptT ReqErr
 updateCategory h (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
   case maybeSuperCatIdParam of
     Just superCatIdParam -> do
-      isExistInDbE h "categories"  "category_id=?" (Num catIdParam)
-      isExistInDbE h "categories"  "category_id=?" (Num superCatIdParam)
+      isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
+      isExistInDbE h "categories"  "category_id=?" (Id superCatIdParam)
       checkRelationCats h catIdParam superCatIdParam
-      updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [Txt catNameParam, Num superCatIdParam, Num catIdParam]
+      updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [Txt catNameParam, Id superCatIdParam, Id catIdParam]
     Nothing -> do
-      isExistInDbE h "categories"  "category_id=?" (Num catIdParam)
-      updateInDbE h "categories" "category_name=?" "category_id=?" [Txt catNameParam, Num catIdParam]
+      isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
+      updateInDbE h "categories" "category_name=?" "category_id=?" [Txt catNameParam, Id catIdParam]
   catResp <- makeCatResp (hCatResp h) catIdParam
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " updated."
   okHelper catResp
 
 deleteCategory :: (MonadCatch m) => Handle m -> DeleteCategory -> ExceptT ReqError m ResponseInfo
 deleteCategory h (DeleteCategory catIdParam) = do
-  isExistInDbE h "categories"  "category_id=?" (Num catIdParam)
+  isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
   allSubCats <- findAllSubCats h catIdParam
-  let values = fmap Num (cDefCatId (hConf h) : allSubCats)
+  let values = fmap Id (cDefCatId (hConf h) : allSubCats)
   let where' = intercalate " OR " . fmap (const "post_category_id=?") $ allSubCats
   let where'' = intercalate " OR " . fmap (const "draft_category_id=?") $ allSubCats
   let updatePos = updateInDb h "posts" "post_category_id=?" where' values
   let updateDr = updateInDb h "drafts" "draft_category_id=?" where'' values
   let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
-  let deleteCat = deleteFromDb h "categories" where''' (fmap Num allSubCats)
+  let deleteCat = deleteFromDb h "categories" where''' (fmap Id allSubCats)
   withTransactionDBE h (updatePos >> updateDr >> deleteCat)
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " deleted."
   okHelper $ OkResponse {ok = True}
@@ -106,7 +106,7 @@ checkRelationCats h catId superCatId
       $ SimpleError
       $ "super_category_id: " ++ show superCatId ++ " is subCategory of category_id: " ++ show catId
 
-findAllSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [Integer]
+findAllSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
 findAllSubCats h catId = do
   catsIds <- findOneLevelSubCats (hCatResp h) catId
   case catsIds of
@@ -125,7 +125,7 @@ updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
 isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
 insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

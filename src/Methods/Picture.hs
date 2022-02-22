@@ -26,7 +26,7 @@ data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
     selectBS :: Table -> [Param] -> Where -> [DbValue] -> m [ByteString],
-    insertByteaInDb :: Table -> String -> [String] -> ByteString -> m Integer,
+    insertByteaInDb :: Table -> String -> [String] -> ByteString -> m Id,
     httpAction :: HT.Request -> m (HT.Response BSL.ByteString)
   }
 
@@ -42,7 +42,7 @@ makeH conf logH =
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture h picIdNum = do
-  bs <- checkOneIfExistE (hLog h) (selectBS h) "pics" ["pic"] "pic_id=?" (Num picIdNum)
+  bs <- checkOneIfExistE (hLog h) (selectBS h) "pics" ["pic"] "pic_id=?" (Id picIdNum)
   let lbs = BSL.fromStrict bs
   lift $ logInfo (hLog h) $ "Pic_id: " ++ show picIdNum ++ " sending in response"
   return $
@@ -68,5 +68,5 @@ checkPicUrlGetPic h url = do
     Right _ -> return lbs
     Left _ -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
 
-insertByteaInDbE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Integer
+insertByteaInDbE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Id
 insertByteaInDbE h = checkInsRetE (hLog h) (insertByteaInDb h)

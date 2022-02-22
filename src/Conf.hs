@@ -12,7 +12,6 @@ import qualified Data.Configurator as C
 import qualified Data.Configurator.Types as C
 import Data.List ((\\))
 import Data.String (fromString)
-import Data.Text (Text, pack, unpack)
 import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
@@ -212,17 +211,29 @@ inputLogLevel = do
     "ERROR" -> return ERROR
     _ -> inputLogLevel
 
-inputIntegerOr :: String -> IO Integer -> IO Integer
-inputIntegerOr valueName action = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName ++ "\nOr enter  `NEW`  to create a new " ++ valueName
+inputIdOr :: String -> IO Id -> IO Id
+inputIdOr valueName action = do
+  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number from 1 to 9223372036854775807\nOr enter  `NEW`  to create a new " ++ valueName
   input <- getLine
   case map toUpper input of
     "NEW" -> action
-    _ -> case reads input of
-      [(a, "")] -> return a
-      _ -> inputIntegerOr valueName action
+    _ -> case reads input  of
+      [(a , "")] -> do
+        iD <- checkBigIntOr a . inputIdOr valueName $ action
+        return iD
+      _ -> inputIdOr valueName action
 
-parseConfDefPicId :: C.Config -> Connection -> IO Integer
+inputOrCreateDefCatId,inputOrCreateDefPicId :: Connection -> IO Id
+inputOrCreateDefCatId  conn          = inputIdOr "defaultCategoryId" (createNewDefCat conn)
+inputOrCreateDefPicId  conn          = inputIdOr "defaultPictureId"  (createNewDefPic conn)
+
+inputOrCreateDefUsId :: Connection -> PictureId -> IO UserId
+inputOrCreateDefUsId   conn defPicId = inputIdOr "defaultUserId"     (createNewDefUser conn defPicId)
+
+inputOrCreateDefAuthId :: Connection -> UserId -> IO AuthorId
+inputOrCreateDefAuthId conn defUsId  = inputIdOr "defaultAuthorId"   (createNewDefAuthor conn defUsId)
+
+parseConfDefPicId :: C.Config -> Connection -> IO PictureId
 parseConfDefPicId conf conn = do
   str <-
     (C.lookup conf "defaultValues.defaultPictureId" :: IO (Maybe Integer))
@@ -230,24 +241,25 @@ parseConfDefPicId conf conn = do
       `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
   case str of
     Nothing -> do
-      x <- inputIntegerOr "defaultPictureId" (createNewDefPic conn)
+      iD <- inputOrCreateDefPicId conn
       checkExistId
         conn
         "pics"
         "pic_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
-    Just x ->
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefPicId conn)
+    Just x -> do
+      iD <- checkBigIntOr x $ inputOrCreateDefPicId conn
       checkExistId
         conn
         "pics"
         "pic_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultPictureId" (createNewDefPic conn))
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefPicId conn)
 
-parseConfDefUsId :: C.Config -> Connection -> Integer -> IO Integer
+parseConfDefUsId :: C.Config -> Connection -> PictureId -> IO UserId
 parseConfDefUsId conf conn defPicId = do
   str <-
     (C.lookup conf "defaultValues.defaultUserId" :: IO (Maybe Integer))
@@ -255,24 +267,25 @@ parseConfDefUsId conf conn defPicId = do
       `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
   case str of
     Nothing -> do
-      x <- inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId)
+      iD <- inputOrCreateDefUsId conn defPicId
       checkExistId
         conn
         "users"
         "user_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
-    Just x ->
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefUsId conn defPicId)
+    Just x -> do
+      iD <- checkBigIntOr x $ inputOrCreateDefUsId conn defPicId
       checkExistId
         conn
         "users"
         "user_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultUserId" (createNewDefUser conn defPicId))
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefUsId conn defPicId)
 
-parseConfDefAuthId :: C.Config -> Connection -> Integer -> IO Integer
+parseConfDefAuthId :: C.Config -> Connection -> UserId -> IO AuthorId
 parseConfDefAuthId conf conn defUsId = do
   str <-
     (C.lookup conf "defaultValues.defaultAuthorId" :: IO (Maybe Integer))
@@ -280,24 +293,25 @@ parseConfDefAuthId conf conn defUsId = do
       `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
   case str of
     Nothing -> do
-      x <- inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId)
+      iD <- inputOrCreateDefAuthId conn defUsId
       checkExistId
         conn
         "authors"
         "author_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
-    Just x ->
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefAuthId conn defUsId)
+    Just x -> do
+      iD <- checkBigIntOr x $ inputOrCreateDefAuthId conn defUsId
       checkExistId
         conn
         "authors"
         "author_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultAuthorId" (createNewDefAuthor conn defUsId))
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefAuthId conn defUsId)
 
-parseConfDefCatId :: C.Config -> Connection -> IO Integer
+parseConfDefCatId :: C.Config -> Connection -> IO CategoryId
 parseConfDefCatId conf conn = do
   str <-
     (C.lookup conf "defaultValues.defaultCategoryId" :: IO (Maybe Integer))
@@ -305,33 +319,34 @@ parseConfDefCatId conf conn = do
       `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
   case str of
     Nothing -> do
-      x <- inputIntegerOr "defaultCategoryId" (createNewDefCat conn)
+      iD <- inputOrCreateDefCatId conn
       checkExistId
         conn
         "categories"
         "category_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))
-    Just x ->
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefCatId conn)
+    Just x -> do
+      iD <- checkBigIntOr x $ inputOrCreateDefCatId conn
       checkExistId
         conn
         "categories"
         "category_id=?"
-        (pack . show $ x)
-        (return x)
-        (inputIntegerOr "defaultCategoryId" (createNewDefCat conn))
+        (Id iD)
+        (return iD)
+        (inputOrCreateDefCatId conn)
 
-checkExistId :: Connection -> String -> String -> Text -> IO b -> IO b -> IO b
+checkExistId :: Connection -> String -> String -> DbValue -> IO Id -> IO Id -> IO Id
 checkExistId conn table where' value ifTrue ifFalse = do
   onlyChecks <- query conn (toExQ table where') [value]
   case onlyChecks of
     [Only True] -> ifTrue
     [Only False] -> do
-      putStrLn $ (where' \\ "=?") ++ ": " ++ unpack  value ++ " doesn`t exist"
+      putStrLn $ (where' \\ "=?") ++ ": " ++ show value ++ " doesn`t exist"
       ifFalse
     _ -> do
-      putStrLn $ "Something in DB went wrong with " ++ (where' \\ "=?") ++ ": " ++ unpack  value
+      putStrLn $ "Something in DB went wrong with " ++ (where' \\ "=?") ++ ": " ++ show  value
       ifFalse
 
 checkLimitOr :: Integer -> IO Integer -> IO Page
@@ -344,4 +359,14 @@ checkLimitOr num action
     putStrLn "Limit should be less then 100"
     newNum <- action
     checkLimitOr newNum action
+  | otherwise = return (fromInteger num)
+
+checkBigIntOr :: Integer -> IO Id -> IO Id
+checkBigIntOr num action
+  | num <= 0 = do
+    putStrLn "Id should be greater then 0"
+    action
+  | num > 9223372036854775807 = do
+    putStrLn "Id should be less then 9223372036854775807"
+    action
   | otherwise = return (fromInteger num)

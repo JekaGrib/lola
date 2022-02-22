@@ -42,7 +42,7 @@ data Handle m = Handle
     updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
     deleteFromDb :: Table -> Where -> [DbValue] -> m (),
     isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
     insertMany :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
     getDay :: m String,
     withTransactionDB :: forall a. m a -> m a,
@@ -78,7 +78,7 @@ createNewDraft h usIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam pic
   DraftInfo auResp@(AuthorResponse auId _ _) tagResps catResp <- getDraftInfo h usIdNum drReq
   draftId <- withTransactionDBE h $ do
     let insNames = ["author_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
-    let insValues = [Num auId, Txt nameParam, Num catIdParam, Txt txtParam, Num picId]
+    let insValues = [Id auId, Txt nameParam, Id catIdParam, Txt txtParam, Id picId]
     insertReturnDraft h picsIds tagsIds insNames insValues
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created"
   okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdNull, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl (hConf h) picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
@@ -88,15 +88,15 @@ createPostsDraft h usIdNum (CreatePostsDraft postIdParam) = do
   isUserAuthorE_ h usIdNum
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
   let params = ["a.author_id", "author_info", "post_name", "post_category_id", "post_text", "post_main_pic_id"]
-  PostInfo auId auInfo postName postCatId postTxt mPicId <- checkOneIfExistE (hLog h) (selectPostInfos h) table params "post_id=?" (Num postIdParam)
+  PostInfo auId auInfo postName postCatId postTxt mPicId <- checkOneIfExistE (hLog h) (selectPostInfos h) table params "post_id=?" (Id postIdParam)
   isPostAuthor h postIdParam usIdNum
-  picsIds <- checkListE (hLog h) $ selectNums h "postspics" ["pic_id"] "post_id=?" [Num postIdParam]
-  tagS <- checkListE (hLog h) $ selectTags h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "post_id=?" [Num postIdParam]
+  picsIds <- checkListE (hLog h) $ selectNums h "postspics" ["pic_id"] "post_id=?" [Id postIdParam]
+  tagS <- checkListE (hLog h) $ selectTags h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "post_id=?" [Id postIdParam]
   let tagsIds = fmap tag_idT tagS
   catResp <- makeCatResp (hCatResp h) postCatId
   draftId <- withTransactionDBE h $ do
     let insNames = ["post_id", "author_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
-    let insValues = [Num postIdParam, Num auId, Txt postName, Num postCatId, Txt postTxt, Num mPicId]
+    let insValues = [Id postIdParam, Id auId, Txt postName, Id postCatId, Txt postTxt, Id mPicId]
     insertReturnDraft h picsIds tagsIds insNames insValues
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postIdParam
   okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postIdParam, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = postName, draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
@@ -114,9 +114,9 @@ getDrafts h usIdNum (GetDrafts pageNum) = do
   let orderBy = "draft_id DESC"
   let extractParams = ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
   let where' = "drafts.author_id = ?"
-  let values = [Num auId]
+  let values = [Id auId]
   drafts <- checkListE (hLog h) $ selectLimitDrafts h table orderBy pageNum (cDraftsLimit . hConf $ h) extractParams where' values [] []
-  let alldraftIdsValues = fmap (Num . draft_idD) drafts
+  let alldraftIdsValues = fmap (Id . draft_idD) drafts
   let allCatIdsNum = fmap draft_cat_idD drafts
   manyCatResp <- mapM (makeCatResp (hCatResp h)) allCatIdsNum
   manyDraftPicsIds <- mapM (checkListE (hLog h) . selectNums h "draftspics" ["pic_id"] "draft_id=?") $ fmap (: []) alldraftIdsValues
@@ -133,10 +133,10 @@ updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -
 updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtParam picId picsIds tagsIds) = do
   isDraftAuthor h draftIdNum usIdNum
   DraftInfo auResp tagResps catResp <- getDraftInfo h usIdNum drReq
-  postId <- checkOneE (hLog h) $ selectNums h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [Num draftIdNum]
+  postId <- checkOneE (hLog h) $ selectNums h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [Id draftIdNum]
   withTransactionDBE h $ do
     deleteDraftsPicsTags (hDelMany h) [draftIdNum]
-    updateInDb h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [Txt nameParam, Num catIdParam, Txt txtParam, Num picId, Num draftIdNum]
+    updateInDb h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [Txt nameParam, Id catIdParam, Txt txtParam, Id picId, Id draftIdNum]
     insertMany h "draftspics" ["draft_id", "pic_id"] (zip (repeat draftIdNum) picsIds)
     insertMany h "draftstags" ["draft_id", "tag_id"] (zip (repeat draftIdNum) tagsIds)
   lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftIdNum ++ " updated"
@@ -144,7 +144,7 @@ updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtP
 
 deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DeleteDraft -> ExceptT ReqError m ResponseInfo
 deleteDraft h usIdNum (DeleteDraft draftIdParam) = do
-  isExistInDbE h "drafts" "draft_id=?" (Num draftIdParam)
+  isExistInDbE h "drafts" "draft_id=?" (Id draftIdParam)
   isUserAuthorE_ h usIdNum
   isDraftAuthor h draftIdParam usIdNum
   withTransactionDBE h $ deleteAllAboutDrafts (hDelMany h) [draftIdParam]
@@ -159,7 +159,7 @@ publishDraft h usIdNum (PublishDraft draftIdParam) = do
       day <- lift $ getDay h
       postId <- withTransactionDBE h $ do
         let insNames = ["author_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-        let insValues = [Num auId, Txt draftName, Txt (pack day), Num . fromCatResp $ catResp, Txt draftTxt, Num mPicId]
+        let insValues = [Id auId, Txt draftName, Txt (pack day), Id . fromCatResp $ catResp, Txt draftTxt, Id mPicId]
         postId <- insertReturn h "posts" "post_id" insNames insValues
         insertMany h "postspics" ["post_id", "pic_id"] (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertMany h "poststags" ["post_id", "tag_id"] (zip (repeat postId) (fmap tag_idTR tagResps))
@@ -167,9 +167,9 @@ publishDraft h usIdNum (PublishDraft draftIdParam) = do
       lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = pack day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
     PostIdExist postId -> do
-      day <- checkOneE (hLog h) $ selectDays h "posts" ["post_create_date"] "post_id=?" [Num postId]
+      day <- checkOneE (hLog h) $ selectDays h "posts" ["post_create_date"] "post_id=?" [Id postId]
       withTransactionDBE h $ do
-        updateInDb h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [Txt draftName, Num . fromCatResp $ catResp, Txt draftTxt, Num mPicId, Num postId]
+        updateInDb h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [Txt draftName, Id . fromCatResp $ catResp, Txt draftTxt, Id mPicId, Id postId]
         deletePostsPicsTags (hDelMany h) [postId]
         insertMany h "postspics" ["post_id", "pic_id"] (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertMany h "poststags" ["post_id", "tag_id"] (zip (repeat postId) (fmap tag_idTR tagResps))
@@ -180,11 +180,11 @@ selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> Exc
 selectDraftAndMakeResp h usIdNum draftIdParam = do
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
   let params = ["d.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
-  Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- checkOneIfExistE (hLog h) (selectDrafts h) table params "draft_id=?" (Num draftIdParam)
+  Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId <- checkOneIfExistE (hLog h) (selectDrafts h) table params "draft_id=?" (Id draftIdParam)
   Author auId _ _ <- isUserAuthorE h usIdNum
   isDraftAuthor h draftIdParam usIdNum
-  picsIds <- checkListE (hLog h) $ selectNums h "draftspics" ["pic_id"] "draft_id=?" [Num draftIdParam]
-  tagS <- checkListE (hLog h) $ selectTags h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "draft_id=?" [Num draftIdParam]
+  picsIds <- checkListE (hLog h) $ selectNums h "draftspics" ["pic_id"] "draft_id=?" [Id draftIdParam]
+  tagS <- checkListE (hLog h) $ selectTags h "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "draft_id=?" [Id draftIdParam]
   catResp <- makeCatResp (hCatResp h) draftCatId
   return DraftResponse {draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName, draft_cat2 = catResp, draft_text2 = draftTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
 
@@ -192,12 +192,12 @@ data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 
 getDraftInfo :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m DraftInfo
 getDraftInfo h usIdNum (DraftRequest _ _ catIdParam _ picId picsIds tagsIds) = do
-  isExistInDbE h "categories"  "category_id=?" (Num catIdParam)
-  mapM_ (isExistInDbE h "tags"  "tag_id=?") $ fmap Num tagsIds
-  mapM_ (isExistInDbE h "pics"  "pic_id=?") $ fmap Num (picId : picsIds)
+  isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
+  mapM_ (isExistInDbE h "tags"  "tag_id=?") $ fmap Id tagsIds
+  mapM_ (isExistInDbE h "pics"  "pic_id=?") $ fmap Id (picId : picsIds)
   (Author auId auInfo usId) <- isUserAuthorE h usIdNum
   let where' = intercalate " OR " . fmap (const "tag_id=?") $ tagsIds
-  tagS <- checkListE (hLog h) $ selectTags h "tags" ["tag_id", "tag_name"] where' (fmap Num tagsIds)
+  tagS <- checkListE (hLog h) $ selectTags h "tags" ["tag_id", "tag_name"] where' (fmap Id tagsIds)
   catResp <- makeCatResp (hCatResp h) catIdParam
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp
 
@@ -211,7 +211,7 @@ insertReturnDraft h picsIds tagsIds insNames insValues = do
 isDraftAuthor :: (MonadCatch m) => Handle m -> DraftId -> UserId -> ExceptT ReqError m ()
 isDraftAuthor h draftIdNum usIdNum = do
   let table = "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
-  usDraftId <- checkOneE (hLog h) $ selectNums h table ["user_id"] "draft_id=?" [Num draftIdNum]
+  usDraftId <- checkOneE (hLog h) $ selectNums h table ["user_id"] "draft_id=?" [Id draftIdNum]
   unless (usDraftId == usIdNum)
     $ throwE
     $ SimpleError
@@ -220,7 +220,7 @@ isDraftAuthor h draftIdNum usIdNum = do
 isPostAuthor :: (MonadCatch m) => Handle m -> PostId -> UserId -> ExceptT ReqError m ()
 isPostAuthor h postIdParam usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-  usPostId <- checkOneE (hLog h) $ selectNums h table ["user_id"] "post_id=?" [Num postIdParam]
+  usPostId <- checkOneE (hLog h) $ selectNums h table ["user_id"] "post_id=?" [Id postIdParam]
   unless (usPostId == usIdNum)
     $ throwE
     $ SimpleError
@@ -229,7 +229,7 @@ isPostAuthor h postIdParam usIdNum = do
 isUserAuthorE :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
 isUserAuthorE h usIdNum = do
   lift $ logDebug (hLog h) "Checking in DB is user author"
-  maybeAu <- checkMaybeOneE (hLog h) $ selectAuthors h "authors" ["author_id", "author_info", "user_id"] "user_id=?" [Num usIdNum]
+  maybeAu <- checkMaybeOneE (hLog h) $ selectAuthors h "authors" ["author_id", "author_info", "user_id"] "user_id=?" [Id usIdNum]
   case maybeAu of
     Nothing -> throwE $ SimpleError $ "user_id: " ++ show usIdNum ++ " isn`t author"
     Just author -> return author

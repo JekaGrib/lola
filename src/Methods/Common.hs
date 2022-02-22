@@ -124,12 +124,12 @@ checkIsExistE logH func table where' value = do
 checkInsRetE ::
   (MonadCatch m) =>
   LogHandle m ->
-  (Table -> String -> [String] -> a -> m Integer) ->
+  (Table -> String -> [String] -> a -> m Id) ->
   Table ->
   String ->
   [String] ->
   a ->
-  ExceptT ReqError m Integer
+  ExceptT ReqError m Id
 checkInsRetE logH func table returnName insNames insValues = do
   lift $ logDebug logH "Insert data in the DB"
   i <- catchDbErrE $ func table returnName insNames insValues

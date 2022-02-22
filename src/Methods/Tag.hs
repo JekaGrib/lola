@@ -28,7 +28,7 @@ data Handle m = Handle
     updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
     deleteFromDb :: Table -> Where -> [DbValue] -> m (),
     isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
     withTransactionDB :: forall a. m a -> m a
   }
 
@@ -53,23 +53,23 @@ createTag h (CreateTag tagNameParam) = do
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag h tagIdNum = do
-  tagName <- checkOneIfExistE (hLog h) (selectTxts h) "tags" ["tag_name"] "tag_id=?" (Num tagIdNum)
+  tagName <- checkOneIfExistE (hLog h) (selectTxts h) "tags" ["tag_name"] "tag_id=?" (Id tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
 
 updateTag :: (Monad m, MonadCatch m) => Handle m -> UpdateTag -> ExceptT ReqError m ResponseInfo
 updateTag h (UpdateTag tagIdNum tagNameParam) = do
-  isExistInDbE h "tags" "tag_id=?" (Num tagIdNum)
-  updateInDbE h "tags" "tag_name=?" "tag_id=?" [Txt tagNameParam,Num tagIdNum]
+  isExistInDbE h "tags" "tag_id=?" (Id tagIdNum)
+  updateInDbE h "tags" "tag_name=?" "tag_id=?" [Txt tagNameParam,Id tagIdNum]
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " updated"
   okHelper $ TagResponse tagIdNum tagNameParam
 
 deleteTag :: (Monad m, MonadCatch m) => Handle m -> DeleteTag -> ExceptT ReqError m ResponseInfo
 deleteTag h (DeleteTag tagIdNum) = do
-  isExistInDbE h "tags" "tag_id=?" (Num tagIdNum)
-  let deleteDrTg = deleteFromDb h "draftstags" "tag_id=?" [Num tagIdNum]
-  let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [Num tagIdNum]
-  let deleteTg = deleteFromDb h "tags" "tag_id=?" [Num tagIdNum]
+  isExistInDbE h "tags" "tag_id=?" (Id tagIdNum)
+  let deleteDrTg = deleteFromDb h "draftstags" "tag_id=?" [Id tagIdNum]
+  let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [Id tagIdNum]
+  let deleteTg = deleteFromDb h "tags" "tag_id=?" [Id tagIdNum]
   withTransactionDBE h (deleteDrTg >> deletePosTg >> deleteTg)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
@@ -80,7 +80,7 @@ updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
 isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
 insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

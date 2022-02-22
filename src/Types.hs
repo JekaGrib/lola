@@ -7,8 +7,11 @@ module Types where
 import Data.Text (Text)
 --import Data.Map as Map
 import Database.PostgreSQL.Simple.ToField (ToField(..))
+import Database.PostgreSQL.Simple.Types (PGArray,In)
+import Data.Int (Int64)
 
-type Id = Integer
+type Id = Int64
+
 
 type UserId = Id
 
@@ -70,15 +73,25 @@ type Limit = Int
 
 --type WhereMap = Map.Map DbParamKey DbParamValue
 
-data DbValue = Txt Text | Num Integer
+data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id
 
 instance Show DbValue where
   show (Num a) = show a
   show (Txt a) = show a
+  show (IdArray a) = show a
+  show (IdIn a) = show a
+  show (Id a) = show a
+
+
 
 instance ToField DbValue where
   toField (Num a) = toField a
   toField (Txt a) = toField a
+  toField (IdArray a) = toField a
+  toField (IdIn a) = toField a
+  toField (Id a) = toField a
+
+
   
 
 type WhereValue = (Where, DbValue)
