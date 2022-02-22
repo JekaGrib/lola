@@ -25,7 +25,7 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectBS :: Table -> [Param] -> Where -> [Text] -> m [ByteString],
+    selectBS :: Table -> [Param] -> Where -> [DbValue] -> m [ByteString],
     insertByteaInDb :: Table -> String -> [String] -> ByteString -> m Integer,
     httpAction :: HT.Request -> m (HT.Response BSL.ByteString)
   }
@@ -42,7 +42,7 @@ makeH conf logH =
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture h picIdNum = do
-  bs <- checkOneIfExistE (hLog h) (selectBS h) "pics" ["pic"] "pic_id=?" (numToTxt picIdNum)
+  bs <- checkOneIfExistE (hLog h) (selectBS h) "pics" ["pic"] "pic_id=?" (Num picIdNum)
   let lbs = BSL.fromStrict bs
   lift $ logInfo (hLog h) $ "Pic_id: " ++ show picIdNum ++ " sending in response"
   return $

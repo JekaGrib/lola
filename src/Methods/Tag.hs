@@ -1,3 +1,6 @@
+
+
+
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -21,11 +24,11 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Text],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
-    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
+    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Text],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
+    isExistInDb :: Table -> Where -> DbValue -> m Bool,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
     withTransactionDB :: forall a. m a -> m a
   }
 
@@ -44,42 +47,40 @@ makeH conf logH =
 
 createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
 createTag h (CreateTag tagNameParam) = do
-  tagId <- insertReturnE h "tags" "tag_id" ["tag_name"] [tagNameParam]
+  tagId <- insertReturnE h "tags" "tag_id" ["tag_name"] [Txt tagNameParam]
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " created"
   okHelper $ TagResponse tagId tagNameParam
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag h tagIdNum = do
-  tagName <- checkOneIfExistE (hLog h) (selectTxts h) "tags" ["tag_name"] "tag_id=?" (numToTxt tagIdNum)
+  tagName <- checkOneIfExistE (hLog h) (selectTxts h) "tags" ["tag_name"] "tag_id=?" (Num tagIdNum)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
   okHelper $ TagResponse tagIdNum tagName
 
 updateTag :: (Monad m, MonadCatch m) => Handle m -> UpdateTag -> ExceptT ReqError m ResponseInfo
 updateTag h (UpdateTag tagIdNum tagNameParam) = do
-  let tagIdParam = numToTxt tagIdNum
-  isExistInDbE h "tags" "tag_id=?" tagIdParam
-  updateInDbE h "tags" "tag_name=?" "tag_id=?" [tagNameParam, tagIdParam]
+  isExistInDbE h "tags" "tag_id=?" (Num tagIdNum)
+  updateInDbE h "tags" "tag_name=?" "tag_id=?" [Txt tagNameParam,Num tagIdNum]
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " updated"
   okHelper $ TagResponse tagIdNum tagNameParam
 
 deleteTag :: (Monad m, MonadCatch m) => Handle m -> DeleteTag -> ExceptT ReqError m ResponseInfo
 deleteTag h (DeleteTag tagIdNum) = do
-  let tagIdParam = numToTxt tagIdNum
-  isExistInDbE h "tags" "tag_id=?" tagIdParam
-  let deleteDrTg = deleteFromDb h "draftstags" "tag_id=?" [tagIdParam]
-  let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [tagIdParam]
-  let deleteTg = deleteFromDb h "tags" "tag_id=?" [tagIdParam]
+  isExistInDbE h "tags" "tag_id=?" (Num tagIdNum)
+  let deleteDrTg = deleteFromDb h "draftstags" "tag_id=?" [Num tagIdNum]
+  let deletePosTg = deleteFromDb h "poststags" "tag_id=?" [Num tagIdNum]
+  let deleteTg = deleteFromDb h "tags" "tag_id=?" [Num tagIdNum]
   withTransactionDBE h (deleteDrTg >> deletePosTg >> deleteTg)
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [DbValue] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
 
-isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Integer
 insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

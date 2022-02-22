@@ -64,17 +64,17 @@ checkMaybeOneE logH m = do
 checkOneIfExistE ::
   (MonadCatch m, Show a) =>
   LogHandle m ->
-  (Table -> [Param] -> Where -> [Text] -> m [a]) ->
+  (Table -> [Param] -> Where -> [DbValue] -> m [a]) ->
   Table ->
   [Param] ->
   Where ->
-  Text ->
+  DbValue ->
   ExceptT ReqError m a
 checkOneIfExistE logH func table params where' value = do
   lift $ logDebug logH $ "Select data from DB. Table: " ++ table
   xs <- catchDbErr $ lift $ func table params where' [value]
   case xs of
-    [] -> throwE $ SimpleError $ (where' \\ "???") ++ unpack value ++ " doesn`t exist"
+    [] -> throwE $ SimpleError $ (where' \\ "???") ++ show value ++ " doesn`t exist"
     [x] -> do
       lift $ logInfo logH "Data received from DB"
       return x
@@ -99,18 +99,18 @@ checkUpdE logH m = do
 checkIsExistE ::
   (MonadCatch m) =>
   LogHandle m ->
-  (Table -> Where -> DbParamValue -> m Bool) ->
+  (Table -> Where -> DbValue -> m Bool) ->
   Table ->
   Where ->
-  DbParamValue ->
+  DbValue ->
   ExceptT ReqError m ()
 checkIsExistE logH func table where' value = do
-  lift $ logDebug logH $ "Checking existence " ++ where' ++ unpack value ++ " in the DB"
+  lift $ logDebug logH $ "Checking existence " ++ where' ++ show value ++ " in the DB"
   isExist <- catchDbErrE $ func table where' value
   if isExist
     then
       ( do
-          lift $ logInfo logH $ "Entity (" ++ where' ++ unpack value ++ ") exist"
+          lift $ logInfo logH $ "Entity (" ++ where' ++ show value ++ ") exist"
           return ()
       )
     else
@@ -118,7 +118,7 @@ checkIsExistE logH func table where' value = do
         $ SimpleError
         $ (where' \\ "=?") 
           ++ ": "
-          ++ unpack value
+          ++ show value
           ++ " doesn`t exist."
 
 checkInsRetE ::
@@ -157,21 +157,21 @@ getDay' = do
   let day = showGregorian . localDay . zonedTimeToLocalTime $ time
   return day
 
-select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
+select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
 select' conn table params where' =
   query conn (toSelQ table params where')
 
-selectOnly' :: (FromField a) => Connection -> Table -> [Param] -> Where -> [Text] -> IO [a]
+selectOnly' :: (FromField a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
 selectOnly' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap fromOnly xs
 
-selectBS' :: Connection -> Table -> [Param] -> Where -> [Text] -> IO [ByteString]
+selectBS' :: Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [ByteString]
 selectBS' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap (fromBinary . fromOnly) xs
 
-selectLimit' :: (Select a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [Text] -> [FilterArg] -> [SortArg] -> IO [a]
+selectLimit' :: (Select a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [DbValue] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
   let table = unwords $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
   let where' = intercalate " AND " $ defWhere : fmap whereFil filterArgs
@@ -179,23 +179,23 @@ selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues
   let values = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
   query conn (toSelLimQ table orderBy page limitNumber params where') values
 
-updateInDb' :: Connection -> String -> String -> String -> [Text] -> IO ()
+updateInDb' :: Connection -> String -> String -> String -> [DbValue] -> IO ()
 updateInDb' conn table set where' values = do
   _ <- execute conn (toUpdQ table set where') values
   return ()
 
-deleteFromDb' :: Connection -> Table -> Where -> [Text] -> IO ()
+deleteFromDb' :: Connection -> Table -> Where -> [DbValue] -> IO ()
 deleteFromDb' conn table where' values = do
   _ <- execute conn (toDelQ table where') values
   return ()
 
-isExistInDb' :: Connection -> Table -> Where -> DbParamValue -> IO Bool
+isExistInDb' :: Connection -> Table -> Where -> DbValue -> IO Bool
 isExistInDb' conn table where' value = do
   onlyChecks <- query conn (toExQ table where') [value]
   Only isExist <- checkOneM onlyChecks
   return isExist
 
-insertReturn' :: Connection -> String -> String -> [String] -> [Text] -> IO Id
+insertReturn' :: Connection -> String -> String -> [String] -> [DbValue] -> IO Id
 insertReturn' conn table returnName insNames insValues = do
   onlyXs <- query conn (toInsRetQ table returnName insNames) insValues
   Only num <- checkOneM onlyXs
@@ -207,7 +207,7 @@ insertByteaInDb' conn table returnName insNames bs = do
   Only num <- checkOneM onlyXs
   return num
 
-insertMany' :: Connection -> Table -> [DbInsertParamKey] -> [(DbNumValue, DbNumValue)] -> IO ()
+insertMany' :: Connection -> Table -> [DbInsertParamKey] -> [(Id, Id)] -> IO ()
 insertMany' conn table insNames insValues = do
   _ <- executeMany conn (toInsManyQ table insNames) insValues
   return ()

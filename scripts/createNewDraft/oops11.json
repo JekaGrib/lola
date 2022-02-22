@@ -1,0 +1,9 @@
+{
+    "token": "blabla",
+    "draft_name": "rock",
+    "draft_category_id": 3,
+    "draft_text": "heyhey",
+    "draft_main_pic_id": 420,
+    "draft_tags_ids" : [ 1, 27, 41 ],
+    "draft_pics_ids": [ 5,42,314]
+}

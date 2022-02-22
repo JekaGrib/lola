@@ -22,9 +22,9 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Text],
-    selectAuths :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Auth],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
+    selectTxts :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Text],
+    selectAuths :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Auth],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
     getTokenKey :: m String
   }
 
@@ -40,20 +40,19 @@ makeH conf logH =
         getTokenKey'
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
-logIn h (LogIn usIdNum pwdParam) = do
-  let usIdParam = numToTxt usIdNum
-  Auth pwd admBool <- checkOneIfExistE (hLog h) (selectAuths h) "users" ["password", "admin"] "user_id=?" usIdParam
+logIn h (LogIn usIdParam pwdParam) = do
+  Auth pwd admBool <- checkOneIfExistE (hLog h) (selectAuths h) "users" ["password", "admin"] "user_id=?" (Num usIdParam)
   checkPwd pwdParam pwd
   tokenKey <- lift $ getTokenKey h
-  updateInDbE h "users" "token_key=?" "user_id=?" [pack tokenKey, usIdParam]
+  updateInDbE h "users" "token_key=?" "user_id=?" [Txt (pack tokenKey), Num usIdParam]
   if admBool
     then do
-      let usToken = pack $ show usIdNum ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " successfully logIn as admin."
+      let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
+      lift $ logInfo (hLog h) $ "User_id: " ++ show usIdParam ++ " successfully logIn as admin."
       okHelper $ TokenResponse {tokenTR = usToken}
     else do
-      let usToken = pack $ show usIdNum ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      lift $ logInfo (hLog h) $ "User_id: " ++ show usIdNum ++ " successfully logIn as user."
+      let usToken = pack $ show usIdParam ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
+      lift $ logInfo (hLog h) $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
       okHelper $ TokenResponse {tokenTR = usToken}
 
 type UserAccessMode = (UserId, AccessMode)
@@ -71,7 +70,7 @@ checkAdminTokenParam h tokenParam = hideTokenErr $
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ unpack tokenKey) == xs
@@ -93,7 +92,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ unpack tokenKey) == xs
@@ -104,7 +103,7 @@ checkUserTokenParam h tokenParam = hideTokenErr $
         Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"
     (usIdParam, '.' : 's' : 't' : 'u' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [pack usIdParam]
+      maybeTokenKey <- checkMaybeOneE (hLog h) $ selectTxts h "users" ["token_key"] "user_id=?" [Num usIdNum]
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("stu" ++ unpack tokenKey) == xs
@@ -122,5 +121,5 @@ checkPwd pwdParam pwd
   where
     hashPwdParam = txtSha1 pwdParam
 
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [DbValue] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values

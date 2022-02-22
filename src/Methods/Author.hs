@@ -11,7 +11,6 @@ import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Text (Text, pack, unpack)
 import Database.PostgreSQL.Simple (withTransaction)
 import Logger
 import Methods.Common
@@ -25,12 +24,12 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Id],
-    selectAuthors :: Table -> [DbSelectParamKey] -> Where -> [DbParamValue] -> m [Author],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbParamValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbParamValue] -> m (),
-    isExistInDb :: Table -> Where -> DbParamValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbParamValue] -> m Integer,
+    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
+    selectAuthors :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Author],
+    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
+    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
+    isExistInDb :: Table -> Where -> DbValue -> m Bool,
+    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Integer,
     withTransactionDB :: forall a. m a -> m a,
     hDelMany :: Methods.Common.DeleteMany.Handle m
   }
@@ -51,71 +50,65 @@ makeH conf logH =
         (Methods.Common.DeleteMany.makeH conf)
 
 createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
-createAuthor h (CreateAuthor usIdNum auInfoParam) = do
-  let usIdParam = numToTxt usIdNum
-  isExistInDbE h "users" "user_id=?" usIdParam
-  isNotAlreadyAuthor h usIdNum
-  auId <- insertReturnE h "authors" "author_id" ["user_id", "author_info"] [usIdParam, auInfoParam]
+createAuthor h (CreateAuthor usIdParam auInfoParam) = do
+  isExistInDbE h "users" "user_id=?" (Num usIdParam)
+  isNotAlreadyAuthor h usIdParam
+  auId <- insertReturnE h "authors" "author_id" ["user_id", "author_info"] [Num usIdParam, Txt auInfoParam]
   lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdNum, author_info = auInfoParam}
+  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
 
 getAuthor :: (MonadCatch m) => Handle m -> GetAuthor -> ExceptT ReqError m ResponseInfo
-getAuthor h (GetAuthor auIdNum) = do
-  let auIdParam = numToTxt auIdNum
-  Author auId auInfo usId <- checkOneIfExistE (hLog h) (selectAuthors h) "authors" ["author_id", "author_info", "user_id"] "author_id=?" auIdParam
+getAuthor h (GetAuthor auIdParam) = do
+  Author auId auInfo usId <- checkOneIfExistE (hLog h) (selectAuthors h) "authors" ["author_id", "author_info", "user_id"] "author_id=?" (Num auIdParam)
   lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
 
 updateAuthor :: (MonadCatch m) => Handle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
-updateAuthor h (UpdateAuthor auIdNum usIdNum auInfoParam) = do
-  let usIdParam = numToTxt usIdNum
-  let auIdParam = numToTxt auIdNum
-  isExistInDbE h "users"  "user_id=?" usIdParam
-  isExistInDbE h "authors"  "author_id=?" auIdParam
-  isntUserOtherAuthor h usIdNum auIdNum
-  updateInDbE h "authors" "author_info=?,user_id=?" "author_id=?" [auInfoParam, usIdParam, auIdParam]
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " updated."
-  okHelper $ AuthorResponse {author_id = auIdNum, auth_user_id = usIdNum, author_info = auInfoParam}
+updateAuthor h (UpdateAuthor auIdParam usIdParam auInfoParam) = do
+  isExistInDbE h "users"  "user_id=?" (Num usIdParam)
+  isExistInDbE h "authors"  "author_id=?" (Num auIdParam)
+  isntUserOtherAuthor h usIdParam auIdParam
+  updateInDbE h "authors" "author_info=?,user_id=?" "author_id=?" [Txt auInfoParam, Num usIdParam, Num auIdParam]
+  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdParam ++ " updated."
+  okHelper $ AuthorResponse {author_id = auIdParam, auth_user_id = usIdParam, author_info = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> DeleteAuthor -> ExceptT ReqError m ResponseInfo
-deleteAuthor h (DeleteAuthor auIdNum) = do
-  let auIdParam = numToTxt auIdNum
-  isExistInDbE h "authors" "author_id=?" auIdParam
-  let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [pack . show $ cDefAuthId (hConf h), auIdParam]
-  draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [auIdParam]
+deleteAuthor h (DeleteAuthor auIdParam) = do
+  isExistInDbE h "authors" "author_id=?" (Num auIdParam)
+  let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [Num $ cDefAuthId (hConf h), Num auIdParam]
+  draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [Num auIdParam]
   let deleteDr = deleteAllAboutDrafts (hDelMany h) draftsIds
-  let deleteAu = deleteFromDb h "authors" "author_id=?" [auIdParam]
+  let deleteAu = deleteFromDb h "authors" "author_id=?" [Num auIdParam]
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdNum ++ " deleted."
+  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdParam ++ " deleted."
   okHelper $ OkResponse {ok = True}
 
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
-isntUserOtherAuthor h usIdNum auIdNum = do
-  let usIdParam = pack . show $ usIdNum
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [usIdParam]
+isntUserOtherAuthor h usIdParam auIdParam = do
+  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [Num usIdParam]
   case maybeAuId of
     Just auId ->
-      if auId == auIdNum
+      if auId == auIdParam
         then return ()
-        else throwE $ SimpleError $ "user_id: " ++ unpack usIdParam ++ " is already author"
+        else throwE $ SimpleError $ "user_id: " ++ show usIdParam ++ " is already author"
     Nothing -> return ()
 
 
 isNotAlreadyAuthor :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ()
-isNotAlreadyAuthor h usIdNum = do
+isNotAlreadyAuthor h usId = do
   lift $ logDebug (hLog h) $ "Checking is user already in authors in DB"
-  isExist <- catchDbErr $ lift $ isExistInDb h "authors" "user_id=?" (numToTxt usIdNum)
+  isExist <- catchDbErr $ lift $ isExistInDb h "authors" "user_id=?" (Num usId)
   when isExist $
-      throwE $ SimpleError $ "User is already author. User_id: " ++ show usIdNum
+      throwE $ SimpleError $ "User is already author. User_id: " ++ show usId
 
-isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbParamValue -> ExceptT ReqError m ()
+isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
 
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [Text] -> ExceptT ReqError m ()
+updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [DbValue] -> ExceptT ReqError m ()
 updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
 
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [Text] -> ExceptT ReqError m Integer
+insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Integer
 insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

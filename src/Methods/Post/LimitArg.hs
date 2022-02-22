@@ -18,7 +18,7 @@ import Types
 
 data LimitArg = LimitArg [FilterArg] [SortArg]
 
-data FilterArg = FilterArg {tableFil :: String, whereFil :: String, valuesFil :: ([Text], [Text])}
+data FilterArg = FilterArg {tableFil :: String, whereFil :: String, valuesFil :: ([DbValue], [DbValue])}
 
 data SortArg = SortArg {tableSort :: String, orderBySort :: String, sortDate :: SortDate}
 
@@ -65,36 +65,36 @@ chooseFilterArgPreCheck req paramKey = do
     Nothing -> return Nothing
 
 chooseFilterArg :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArg paramKey x = case paramKey of
+chooseFilterArg paramKey x = let val = Txt x in case paramKey of
   "created_at" -> do
     _ <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date = ?"
-    let values = ([], [x])
+    let values = ([], [val])
     return . Just $ FilterArg table where' values
   "created_at_lt" -> do
     _ <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date < ?"
-    let values = ([], [x])
+    let values = ([], [val])
     return . Just $ FilterArg table where' values
   "created_at_gt" -> do
     _ <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date > ?"
-    let values = ([], [x])
+    let values = ([], [val])
     return . Just $ FilterArg table where' values
   "category_id" -> do
     _ <- tryReadId paramKey x
     let table = ""
     let where' = "post_category_id = ?"
-    let values = ([], [x])
+    let values = ([], [val])
     return . Just $ FilterArg table where' values
   "tag" -> do
     _ <- tryReadId paramKey x
     let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where' = "true"
-    let values = ([x], [])
+    let values = ([val], [])
     return . Just $ FilterArg table where' values
   "tags_in" -> do
     xs <- tryReadIdArray paramKey x
@@ -112,25 +112,25 @@ chooseFilterArg paramKey x = case paramKey of
     _ <- checkLength 50 paramKey x
     let table = ""
     let where' = "post_name ILIKE ?"
-    let values = ([], [Data.Text.concat ["%", escape x, "%"]])
+    let values = ([], [Txt $ Data.Text.concat ["%", escape x, "%"]])
     return . Just $ FilterArg table where' values
   "text_in" -> do
     _ <- checkLength 50 paramKey x
     let table = ""
     let where' = "post_text ILIKE ?"
-    let values = ([], [Data.Text.concat ["%", escape x, "%"]])
+    let values = ([], [Txt $ Data.Text.concat ["%", escape x, "%"]])
     return . Just $ FilterArg table where' values
   "everywhere_in" -> do
     _ <- checkLength 50 paramKey x
     let table = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
     let where' = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
-    let values = ([Data.Text.concat ["%", escape x, "%"]], replicate 4 $ Data.Text.concat ["%", escape x, "%"])
+    let values = ([Txt $ Data.Text.concat ["%", escape x, "%"]], replicate 4 $ Txt $ Data.Text.concat ["%", escape x, "%"])
     return . Just $ FilterArg table where' values
   "author_name" -> do
     _ <- checkLength 50 paramKey x
     let table = "JOIN users AS us ON authors.user_id=us.user_id"
     let where' = "us.first_name = ?"
-    let values = ([], [x])
+    let values = ([], [val])
     return . Just $ FilterArg table where' values
   _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack paramKey
 

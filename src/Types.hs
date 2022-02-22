@@ -5,6 +5,8 @@
 module Types where
 
 import Data.Text (Text)
+--import Data.Map as Map
+import Database.PostgreSQL.Simple.ToField (ToField(..))
 
 type Id = Integer
 
@@ -65,3 +67,24 @@ type OrderBy = String
 type Page = Int
 
 type Limit = Int
+
+--type WhereMap = Map.Map DbParamKey DbParamValue
+
+data DbValue = Txt Text | Num Integer
+
+instance Show DbValue where
+  show (Num a) = show a
+  show (Txt a) = show a
+
+instance ToField DbValue where
+  toField (Num a) = toField a
+  toField (Txt a) = toField a
+  
+
+type WhereValue = (Where, DbValue)
+
+data AndWhereVal = AndWhereVal WhereValue | AndOrWhere [OrWhereValue]
+
+newtype OrWhereValue = OrWhereValue WhereValue
+
+--type WhereValueS = WhereValue :| [AndWhereVal]
