@@ -41,11 +41,18 @@ type Port = Int
 
 type Table = String
 
+type JoinTable = String
+
+
 type DbParamKey = String
 
 type DbKey = String
 
+type DbReturnKey = DbKey
+
+
 type Predicate = String
+
 
 type DbReturnParamKey = DbParamKey
 

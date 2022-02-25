@@ -221,3 +221,78 @@ escapeChar '\\' = "\\\\"
 escapeChar '%' = "\\%"
 escapeChar '_' = "\\_"
 escapeChar a = [a]
+
+
+data Filter = 
+  CreatedF CreatedF
+  | CatIdF CategoryId
+  | TagF TagF
+  | InF InF
+  | AuthorNameF Text
+
+data CreatedF = 
+  At Day
+  | AtLt Day
+  | AtGt Day
+
+data TagF =
+  | TagId TagId
+  | TagsIn [TagId]
+  | TagsAll [TagId]
+
+data InF =
+  | PostText Text
+  | Name Text
+  | UsersName Text
+  | CatName Text
+  | EveryWhere [InF]
+
+class ToWhere a where
+  toWhere :: a -> Where
+
+instance InF ToWhere where
+  toWhere (PostText txt) = 
+    WherePair " post_text ILIKE %?% " (Txt (escape txt))
+  toWhere (Name txt) = 
+    WherePair " post_name ILIKE %?% " (Txt (escape txt))
+  toWhere (UsersName txt) = 
+    WherePair " usrs.first_name ILIKE %?% " (Txt (escape txt))
+  toWhere (CatName txt) =
+    let sel = Select 
+      ["post_id"] 
+      "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" 
+      (WherePair " tag_name ILIKE %?% " (Txt (escape txt)))
+    in WhereSelect " posts.post_id IN " sel
+  toWhere EveryWhere xs = WhereOr (fmap toWhere xs)
+
+instance AddJoinTable InF where
+  addJoinTable (UsersName _) = "JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable _ = ""
+
+instance CreatedF ToWhere where
+  toWhere (At day) = 
+    WherePair " post_create_date = ? " (Day day)
+  toWhere (AtLt day) = 
+    WherePair " post_create_date < ? " (Day day)
+  toWhere (AtGt day) = 
+    WherePair " post_create_date > ? " (Day day)
+
+instance TagF ToWhere where
+  toWhere (TadId iD) = 
+    let sel = Select
+      ["post_id"] 
+      "poststags"
+       WherePair " tag_id = ? " (Id iD)
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (TadsIn idS) = 
+    let sel = Select
+      ["post_id"] 
+      "poststags"
+       WherePair " tag_id IN ? " (IdIn (In idS))
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (TadsAll idS) = 
+    let sel = Select
+      ["array_agg(tag_id)"] 
+      "poststags"
+       Where "posts.post_id = poststags.post_id"
+    in WhereSelectPair sel " @>?::bigint[] " (IdArray (PGArray idS))
