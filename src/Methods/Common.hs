@@ -17,8 +17,8 @@ import Data.ByteString.Builder (Builder, lazyByteString)
 import Data.List ((\\), intercalate)
 import Data.String (fromString)
 import Data.Text (Text, pack, unpack)
-import Data.Time.Calendar (showGregorian)
-import Data.Time.LocalTime
+import Data.Time.Calendar (Day)
+import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
@@ -151,10 +151,10 @@ checkOneM xs = case xs of
 
 -- common IO handle functions:
 
-getDay' :: IO String
+getDay' :: IO Day
 getDay' = do
   time <- getZonedTime
-  let day = showGregorian . localDay . zonedTimeToLocalTime $ time
+  let day = localDay . zonedTimeToLocalTime $ time
   return day
 
 select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]

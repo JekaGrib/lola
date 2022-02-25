@@ -7,6 +7,8 @@ module Api.Response where
 import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), object, pairs)
 import Data.Text (Text)
 import Types
+import Data.Time.Calendar ( Day)
+
 
 data UserResponse = UserResponse
   { user_id :: UserId,
@@ -14,7 +16,7 @@ data UserResponse = UserResponse
     last_name :: Text,
     user_pic_id :: PictureId,
     user_pic_url :: Text,
-    user_create_date :: Text
+    user_create_date :: Day
   }
   deriving (Eq, Show)
 
@@ -31,7 +33,7 @@ data UserTokenResponse = UserTokenResponse
     last_nameUTR :: Text,
     user_pic_idUTR :: PictureId,
     user_pic_urlUTR :: Text,
-    user_create_dateUTR :: Text
+    user_create_dateUTR :: Day
   }
   deriving (Eq, Show)
 
@@ -161,7 +163,7 @@ data PostResponse = PostResponse
   { post_id :: PostId,
     author4 :: AuthorResponse,
     post_name :: Text,
-    post_create_date :: Text,
+    post_create_date :: Day,
     post_cat :: CatResponse,
     post_text :: Text,
     post_main_pic_id :: PictureId,

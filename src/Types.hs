@@ -9,6 +9,8 @@ import Data.Text (Text)
 import Database.PostgreSQL.Simple.ToField (ToField(..))
 import Database.PostgreSQL.Simple.Types (PGArray,In)
 import Data.Int (Int64)
+import Data.Time.Calendar ( Day)
+
 
 type Id = Int64
 
@@ -73,7 +75,7 @@ type Limit = Int
 
 --type WhereMap = Map.Map DbParamKey DbParamValue
 
-data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id
+data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id | Day Day
 
 instance Show DbValue where
   show (Num a) = show a
@@ -81,6 +83,8 @@ instance Show DbValue where
   show (IdArray a) = show a
   show (IdIn a) = show a
   show (Id a) = show a
+  show (Day a) = show a
+
 
 
 
@@ -90,9 +94,10 @@ instance ToField DbValue where
   toField (IdArray a) = toField a
   toField (IdIn a) = toField a
   toField (Id a) = toField a
+  toField (Day a) = toField a
 
 
-  
+ 
 
 type WhereValue = (Where, DbValue)
 

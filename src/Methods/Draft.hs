@@ -13,8 +13,6 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.List (intercalate, zip4)
-import Data.Text ( pack)
-import Data.Time.Calendar (Day, showGregorian)
 import Database.PostgreSQL.Simple (withTransaction)
 import Logger
 import Methods.Category (fromCatResp)
@@ -28,6 +26,8 @@ import Methods.Post.LimitArg (FilterArg, SortArg)
 import Oops
 import ParseQueryStr (CreatePostsDraft (..), DeleteDraft (..), GetDraft (..), GetDrafts (..), PublishDraft (..))
 import Types
+import Data.Time.Calendar ( Day)
+
 
 data Handle m = Handle
   { hConf :: Config,
@@ -44,7 +44,7 @@ data Handle m = Handle
     isExistInDb :: Table -> Where -> DbValue -> m Bool,
     insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
     insertMany :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
-    getDay :: m String,
+    getDay :: m Day,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m,
     hDelMany :: Methods.Common.DeleteMany.Handle m
@@ -159,13 +159,13 @@ publishDraft h usIdNum (PublishDraft draftIdParam) = do
       day <- lift $ getDay h
       postId <- withTransactionDBE h $ do
         let insNames = ["author_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-        let insValues = [Id auId, Txt draftName, Txt (pack day), Id . fromCatResp $ catResp, Txt draftTxt, Id mPicId]
+        let insValues = [Id auId, Txt draftName, Day day, Id . fromCatResp $ catResp, Txt draftTxt, Id mPicId]
         postId <- insertReturn h "posts" "post_id" insNames insValues
         insertMany h "postspics" ["post_id", "pic_id"] (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertMany h "poststags" ["post_id", "tag_id"] (zip (repeat postId) (fmap tag_idTR tagResps))
         return postId
       lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = pack day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
+      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
     PostIdExist postId -> do
       day <- checkOneE (hLog h) $ selectDays h "posts" ["post_create_date"] "post_id=?" [Id postId]
       withTransactionDBE h $ do
@@ -174,7 +174,7 @@ publishDraft h usIdNum (PublishDraft draftIdParam) = do
         insertMany h "postspics" ["post_id", "pic_id"] (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertMany h "poststags" ["post_id", "tag_id"] (zip (repeat postId) (fmap tag_idTR tagResps))
       lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = pack . showGregorian $ day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
+      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
 
 selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
 selectDraftAndMakeResp h usIdNum draftIdParam = do
