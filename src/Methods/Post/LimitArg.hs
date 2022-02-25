@@ -70,34 +70,34 @@ chooseFilterArgPreCheck req paramKey = do
 chooseFilterArg :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
 chooseFilterArg paramKey x = let val = Txt x in case paramKey of
   "created_at" -> do
-    _ <- tryReadDay paramKey x
+    day <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date = ?"
-    let values = ([], [val])
+    let values = ([], [Day day])
     return . Just $ FilterArg table where' values
   "created_at_lt" -> do
-    _ <- tryReadDay paramKey x
+    day <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date < ?"
-    let values = ([], [val])
+    let values = ([], [Day day])
     return . Just $ FilterArg table where' values
   "created_at_gt" -> do
-    _ <- tryReadDay paramKey x
+    day <- tryReadDay paramKey x
     let table = ""
     let where' = "post_create_date > ?"
-    let values = ([], [val])
+    let values = ([], [Day day])
     return . Just $ FilterArg table where' values
   "category_id" -> do
-    _ <- tryReadId paramKey x
+    iD <- tryReadId paramKey x
     let table = ""
     let where' = "post_category_id = ?"
-    let values = ([], [val])
+    let values = ([], [Id iD])
     return . Just $ FilterArg table where' values
   "tag" -> do
-    _ <- tryReadId paramKey x
+    iD <- tryReadId paramKey x
     let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
     let where' = "true"
-    let values = ([val], [])
+    let values = ([Id iD], [])
     return . Just $ FilterArg table where' values
   "tags_in" -> do
     xs <- tryReadIdArray paramKey x
