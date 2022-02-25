@@ -47,7 +47,7 @@ createAdmin h (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) =
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
   tokenKey <- lift $ getTokenKey h
   let insNames = ["password", "first_name", "last_name", "user_pic_id", "user_create_date", "admin", "token_key"]
-  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam,Id picIdParam, Day day, Txt "TRUE", Txt (pack tokenKey)]
+  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam,Id picIdParam, Day day, Bool True, Txt (pack tokenKey)]
   admId <- insertReturnE h "users" "user_id" insNames insValues
   let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
   lift $ logInfo (hLog h) $ "User_id: " ++ show admId ++ " created as admin"

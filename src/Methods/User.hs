@@ -62,7 +62,7 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   let hashPwdParam = txtSha1 pwdParam
   isExistInDbE h "pics" "pic_id=?" (Id picIdParam)
   let insNames = ["password", "first_name", "last_name", "user_pic_id", "user_create_date", "admin", "token_key"]
-  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam, Id picIdParam, Day day, Txt "FALSE", Txt (pack tokenKey)]
+  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam, Id picIdParam, Day day, Bool False, Txt (pack tokenKey)]
   usId <- insertReturnE h "users" "user_id" insNames insValues
   lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
   lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"

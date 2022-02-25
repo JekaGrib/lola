@@ -75,7 +75,7 @@ type Limit = Int
 
 --type WhereMap = Map.Map DbParamKey DbParamValue
 
-data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id | Day Day
+data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id | Day Day | Bool Bool
 
 instance Show DbValue where
   show (Num a) = show a
@@ -84,6 +84,8 @@ instance Show DbValue where
   show (IdIn a) = show a
   show (Id a) = show a
   show (Day a) = show a
+  show (Bool a) = show a
+
 
 
 
@@ -95,6 +97,8 @@ instance ToField DbValue where
   toField (IdIn a) = toField a
   toField (Id a) = toField a
   toField (Day a) = toField a
+  toField (Bool a) = toField a
+
 
 
  
