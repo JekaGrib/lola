@@ -14,7 +14,7 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Logger
 import Methods.Auth (AccessMode (..))
 import Methods.Common
-import Methods.Common.Select (Comment (comment_idC))
+import Methods.Common.Selecty (Comment (comment_idC))
 import Methods.Post.LimitArg (FilterArg, SortArg)
 import Oops
 import ParseQueryStr (CreateComment (..), DeleteComment (..), GetComments (..), UpdateComment (..))

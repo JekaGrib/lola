@@ -43,6 +43,10 @@ type Table = String
 
 type DbParamKey = String
 
+type DbKey = String
+
+type Predicate = String
+
 type DbReturnParamKey = DbParamKey
 
 type DbCheckParamKey = DbParamKey

@@ -22,7 +22,7 @@ import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
-import Methods.Common.Select (Comment (..), Select, Tag (..))
+import Methods.Common.Selecty (Comment (..), Selecty, Tag (..))
 import Methods.Common.ToQuery (toDelQ, toExQ, toInsManyQ, toInsRetQ, toSelLimQ, toSelQ, toUpdQ)
 import Methods.Post.LimitArg
 import Network.HTTP.Types (ResponseHeaders, Status, status200)
@@ -157,7 +157,7 @@ getDay' = do
   let day = localDay . zonedTimeToLocalTime $ time
   return day
 
-select' :: (Select a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
+select' :: (Selecty a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
 select' conn table params where' =
   query conn (toSelQ table params where')
 
@@ -171,7 +171,7 @@ selectBS' conn table params where' values = do
   xs <- query conn (toSelQ table params where') values
   return $ fmap (fromBinary . fromOnly) xs
 
-selectLimit' :: (Select a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [DbValue] -> [FilterArg] -> [SortArg] -> IO [a]
+selectLimit' :: (Selecty a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [DbValue] -> [FilterArg] -> [SortArg] -> IO [a]
 selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
   let table = unwords $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
   let where' = intercalate " AND " $ defWhere : fmap whereFil filterArgs

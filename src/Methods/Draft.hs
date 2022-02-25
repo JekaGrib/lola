@@ -21,7 +21,7 @@ import Methods.Common.DeleteMany (deleteAllAboutDrafts, deleteDraftsPicsTags, de
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Methods.Common.Select (Author (..), Draft (..), PostInfo (..), Tag (..))
+import Methods.Common.Selecty (Author (..), Draft (..), PostInfo (..), Tag (..))
 import Methods.Post.LimitArg (FilterArg, SortArg)
 import Oops
 import ParseQueryStr (CreatePostsDraft (..), DeleteDraft (..), GetDraft (..), GetDrafts (..), PublishDraft (..))

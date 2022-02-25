@@ -11,7 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
 import Logger (LogHandle (..))
 import Methods.Common
-import Methods.Common.Select (Cat (..))
+import Methods.Common.Selecty (Cat (..))
 import Oops (ReqError)
 import Types
 

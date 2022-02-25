@@ -12,7 +12,7 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
-import Methods.Common.Select (Auth (..))
+import Methods.Common.Selecty (Auth (..))
 import Network.Wai (Request)
 import Oops
 import ParseQueryStr (LogIn (..), Token (..), parseQueryStr)

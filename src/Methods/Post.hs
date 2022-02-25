@@ -18,7 +18,7 @@ import Methods.Common.DeleteMany (deleteAllAboutPost)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Methods.Common.Select (Post (..), Tag)
+import Methods.Common.Selecty (Post (..), Tag)
 import Methods.Post.LimitArg (FilterArg (..), LimitArg (..), SortArg (..), chooseArgs, isDateASC)
 import Network.Wai (Request)
 import Oops

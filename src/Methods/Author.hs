@@ -16,7 +16,7 @@ import Logger
 import Methods.Common
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
-import Methods.Common.Select (Author (..))
+import Methods.Common.Selecty (Author (..))
 import Oops
 import ParseQueryStr (CreateAuthor (..), DeleteAuthor (..), GetAuthor (..), UpdateAuthor (..))
 import Types
