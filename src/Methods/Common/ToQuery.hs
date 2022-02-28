@@ -8,6 +8,9 @@ import Data.String (fromString)
 import Database.PostgreSQL.Simple (Query)
 import Types
 
+toQ :: (ToStr a) => a -> Query
+toQ = fromString . toStr
+
 toSelQ :: Table -> [Param] -> Where -> Query
 toSelQ table params where' =
   fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where'
@@ -39,12 +42,36 @@ toInsManyQ table insNames =
 class ToStr a where
   toStr :: a -> String
 
+class ToVal a where
+  toVal :: a -> [DbValue]
+
 data Select =
   Select [DbKey] Table Where
 
 instance ToStr Select where
   toStr (Select keys t wh) = 
     "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table ++ " WHERE " ++ toStr wh
+
+instance ToVal Select where
+  toVal (Select keys t wh) = toVal wh
+
+Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
+toSelLimQ table orderBy page limitNumber params where' =
+  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1) * limitNumber) ++ " LIMIT " ++ show (page * limitNumber)
+
+data SelectLim =
+  SelectLim [DbKey] Table Where OrderBy Page Limit
+
+instance ToStr SelectLim where
+  toStr (SelectLim keys t wh ord page limit) = 
+    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t 
+    ++ " WHERE " ++ toStr wh ++ " ORDER BY " ++ toStr ord 
+    ++ " OFFSET ? LIMIT ?" 
+
+instance ToVal SelectLim where
+  toVal (SelectLim keys t wh ord page limit) = 
+    toVal wh ++ toVal ord 
+    ++ [Num ((page - 1) * limitNumber),Num (page * limitNumber)]
 
 data Where =
   Where Predicate
@@ -62,18 +89,38 @@ instance ToStr Where where
   toStr WhereOr xs = "(" ++ intercalate " OR " xs ++ ")"
   toStr WhereAnd xs = "(" ++ intercalate " AND " xs ++ ")"
 
+instance ToVal Where where
+  toVal (Where _) = []
+  toVal (WherePair _ val) = [val]
+  toVal (WhereSelect _ sel) = toVal sel 
+  toVal (WhereSelectPair sel _ val) =  toVal sel  ++ [val]
+  toVal WhereOr xs = map toVal xs
+  toVal WhereAnd xs = map toVal xs
+
 data Update = 
-  Update Table Set Where
+  Update Table [Set] Where
 
 instance ToStr Update where
-  toStr (Update t set wh) = 
-    "UPDATE " ++ t ++ " SET " ++ toStr set ++ " WHERE " ++ toStr wh
+  toStr (Update t sets wh) = 
+    "UPDATE " ++ t ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr wh
+
+instance ToVal Select where
+  toVal (Update t set wh) = toVal set ++ toVal wh
 
 data Set =
   SetPair Predicate DbValue
 
 instance ToStr Set where
   toStr (SetPair str _) = str
+
+instance ToStr [Set] where
+  toStr sets = intercalate "," $ fmap toStr sets
+
+instance ToVal Set where
+  toVal (SetPair _ val) = [val]
+
+instance ToVal [Set] where
+  toVal sets = concatMap toVal sets  
 
 data Delete =
   Delete Table Where
@@ -82,6 +129,9 @@ instance ToStr Delete where
   toStr (Delete t wh) = 
     "DELETE FROM " ++ t ++ " WHERE " ++ toStr wh
 
+instance ToVal Delete where
+  toVal (Delete t wh)  = toVal wh
+
 data Exists =
   Exists Table Where
 
@@ -89,12 +139,18 @@ instance ToStr Exists where
   toStr (Exists t wh) = 
     "SELECT EXISTS (SELECT 1 FROM " ++ t ++ " WHERE " ++ toStr wh ++ ")"
 
+instance ToVal Exists where
+  toVal (Exists t wh)  = toVal wh
+
 data InsertRet =
-  InsertRet Table DbReturnKey [InsertPair]
+  InsertRet Table [InsertPair] DbReturnKey
 
 instance ToStr InsertRet where
-  toStr (InsertRet t retKey insPairs) = 
-    "INSERT INTO " ++ t ++ toStr insPairs ++ " RETURNING " ++ returnName
+  toStr (InsertRet t insPairs retKey ) = 
+    "INSERT INTO " ++ t ++ toStr insPairs ++ " RETURNING " ++ retKey
+
+instance ToVal InsertRet where
+  toVal (InsertRet t insPairs retKey)  = toVal insPairs
 
 data InsertPair = 
   InsertPair {insKey :: DbKey, insVal :: DbValue}
@@ -102,26 +158,32 @@ data InsertPair =
 instance ToStr InsertPair where
   toStr (InsertPair k _) = " ( " ++ k ++ " ) VALUES ( ? )"
 
+instance ToVal InsertPair where
+  toVal (InsertPair _ val) = [val]
+
 instance ToStr [InsertPair] where
   toStr insPairs = 
     " ( " ++ intercalate "," (map insKey insPairs)  ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insPairs) ++ " )"
 
+instance ToVal [InsertPair] where
+  toVal insPairs = concatMap toVal insPairs
+
+
 data InsertMany =
-  InsertMany Table [InsertManyPair]
+  InsertMany Table InsertManyPair
 
 instance ToStr InsertMany where
-  toStr (InsertMany t insPairs) = 
-    "INSERT INTO " ++ t ++ toStr insPairs
+  toStr (InsertMany t insPair) = 
+    "INSERT INTO " ++ t ++ toStr insPair
+
 
 data InsertManyPair = 
-  InsertPair {insManyKey :: DbKey, insManyVal :: DbValue}
+  InsertPair {insManyKey :: (DbKey,DbKey) , insManyVal :: [(Id,Id)]}
 
 instance ToStr InsertManyPair where
-  toStr (InsertManyPair k _) = " ( " ++ k ++ " ) VALUES ( ? )"
+  toStr (InsertManyPair (k1,k2) _) = " (" ++ k1 ++ "," ++ k2 ++ ") VALUES (?,?)"
 
-instance ToStr [InsertManyPair] where
-  toStr insPairs = 
-    " ( " ++ intercalate "," (map insManyKey insPairs)  ++ " ) VALUES ( " ++ intercalate "," ( fmap (const "?") insPairs) ++ " )"
+
 
 data SortOrd = ASC | DESC
   deriving (Eq,Show)

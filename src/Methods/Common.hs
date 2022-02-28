@@ -37,107 +37,83 @@ data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHea
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")] (lazyByteString . encode $ toJ)
 
-checkOneE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
-checkOneE logH m = do
-  lift $ logDebug logH "Select data from DB."
-  xs <- catchDbErr $ lift m
-  case xs of
-    [] -> throwE $ DatabaseError "Empty output"
-    [x] -> do
-      lift $ logInfo logH "Data received from DB"
-      return x
-    _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
-
-checkMaybeOneE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
-checkMaybeOneE logH m = do
-  lift $ logDebug logH "Select data from DB."
-  xs <- catchDbErr $ lift m
-  case xs of
-    [] -> do
-      lift $ logInfo logH "Received empty data from DB"
-      return Nothing
-    [x] -> do
-      lift $ logInfo logH "Data received from DB"
-      return (Just x)
-    _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
-
-checkOneIfExistE ::
-  (MonadCatch m, Show a) =>
-  LogHandle m ->
-  (Table -> [Param] -> Where -> [DbValue] -> m [a]) ->
-  Table ->
-  [Param] ->
-  Where ->
-  DbValue ->
-  ExceptT ReqError m a
-checkOneIfExistE logH func table params where' value = do
-  lift $ logDebug logH $ "Select data from DB. Table: " ++ table
-  xs <- catchDbErr $ lift $ func table params where' [value]
-  case xs of
-    [] -> throwE $ SimpleError $ (where' \\ "???") ++ show value ++ " doesn`t exist"
-    [x] -> do
-      lift $ logInfo logH "Data received from DB"
-      return x
-    _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
-
-checkListE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
-checkListE logH m = do
+catchSelE :: (MonadCatch m) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
+catchSelE logH m = 
   lift $ logDebug logH "Select data from DB."
   xs <- catchDbErr $ lift m
   lift $ logInfo logH "Data received from DB"
   return xs
 
+checkOneE :: (MonadCatch m, Show a) => [a] -> ExceptT ReqError m a
+checkOneE xs = case xs of
+  [] -> throwE $ DatabaseError "Empty output"
+  [x] -> return x
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs  
+
+checkMaybeOneE :: (MonadCatch m, Show a) =>  [a] -> ExceptT ReqError m (Maybe a)
+checkMaybeOneE xs = case xs of
+  [] -> return Nothing
+  [x] -> return (Just x)
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
+
+checkOneIfExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
+checkOneIfExistE (k,v) xs = case xs of
+  [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
+  [x] -> return x
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
+
+catchOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
+catchOneSelE logH m = 
+  catchSelE logH m >>= checkOneE
+
+catchMaybeOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
+catchMaybeOneSelE logH m = 
+  catchSelE logH m >>= checkMaybeOneE
+
+catchOneSelIfExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
+catchOneSelIfExistsE (k,v) logH m = 
+  catchSelE logH m >>= checkOneIfExistE (k,v)
+
+
 catchDbErrE :: (MonadCatch m) => m a -> ExceptT ReqError m a
 catchDbErrE = catchDbErr . lift
 
-checkUpdE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
-checkUpdE logH m = do
+catchUpdE :: (MonadCatch m) => LogHandle m -> m () -> ExceptT ReqError m ()
+catchUpdE logH m = do
   lift $ logDebug logH "Update data in DB."
   catchDbErrE m
   lift $ logInfo logH "Data updated in DB"
 
-checkIsExistE ::
-  (MonadCatch m) =>
-  LogHandle m ->
-  (Table -> Where -> DbValue -> m Bool) ->
-  Table ->
-  Where ->
-  DbValue ->
-  ExceptT ReqError m ()
-checkIsExistE logH func table where' value = do
-  lift $ logDebug logH $ "Checking existence " ++ where' ++ show value ++ " in the DB"
-  isExist <- catchDbErrE $ func table where' value
+catchExistE ::
+  (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> m Bool -> ExceptT ReqError m ()
+catchExistE logH (k,v) m = do
+  lift $ logDebug logH $ "Checking existence " ++ k ++ ": " ++ show v ++ " in the DB"
+  isExist <- catchDbErrE m 
+  checkExistE (k,v) isExist
+
+checkExistE :: 
+  (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> Bool -> ExceptT ReqError m ()
+checkExistE (k,v) isExist = 
   if isExist
-    then
-      ( do
-          lift $ logInfo logH $ "Entity (" ++ where' ++ show value ++ ") exist"
-          return ()
-      )
+    then lift $ logInfo logH $ "Entity (" ++ k ++ ": " ++ show v ++ ") exist"
     else
       throwE
         $ SimpleError
-        $ (where' \\ "=?") 
-          ++ ": "
-          ++ show value
+        $ k ++ ": " ++ show v
           ++ " doesn`t exist."
 
-checkInsRetE ::
+catchInsRetE ::
   (MonadCatch m) =>
-  LogHandle m ->
-  (Table -> String -> [String] -> a -> m Id) ->
-  Table ->
-  String ->
-  [String] ->
-  a ->
+  LogHandle m -> m Id ->
   ExceptT ReqError m Id
-checkInsRetE logH func table returnName insNames insValues = do
+catchInsRetE logH m = do
   lift $ logDebug logH "Insert data in the DB"
-  i <- catchDbErrE $ func table returnName insNames insValues
-  lift $ logInfo logH $ "DB return " ++ returnName ++ ": " ++ show i
+  i <- catchDbErrE $ m
+  lift $ logInfo logH $ "DB return id: " ++ show i
   return i
 
-checkTransactE :: (MonadCatch m) => LogHandle m -> m a -> ExceptT ReqError m a
-checkTransactE logH m = do
+catchTransactE :: (MonadCatch m) => LogHandle m -> m a -> ExceptT ReqError m a
+catchTransactE logH m = do
   lift $ logDebug logH "Open transaction in DB to do several actions"
   a <- catchDbErrE m
   lift $ logInfo logH "Transaction closed. Several actions in DB finished."
@@ -157,62 +133,58 @@ getDay' = do
   let day = localDay . zonedTimeToLocalTime $ time
   return day
 
-select' :: (Selecty a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
-select' conn table params where' =
-  query conn (toSelQ table params where')
+select' :: (Selecty a) => Connection -> Select -> IO [a]
+select' conn sel =
+  query conn (toQ sel) (toVal sel)
 
-selectOnly' :: (FromField a) => Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [a]
-selectOnly' conn table params where' values = do
-  xs <- query conn (toSelQ table params where') values
+selectOnly' :: (FromField a) => Connection -> Select -> IO [a]
+selectOnly' conn sel = do
+  xs <- query conn (toQ sel) (toVal sel)
   return $ fmap fromOnly xs
 
-selectBS' :: Connection -> Table -> [Param] -> Where -> [DbValue] -> IO [ByteString]
-selectBS' conn table params where' values = do
-  xs <- query conn (toSelQ table params where') values
+selectBS' :: Connection -> Select -> IO [ByteString]
+selectBS' conn sel = do
+  xs <- query conn (toQ sel) (toVal sel)
   return $ fmap (fromBinary . fromOnly) xs
 
-selectLimit' :: (Selecty a) => Connection -> Table -> String -> Page -> Limit -> [String] -> String -> [DbValue] -> [FilterArg] -> [SortArg] -> IO [a]
-selectLimit' conn defTable defOrderBy page limitNumber params defWhere defValues filterArgs sortArgs = do
-  let table = unwords $ [defTable] ++ fmap tableFil filterArgs ++ fmap tableSort sortArgs
-  let where' = intercalate " AND " $ defWhere : fmap whereFil filterArgs
-  let orderBy = intercalate "," $ fmap orderBySort sortArgs ++ [defOrderBy]
-  let values = (concatMap fst . fmap valuesFil $ filterArgs) ++ defValues ++ (concatMap snd . fmap valuesFil $ filterArgs)
-  query conn (toSelLimQ table orderBy page limitNumber params where') values
+selectLimit' :: (Selecty a) => Connection -> SelectLim -> IO [a]
+selectLimit' conn sel = 
+  query conn (toQ sel) (toVal sel)
 
-updateInDb' :: Connection -> String -> String -> String -> [DbValue] -> IO ()
-updateInDb' conn table set where' values = do
-  _ <- execute conn (toUpdQ table set where') values
+updateInDb' :: Connection -> Update -> IO ()
+updateInDb' conn upd = do
+  _ <- execute conn (toQ upd) (toVal upd)
   return ()
 
-deleteFromDb' :: Connection -> Table -> Where -> [DbValue] -> IO ()
-deleteFromDb' conn table where' values = do
-  _ <- execute conn (toDelQ table where') values
+deleteFromDb' :: Connection -> Delete -> IO ()
+deleteFromDb' conn del = do
+  _ <- execute conn (toQ del) (toVal del)
   return ()
 
-isExistInDb' :: Connection -> Table -> Where -> DbValue -> IO Bool
-isExistInDb' conn table where' value = do
-  onlyChecks <- query conn (toExQ table where') [value]
+isExistInDb' :: Connection -> Exists -> IO Bool
+isExistInDb' conn exi = do
+  onlyChecks <- query conn (toQ exi) (toVal exi)
   Only isExist <- checkOneM onlyChecks
   return isExist
 
-insertReturn' :: Connection -> String -> String -> [String] -> [DbValue] -> IO Id
-insertReturn' conn table returnName insNames insValues = do
-  onlyXs <- query conn (toInsRetQ table returnName insNames) insValues
+insertReturn' :: Connection -> InsertRet -> IO Id
+insertReturn' conn insRet = do
+  onlyXs <- query conn (toQ insRet) (toVal insRet)
   Only num <- checkOneM onlyXs
   return num
 
-insertByteaInDb' :: Connection -> String -> String -> [String] -> ByteString -> IO Id
-insertByteaInDb' conn table returnName insNames bs = do
-  onlyXs <- query conn (toInsRetQ table returnName insNames) [Binary bs]
-  Only num <- checkOneM onlyXs
-  return num
+--insertByteaInDb' :: Connection -> InsertRet -> IO Id
+--insertByteaInDb' conn table returnName insNames bs = do
+  --onlyXs <- query conn (toInsRetQ table returnName insNames) [Binary bs]
+  --Only num <- checkOneM onlyXs
+  --return num
 
-insertMany' :: Connection -> Table -> [DbInsertParamKey] -> [(Id, Id)] -> IO ()
-insertMany' conn table insNames insValues = do
-  _ <- executeMany conn (toInsManyQ table insNames) insValues
+insertMany' :: Connection -> InsertMany -> IO ()
+insertMany' conn insMany@(InsertMany t pair) = do
+  _ <- executeMany conn (toQ insMany) (insManyVal pair)
   return ()
 
-getTokenKey' :: IO String
+getTokenKey' :: IO TokenKey
 getTokenKey' = do
   gen <- getStdGen
   _ <- newStdGen

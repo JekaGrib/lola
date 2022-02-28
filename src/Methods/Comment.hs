@@ -21,14 +21,16 @@ import ParseQueryStr (CreateComment (..), DeleteComment (..), GetComments (..), 
 import Types
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    selectLimitComments :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbValue] -> [FilterArg] -> [SortArg] -> m [Comment],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
-    isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectUsersForPost :: PostId -> m [UserId]
+  , selectUsersForComm :: CommentId -> m [UserId]
+  , selectLimCommsForPost :: PostId -> OrderBy -> Page -> Limit -> m [Comment]
+  , updateDbComm :: CommentText -> CommentId -> m ()
+  , deleteDbComm :: CommentId -> m ()
+  , isExistComm :: CommentId -> m Bool
+  , isExistPost :: PostId -> m Bool
+  , insertReturnComm :: CommentText -> PostId -> UserId -> m CommentId
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -37,29 +39,62 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectOnly' conn)
-        (selectLimit' conn)
-        (updateInDb' conn)
-        (deleteFromDb' conn)
-        (isExistInDb' conn)
-        (insertReturn' conn)
+        (selectUsersForPost' conn)
+        (selectUsersForComm' conn)
+        (selectLimCommsForPost' conn)
+        (updateDbComm' conn)
+        (deleteDbComm' conn)
+        (isExistComm' conn)
+        (isExistPost' conn)
+        (insertReturnComm' conn)
+
+selectUsersForPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  selectOnly' conn (Select ["user_id"] "posts" wh)
+selectUsersForComm' conn commId = do
+  let wh = WherePair "comment_id=?" (Id commId)
+  selectOnly' conn (Select ["user_id"] "comments" wh)
+selectLimCommsForPost' conn postId orderBy page limit = do
+  let wh = WherePair "post_id=?" (Id postId)
+  selectLimit' conn (SelectLim "comments" wh orderBy page limit)
+updateDbComm' conn commTxt commId = do
+  let set = SetPair "comment_text=?" (Txt commTxt)
+  let wh = WherePair "comment_id=?" (Id commId)
+  updateInDb' conn (Update "comments" [set] wh)
+deleteDbComm' conn commId = do
+  let wh = WherePair "comment_id=?" (Id commId)
+  deleteFromDb' conn (Delete "comments" wh)
+isExistComm' conn commId = do
+  let wh = WherePair "comment_id=?" (Id commId)
+  isExistInDb' conn (Exists "comments" wh)
+isExistPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  isExistInDb' conn (Exists "posts" wh)
+insertReturnComm' conn commTxt postId usId = do
+  let insPair1 = InsertPair "comment_text" (Txt commTxt)
+  let insPair2 = InsertPair "post_id" (Id postId)
+  let insPair3 = InsertPair "user_id" (Id usId)
+  let insPairs = [insPair1,insPair2,insPair3]
+  insertReturn' conn (InsertRet "comments" [insPair] "comment_id")
 
 createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> ExceptT ReqError m ResponseInfo
-createComment h usIdNum (CreateComment postIdParam txtParam) = do
-  isExistInDbE h "posts"  "post_id=?" (Id postIdParam)
-  commId <- insertReturnE h "comments" "comment_id" ["comment_text", "post_id", "user_id"] [Txt txtParam, Id postIdParam, Id usIdNum]
-  lift $ logInfo (hLog h) $ "Comment_id: " ++ show commId ++ " created"
+createComment Handle{..} usIdNum (CreateComment postIdParam txtParam) = do
+  let logpair = ("post_id", postIdParam)
+  catchExistE hLog logpair $ isExistPost postIdParam
+  commId <- catchInsRetE hLog $ insertReturnComm  txtParam postIdParam usIdNum
+  lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " created"
   okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdParam, user_id6 = usIdNum}
 
 getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m ResponseInfo
-getComments h (GetComments postIdParam pageNum) = do
-  isExistInDbE h "posts" "post_id=?" (Id postIdParam)
-  comms <- checkListE (hLog h) $ selectLimitComments h "comments" "comment_id DESC" pageNum (cCommLimit . hConf $ h) ["comment_id", "user_id", "comment_text"] "post_id=?" [Id postIdParam] [] []
+getComments Handle{..} (GetComments postIdParam pageNum) = do
+  let logpair = ("post_id", postIdParam)
+  catchExistE hLog logpair $ isExistPost postIdParam
+  comms <- catchSelE hLog $ selectLimCommsForPost' conn postIdParam orderBy pageNum (cCommLimit hConf)  
   lift $ logInfo (hLog h) $ "Comments_id: " ++ show (fmap comment_idC comms) ++ " sending in response"
   okHelper $ CommentsResponse {pageCR = pageNum, post_id9 = postIdParam, comments = fmap inCommResp comms}
 
 updateComment :: (MonadCatch m) => Handle m -> UserId -> UpdateComment -> ExceptT ReqError m ResponseInfo
-updateComment h usIdNum (UpdateComment commIdParam txtParam) = do
+updateComment h@Handle{..} usIdNum (UpdateComment commIdParam txtParam) = do
   isCommAuthorIfExist h commIdParam usIdNum
   updateInDbE h "comments" "comment_text=?" "comment_id=?" [Txt txtParam, Id commIdParam]
   postId <- checkOneE (hLog h) $ selectNums h "comments" ["post_id"] "comment_id=?" [Id commIdParam]
@@ -67,7 +102,7 @@ updateComment h usIdNum (UpdateComment commIdParam txtParam) = do
   okHelper $ CommentResponse {comment_id = commIdParam, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
 
 deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> DeleteComment -> ExceptT ReqError m ResponseInfo
-deleteComment h@Handle {..} usIdNum accessMode (DeleteComment commIdParam) = do
+deleteComment h@Handle{..} usIdNum accessMode (DeleteComment commIdParam) = do
   isExistInDbE h "comments" "comment_id=?" (Id commIdParam)
   case accessMode of
     AdminMode -> do
@@ -81,7 +116,7 @@ deleteComment h@Handle {..} usIdNum accessMode (DeleteComment commIdParam) = do
       okHelper $ OkResponse {ok = True}
 
 isCommOrPostAuthor :: (MonadCatch m) => Handle m -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
-isCommOrPostAuthor Handle {..} commIdParam postId usIdNum = do
+isCommOrPostAuthor Handle{..} commIdParam postId usIdNum = do
   let table = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
   usPostId <- checkOneE hLog $ selectNums table ["user_id"] "post_id=?" [Id postId]
   usComId <- checkOneE hLog $ selectNums "comments" ["user_id"] "comment_id=?" [Id commIdParam]

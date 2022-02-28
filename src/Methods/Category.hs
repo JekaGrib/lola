@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -24,10 +25,14 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
-    isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
+    updateDbCat :: CatName -> CategoryId -> m (),
+    updateDbSubCat :: CatName -> SuperCatId -> CatId -> m (),
+    updateDbCatsForPosts :: CategoryId -> [CategoryId] -> m (),
+    updateDbCatsForDrafts :: CategoryId -> [CategoryId] -> m (),
+    deleteDbCats :: [CategoryId] -> m (),
+    isExistCat :: CategoryId -> m Bool,
+    insertRetCat :: CatName -> m CategoryId,
+    insertRetSubCat :: CatName -> SuperCatId -> m CategoryId,
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m
   }
@@ -38,59 +43,98 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (updateInDb' conn)
-        (deleteFromDb' conn)
-        (isExistInDb' conn)
-        (insertReturn' conn)
+        (updateDbCat' conn)
+        (updateDbSubCat' conn)
+        (updateDbCatsForPosts' conn)
+        (updateDbCatsForDrafts' conn)
+        (deleteDbCats' conn)
+        (isExistCat' conn)
+        (insertRetCat' conn)
+        (insertRetSubCat' conn)
         (withTransaction conn)
         (Methods.Common.MakeCatResp.makeH conf logH)
 
+updateDbCat' conn catName catId = do
+  let set = SetPair "category_name=?" (Txt catName)
+  let wh = WherePair "category_id=?" (Id catId)
+  updateInDb' conn (Update "categories" [set] wh)
+updateDbSubCat' conn catName superCatId catId = do
+  let set1 = SetPair "category_name=?" (Txt catName)
+  let set2 = SetPair "super_category_id=?" (Id superCatId)
+  let wh = WherePair "category_id=?" (Id catId)
+  updateInDb' conn (Update "categories" [set1,set2] wh)
+updateDbCatsForPosts' conn newCatId catIds = do
+  let set = SetPair "category_id=?" (Id newCatId)
+  let toWhPair catId = WherePair "category_id=?" (Id catId)
+  let wh = WhereOr $ map toWhPair catIds
+  updateInDb' conn (Update "posts" [set] wh)
+updateDbCatsForDrafts' conn newCatId catIds = do
+  let set = SetPair "category_id=?" (Id newCatId)
+  let toWhPair catId = WherePair "category_id=?" (Id catId)
+  let wh = WhereOr $ map toWhPair catIds
+  updateInDb' conn (Update "drafts" [set] wh)
+deleteDbCats' conn catIds = do
+  let toWhPair catId = WherePair "category_id=?" (Id catId)
+  let wh = WhereOr $ map toWhPair catIds
+  deleteFromDb' conn (Delete "categories" wh)
+isExistCat' conn catId = do
+  let wh = WherePair "category_id=?" (Id catId)
+  isExistInDb' conn (Exists "categories" wh)
+insertReturnCat' conn catName = do
+  let insPair = InsertPair "cat_name" (Txt catName)
+  insertReturn' conn (InsertRet "categories" [insPair] "category_id")
+insertReturnSubCat' conn catName = do
+  let insPair = InsertPair "cat_name" (Txt catName)
+  insertReturn' conn (InsertRet "categories" [insPair] "category_id")
+
 createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
-createCategory h (CreateCategory catNameParam) = do
-  catId <- insertReturnE h "categories" "category_id" ["category_name"] [Txt catNameParam]
-  lift $ logInfo (hLog h) $ "Category_id: " ++ show catId ++ " created"
+createCategory Handle{..} (CreateCategory catNameParam) = do
+  catId <- catchInsRetE hLog $ insertReturnCat catNameParam
+  lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
   okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = []}
 
 createSubCategory :: (MonadCatch m) => Handle m -> CreateSubCategory -> ExceptT ReqError m ResponseInfo
-createSubCategory h (CreateSubCategory catNameParam superCatIdParam) = do
-  isExistInDbE h "categories"  "category_id=?" (Id superCatIdParam)
-  catId <- insertReturnE h "categories" "category_id" ["category_name", "super_category_id"] [Txt catNameParam, Id superCatIdParam]
+createSubCategory Handle{..} (CreateSubCategory catNameParam superCatIdParam) = do
+  let logpair = ("category_id", superCatIdParam)
+  catchExistsE hLog logpair $ isExistCat superCatIdParam
+  catId <- catchInsRetE hLog $ insertReturnSubCat catNameParam superCatIdParam
   catResp <- makeCatResp (hCatResp h) catId
   lift $ logInfo (hLog h) $ "Sub_Category_id: " ++ show catId ++ " created"
   okHelper catResp
 
 getCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
-getCategory h catId = do
-  isExistInDbE h "categories"  "category_id=?" (Id catId)
-  catResp <- makeCatResp (hCatResp h) catId
-  lift $ logInfo (hLog h) $ "Category_id: " ++ show catId ++ " sending in response"
+getCategory Handle{..} catId = do
+  let logpair = ("category_id", catId)
+  catchExistsE hLog logpair $ isExistCat catId
+  catResp <- makeCatResp hCatResp catId
+  lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " sending in response"
   okHelper catResp
 
 updateCategory :: (MonadCatch m) => Handle m -> UpdateCategory -> ExceptT ReqError m ResponseInfo
-updateCategory h (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
-  isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
+updateCategory h@Handle{..} (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
+  let logpair = ("category_id", catIdParam)
+  catchExistsE hLog logpair $ isExistCat catIdParam
   case maybeSuperCatIdParam of
     Just superCatIdParam -> do
-      isExistInDbE h "categories"  "category_id=?" (Id superCatIdParam)
+      let logpair = ("category_id", superCatIdParam)
+      catchExistsE hLog logpair $ isExistCat superCatIdParam
       checkRelationCats h catIdParam superCatIdParam
-      updateInDbE h "categories" "category_name=?,super_category_id=?" "category_id=?" [Txt catNameParam, Id superCatIdParam, Id catIdParam]
+      catchUpdE hLog $ updateDbSubCat catNameParam superCatIdParam catIdParam
     Nothing -> do
-      updateInDbE h "categories" "category_name=?" "category_id=?" [Txt catNameParam, Id catIdParam]
-  catResp <- makeCatResp (hCatResp h) catIdParam
+      catchUpdE hLog $ updateDbCat catNameParam superCatIdParam catIdParam
+  catResp <- makeCatResp hCatResp catIdParam
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " updated."
   okHelper catResp
 
 deleteCategory :: (MonadCatch m) => Handle m -> DeleteCategory -> ExceptT ReqError m ResponseInfo
-deleteCategory h (DeleteCategory catIdParam) = do
-  isExistInDbE h "categories"  "category_id=?" (Id catIdParam)
+deleteCategory h@Handle{..} (DeleteCategory catIdParam) = do
+  let logpair = ("category_id", catIdParam)
+  catchExistsE hLog logpair $ isExistCat catIdParam
   allSubCats <- findAllSubCats h catIdParam
-  let values = fmap Id (cDefCatId (hConf h) : allSubCats)
-  let where' = intercalate " OR " . fmap (const "post_category_id=?") $ allSubCats
-  let where'' = intercalate " OR " . fmap (const "draft_category_id=?") $ allSubCats
-  let updatePos = updateInDb h "posts" "post_category_id=?" where' values
-  let updateDr = updateInDb h "drafts" "draft_category_id=?" where'' values
-  let where''' = intercalate " OR " . fmap (const "category_id=?") $ allSubCats
-  let deleteCat = deleteFromDb h "categories" where''' (fmap Id allSubCats)
+  let allCats = catIdParam : allSubCats
+  let updatePos = catchUpdE hLog $ updateDbCatsForPosts (cDefCatId hConf) allCats
+  let updateDr = catchUpdE hLog $ updateDbCatsForDrafts (cDefCatId hConf) allCats
+  let deleteCat = deleteDbCats allCats
   withTransactionDBE h (updatePos >> updateDr >> deleteCat)
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " deleted."
   okHelper $ OkResponse {ok = True}
@@ -106,26 +150,18 @@ checkRelationCats h catId superCatId
       $ "super_category_id: " ++ show superCatId ++ " is subCategory of category_id: " ++ show catId
 
 findAllSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
-findAllSubCats h catId = do
-  catsIds <- findOneLevelSubCats (hCatResp h) catId
+findAllSubCats h@Handle{..} catId = do
+  catsIds <- findOneLevelSubCats hCatResp catId
   case catsIds of
-    [] -> return [catId]
+    [] -> return []
     _ -> do
       subCatsIds <- mapM (findAllSubCats h) catsIds
-      return $ catId : Prelude.concat subCatsIds
+      return $ catsIds ++ Prelude.concat subCatsIds
 
 fromCatResp :: CatResponse -> CategoryId
 fromCatResp (SubCatResponse a _ _ _) = a
 fromCatResp (CatResponse a _ _) = a
 
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [DbValue] -> ExceptT ReqError m ()
-updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
-
-isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
-isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
-
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
-insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h

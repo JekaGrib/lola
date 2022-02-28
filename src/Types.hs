@@ -29,6 +29,11 @@ type PictureId = Id
 
 type CategoryId = Id
 
+type SubCategoryId = Id
+
+type SuperCatId = Id
+
+
 type TagId = Id
 
 type QueryParamKey = Text
@@ -84,9 +89,42 @@ type Page = Int
 
 type Limit = Int
 
+type AdminBool = Bool
+
+type TokenKey = String
+
+
 --type WhereMap = Map.Map DbParamKey DbParamValue
 
-data DbValue = Txt Text | Num Integer | IdArray (PGArray Id) | IdIn (In [Id]) | Id Id | Day Day | Bool Bool
+type LogKey = String
+type LogValue = String
+type LogPair = (LogKey,LogValue)
+
+
+type DbTxtValue = Text
+
+type TagName = DbTxtValue
+
+type AuthorInfo = DbTxtValue
+
+type CatName = DbTxtValue
+
+type CommentText = DbTxtValue
+
+type Key = DbTxtValue
+
+
+
+data DbValue = 
+  Txt Text 
+  | Num Int 
+  | IdArray (PGArray Id) 
+  | IdIn (In [Id]) 
+  | Id Id 
+  | Day Day 
+  | Bool Bool
+  | BS (Binary ByteString)
+  | Str String
 
 instance Show DbValue where
   show (Num a) = show a
@@ -96,8 +134,8 @@ instance Show DbValue where
   show (Id a) = show a
   show (Day a) = show a
   show (Bool a) = show a
-
-
+  show (BS a) = show a
+  show (Str a) = show a
 
 
 
@@ -109,10 +147,10 @@ instance ToField DbValue where
   toField (Id a) = toField a
   toField (Day a) = toField a
   toField (Bool a) = toField a
+  toField (BS a) = toField a
+  toField (Str a) = toField a
 
 
-
- 
 
 type WhereValue = (Where, DbValue)
 

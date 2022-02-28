@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -12,9 +13,15 @@ import Methods.Common
 import Types
 
 data Handle m = Handle
-  { hConf :: Config,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    deleteFromDb :: Table -> Where -> [DbValue] -> m ()
+  { hConf :: Config
+  , selectDraftsForPost :: PostId -> m [DraftId]
+  , deleteDbPicsForPost :: PostId -> m ()
+  , deleteDbTagsForPost :: PostId -> m ()
+  , deleteDbCommsForPost :: PostId -> m ()
+  , deleteDbPost :: PostId -> m ()
+  , deleteDbPicsForDrafts :: [DraftId] -> m ()
+  , deleteDbTagsForDrafts :: [DraftId] -> m ()
+  , deleteDbDrafts :: [DraftId] -> m ()
   }
 
 makeH :: Config -> Handle IO
@@ -22,37 +29,66 @@ makeH conf =
   let conn = extractConn conf
    in Handle
         conf
-        (selectOnly' conn)
-        (deleteFromDb' conn)
+        (selectDraftsForPost' conn)
+        (deleteDbPicsForPost' conn)
+        (deleteDbTagsForPost' conn)
+        (deleteDbCommsForPost' conn)
+        (deleteDbPost' conn)
+        (deleteDbPicsForDrafts' conn)
+        (deleteDbTagsForDrafts' conn)
+        (deleteDbDrafts' conn)
+
+selectDraftsForPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  selectOnly' conn (Select ["draft_id"] "drafts" wh)
+deleteDbPicsForPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  deleteFromDb' conn (Delete "postspics" wh)
+deleteDbTagsForPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  deleteFromDb' conn (Delete "poststags" wh)
+deleteDbCommsForPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  deleteFromDb' conn (Delete "comments" wh)
+deleteDbPost' conn postId = do
+  let wh = WherePair "post_id=?" (Id postId)
+  deleteFromDb' conn (Delete "posts" wh)
+deleteDbPicsForDrafts' conn draftIds = do
+  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
+  let wh = WhereOr $ map toWhPair draftIds
+  deleteFromDb' conn (Delete "draftspics" wh)
+deleteDbTagsForDrafts' conn draftIds = do
+  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
+  let wh = WhereOr $ map toWhPair draftIds
+  deleteFromDb' conn (Delete "draftstags" wh)
+deleteDbDrafts' conn draftIds = do
+  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
+  let wh = WhereOr $ map toWhPair draftIds
+  deleteFromDb' conn (Delete "drafts" wh)
+
 
 deleteAllAboutPost :: (MonadCatch m) => Handle m -> PostId -> m ()
-deleteAllAboutPost h postId = do
-  deletePostsPicsTags h [postId]
-  deleteFromDb h "comments" "post_id=?" [Id postId]
-  draftsIds <- selectNums h "drafts" ["draft_id"] "post_id=?" [Id postId]
+deleteAllAboutPost h@Handle{..} postId = do
+  deletePicsTagsForPost h postId
+  deleteDbCommsForPost postId
+  draftsIds <- selectDraftsForPost postId
   deleteAllAboutDrafts h draftsIds
-  deleteFromDb h "posts" "post_id=?" [Id postId]
+  deleteDbPost postId
 
-deletePostsPicsTags :: (MonadCatch m) => Handle m -> [PostId] -> m ()
-deletePostsPicsTags _ [] = return ()
-deletePostsPicsTags h postsIds = do
-  let values = fmap Id postsIds
-  let where' = intercalate " OR " . fmap (const "post_id=?") $ postsIds
-  deleteFromDb h "postspics" where' values
-  deleteFromDb h "poststags" where' values
+deletePicsTagsForPost :: (MonadCatch m) => Handle m -> PostId -> m ()
+deletePicsTagsForPost Handle{..} postId = do
+  deleteDbPicsForPost postId
+  deleteDbTagsForPost postId
 
 deleteAllAboutDrafts :: (MonadCatch m) => Handle m -> [DraftId] -> m ()
 deleteAllAboutDrafts _ [] = return ()
-deleteAllAboutDrafts h draftsIds = do
-  let values = fmap Id draftsIds
-  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  deleteDraftsPicsTags h draftsIds
-  deleteFromDb h "drafts" where' values
+deleteAllAboutDrafts h@Handle{..} draftsIds = do
+  deletePicsTagsForDrafts h draftsIds
+  deleteDbDrafts draftsIds
 
-deleteDraftsPicsTags :: (MonadCatch m) => Handle m -> [DraftId] -> m ()
-deleteDraftsPicsTags _ [] = return ()
-deleteDraftsPicsTags h draftsIds = do
-  let values = fmap Id draftsIds
-  let where' = intercalate " OR " . fmap (const "draft_id=?") $ draftsIds
-  deleteFromDb h "draftspics" where' values
-  deleteFromDb h "draftstags" where' values
+deletePicsTagsForDrafts :: (MonadCatch m) => Handle m -> [DraftId] -> m ()
+deletePicsTagsForDrafts _ [] = return ()
+deletePicsTagsForDrafts Handle{..} draftsIds = do
+  deleteDbPicsForDrafts draftsIds
+  deleteDbTagsForDrafts draftsIds
+

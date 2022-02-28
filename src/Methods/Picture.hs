@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
@@ -25,9 +26,9 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectBS :: Table -> [Param] -> Where -> [DbValue] -> m [ByteString],
-    insertByteaInDb :: Table -> String -> [String] -> ByteString -> m Id,
-    httpAction :: HT.Request -> m (HT.Response BSL.ByteString)
+    selectPicBS :: PicId -> m [ByteString],
+    insertRetPicBS :: ByteString -> m Id,
+    goToUrl :: HT.Request -> m (HT.Response BSL.ByteString)
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -36,15 +37,23 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectBS' conn)
-        (insertByteaInDb' conn)
+        (selectPicBS' conn)
+        (insertRetPicBS' conn)
         HT.httpLBS
 
+selectPicBS' conn picId =
+  let wh = WherePair "pic_id=?" (Id picId)
+  selectBS' conn (Select ["pic"] "pics" wh)
+insertRetPicBS conn sbs =
+  let insPair = InsertPair "pic" (BS (Binary sbs))
+  insertReturn' conn (InsertRet "pics" [insPair] "pic_id")
+
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
-sendPicture h picIdNum = do
-  bs <- checkOneIfExistE (hLog h) (selectBS h) "pics" ["pic"] "pic_id=?" (Id picIdNum)
+sendPicture Handle{..} picIdNum = do
+  let logpair = ("pic_id", picIdNum)
+  bs <- checkOneSelIfExistE hLog logpair $ selectPicBS picIdNum
   let lbs = BSL.fromStrict bs
-  lift $ logInfo (hLog h) $ "Pic_id: " ++ show picIdNum ++ " sending in response"
+  lift $ logInfo hLog $ "Pic_id: " ++ show picIdNum ++ " sending in response"
   return $
     ResponseInfo
       status200
@@ -52,21 +61,18 @@ sendPicture h picIdNum = do
       (lazyByteString lbs)
 
 browsePicture :: (MonadCatch m) => Handle m -> BrowsePicture -> ExceptT ReqError m ResponseInfo
-browsePicture h (BrowsePicture picUrlParam) = do
+browsePicture h@Handle{..} (BrowsePicture picUrlParam) = do
   lbs <- checkPicUrlGetPic h picUrlParam
   let sbs = BSL.toStrict lbs
-  picId <- insertByteaInDbE h "pics" "pic_id" ["pic"] sbs
-  lift $ logInfo (hLog h) $ "Picture_id: " ++ show picId ++ " uploaded"
-  okHelper $ inPicIdUrl (hConf h) picId
+  picId <- catchInsRetE hLog $ insertRetPicBS sbs
+  lift $ logInfo hLog $ "Picture_id: " ++ show picId ++ " uploaded"
+  okHelper $ inPicIdUrl hConf picId
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
-checkPicUrlGetPic h url = do
-  res <- lift (httpAction h . fromString . unpack $ url) `catch` (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
+checkPicUrlGetPic Handle{..} url = do
+  res <- lift (goToUrl . fromString . unpack $ url) `catch` (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
   let lbs = HT.getResponseBody res
   let sbs = BSL.toStrict lbs
   case decodeImage sbs of
     Right _ -> return lbs
     Left _ -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
-
-insertByteaInDbE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> ByteString -> ExceptT ReqError m Id
-insertByteaInDbE h = checkInsRetE (hLog h) (insertByteaInDb h)

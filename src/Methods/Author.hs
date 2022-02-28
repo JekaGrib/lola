@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -22,16 +23,20 @@ import ParseQueryStr (CreateAuthor (..), DeleteAuthor (..), GetAuthor (..), Upda
 import Types
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    selectAuthors :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Author],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
-    isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
-    withTransactionDB :: forall a. m a -> m a,
-    hDelMany :: Methods.Common.DeleteMany.Handle m
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectDraftsForAuthor :: AuthorId -> m [DraftId]
+  , selectAuthorsForUser  :: UserId -> m [AuthorId]
+  , selectAuthors :: AuthorId -> m [Author]
+  , updateDbAuthor :: UserId -> AuthorInfo -> AuthorId -> m ()
+  , updateDbAuthorForPosts :: AuthorId -> AuthorId -> m ()
+  , deleteDbAuthor :: AuthorId -> m ()
+  , isExistAuthor :: AuthorId -> m Bool
+  , isExistUser :: UserId -> m Bool
+  , isUserAuthor :: UserId -> m Bool
+  , insertReturnAuthor :: UserId -> AuthorInfo -> m Id
+  , withTransactionDB :: forall a. m a -> m a
+  , hDelMany :: Methods.Common.DeleteMany.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -40,53 +45,99 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectOnly' conn)
-        (select' conn)
-        (updateInDb' conn)
-        (deleteFromDb' conn)
-        (isExistInDb' conn)
-        (insertReturn' conn)
+        (selectDraftsForAuthor' conn)
+        (selectAuthorsForUser' conn)
+        (selectAuthors' conn)
+        (updateAuthorForPosts' conn)
+        (deleteAuthor' conn)
+        (isExistAuthor' conn)
+        (isExistUser' conn)
+        (isUserAuthor' conn)
+        (insertReturnAuthor' conn)
         (withTransaction conn)
         (Methods.Common.DeleteMany.makeH conf)
 
+selectDraftsForAuthor' conn auId = do
+  let wh = WherePair "author_id=?" (Id auId)
+  selectOnly' conn (Select ["draft_id"] "drafts" wh)
+selectAuthorsForUser' conn usId = do
+  let wh = WherePair "user_id=?" (Id usId)
+  selectOnly' conn (Select ["author_id"] "authors" wh)
+selectAuthors' conn auId = do
+  let wh = WherePair "author_id=?" (Id auId)
+  select' conn (Select ["author_id", "author_info", "user_id"] "authors" wh)
+updateDbAuthor' conn usId auInfo auId = do
+  let set1 = SetPair "user_id=?" (Id usId)
+  let set2 = SetPair "author_info=?" (Txt auInfo)
+  let wh = WherePair "author_id=?" (Id auId)
+  updateInDb' conn (Update "posts" [set1,set2] wh)
+updateDbAuthorForPosts' conn auIdNew auId = do
+  let set = SetPair "author_id=?" (Id auIdNew)
+  let wh = WherePair "author_id=?" (Id auId)
+  updateInDb' conn (Update "posts" [set] wh)
+deleteDbAuthor' conn auId = do
+  let wh = WherePair "author_id=?" (Id auId)
+  deleteFromDb' conn (Delete "authors" wh)
+isExistAuthor' conn auId = do
+  let wh = WherePair "author_id=?" (Id auId)
+  isExistInDb' conn (Exists "authors" wh)
+isExistUser' conn usId = do
+  let wh = WherePair "user_id=?" (Id usId)
+  isExistInDb' conn (Exists "users" wh)
+isUserAuthor' conn usId = do
+  let wh = WherePair "user_id=?" (Id usId)
+  isExistInDb' conn (Exists "authors" wh)
+insertReturnAuthor' conn usId auInfo = do
+  let insPair1 = InsertPair "user_id"     (Id  usId)
+  let insPair2 = InsertPair "author_info" (Txt  auInfo)
+  let insPairs = [insPair1,insPair2]
+  insertReturn' conn (InsertRet "authors" insPairs "author_id")
+
+
+
 createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
-createAuthor h (CreateAuthor usIdParam auInfoParam) = do
-  isExistInDbE h "users" "user_id=?" (Id usIdParam)
+createAuthor h@Handle{..} (CreateAuthor usIdParam auInfoParam) = do
+  let logpair = ("user_id", usIdParam)
+  catchExistE hLog logpair $ isExistUser usIdParam
   isNotAlreadyAuthor h usIdParam
-  auId <- insertReturnE h "authors" "author_id" ["user_id", "author_info"] [Id usIdParam, Txt auInfoParam]
-  lift $ logDebug (hLog h) $ "DB return author_id" ++ show auId
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " created"
+  auId <- catchInsRetE hLog $ insertReturnAuthor usIdParam auInfoParam
+  lift $ logDebug hLog $ "DB return author_id" ++ show auId
+  lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
 
 getAuthor :: (MonadCatch m) => Handle m -> GetAuthor -> ExceptT ReqError m ResponseInfo
-getAuthor h (GetAuthor auIdParam) = do
-  Author auId auInfo usId <- checkOneIfExistE (hLog h) (selectAuthors h) "authors" ["author_id", "author_info", "user_id"] "author_id=?" (Id auIdParam)
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auId ++ " sending in response."
+getAuthor Handle{..} (GetAuthor auIdParam) = do
+  let logpair = ("author_id", auIdParam)
+  Author auId auInfo usId <- checkOneSelIfExistE hLog logpair $ selectAuthors auIdParam
+  lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
 
 updateAuthor :: (MonadCatch m) => Handle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
-updateAuthor h (UpdateAuthor auIdParam usIdParam auInfoParam) = do
-  isExistInDbE h "users"  "user_id=?" (Id usIdParam)
-  isExistInDbE h "authors"  "author_id=?" (Id auIdParam)
+updateAuthor h@Handle{..} (UpdateAuthor auIdParam usIdParam auInfoParam) = do
+  let logpair1 = ("user_id", usIdParam)
+  catchExistE hLog logpair1 $ isExistUser usIdParam
+  let logpair2 = ("author_id", auIdParam)
+  catchExistE hLog logpair2 $ isExistAuthor auIdParam
   isntUserOtherAuthor h usIdParam auIdParam
-  updateInDbE h "authors" "author_info=?,user_id=?" "author_id=?" [Txt auInfoParam, Id usIdParam, Id auIdParam]
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdParam ++ " updated."
+  catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auIdParam
+  lift $ logInfo hLog $ "Author_id: " ++ show auIdParam ++ " updated."
   okHelper $ AuthorResponse {author_id = auIdParam, auth_user_id = usIdParam, author_info = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> DeleteAuthor -> ExceptT ReqError m ResponseInfo
-deleteAuthor h (DeleteAuthor auIdParam) = do
-  isExistInDbE h "authors" "author_id=?" (Id auIdParam)
-  let updatePos = updateInDb h "posts" "author_id=?" "author_id=?" [Id $ cDefAuthId (hConf h), Id auIdParam]
-  draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [Id auIdParam]
-  let deleteDr = deleteAllAboutDrafts (hDelMany h) draftsIds
-  let deleteAu = deleteFromDb h "authors" "author_id=?" [Id auIdParam]
+deleteAuthor Handle{..} (DeleteAuthor auIdParam) = do
+  let logpair = ("author_id", auIdParam)
+  catchExistE hLog logpair $ isExistAuthor auIdParam
+  let updatePos = updateDbAuthorForPosts (cDefAuthId hConf) auIdParam
+  draftsIds <- catchSelE hLog $ selectDraftsForAuthor auIdParam
+  let deleteDr = deleteAllAboutDrafts hDelMany draftsIds
+  let deleteAu = deleteDbAuthor auIdParam
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
-  lift $ logInfo (hLog h) $ "Author_id: " ++ show auIdParam ++ " deleted."
+  lift $ logInfo hLog $ "Author_id: " ++ show auIdParam ++ " deleted."
   okHelper $ OkResponse {ok = True}
 
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
-isntUserOtherAuthor h usIdParam auIdParam = do
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [Id usIdParam]
+isntUserOtherAuthor Handle{..} usIdParam auIdParam = do
+  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usIdParam
   case maybeAuId of
     Just auId ->
       if auId == auIdParam
@@ -96,20 +147,12 @@ isntUserOtherAuthor h usIdParam auIdParam = do
 
 
 isNotAlreadyAuthor :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ()
-isNotAlreadyAuthor h usId = do
-  lift $ logDebug (hLog h) $ "Checking is user already in authors in DB"
-  isExist <- catchDbErr $ lift $ isExistInDb h "authors" "user_id=?" (Id usId)
+isNotAlreadyAuthor Handle{..} usId = do
+  lift $ logDebug hLog  $ "Checking is user already in authors in DB"
+  isExist <- catchDbErr $ lift $ isUserAuthor usId
   when isExist $
       throwE $ SimpleError $ "User is already author. User_id: " ++ show usId
 
-isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
-isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
-
-updateInDbE :: (MonadCatch m) => Handle m -> Table -> Set -> Where -> [DbValue] -> ExceptT ReqError m ()
-updateInDbE h t s w values = checkUpdE (hLog h) $ updateInDb h t s w values
-
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
-insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

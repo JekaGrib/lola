@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -17,7 +18,7 @@ import Database.PostgreSQL.Simple (withTransaction)
 import Logger
 import Methods.Category (fromCatResp)
 import Methods.Common
-import Methods.Common.DeleteMany (deleteAllAboutDrafts, deleteDraftsPicsTags, deletePostsPicsTags)
+import Methods.Common.DeleteMany (deleteAllAboutDrafts, deletePicsTagsForDrafts, deletePicsTagsForPost)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
@@ -135,7 +136,7 @@ updateDraft h usIdNum draftIdNum drReq@(DraftRequest _ nameParam catIdParam txtP
   DraftInfo auResp tagResps catResp <- getDraftInfo h usIdNum drReq
   postId <- checkOneE (hLog h) $ selectNums h "drafts" ["COALESCE (post_id, '0') AS post_id"] "draft_id=?" [Id draftIdNum]
   withTransactionDBE h $ do
-    deleteDraftsPicsTags (hDelMany h) [draftIdNum]
+    deletePicsTagsForDrafts (hDelMany h) [draftIdNum]
     updateInDb h "drafts" "draft_name=?,draft_category_id=?,draft_text=?,draft_main_pic_id=?" "draft_id=?" [Txt nameParam, Id catIdParam, Txt txtParam, Id picId, Id draftIdNum]
     insertMany h "draftspics" ["draft_id", "pic_id"] (zip (repeat draftIdNum) picsIds)
     insertMany h "draftstags" ["draft_id", "tag_id"] (zip (repeat draftIdNum) tagsIds)
@@ -170,7 +171,7 @@ publishDraft h usIdNum (PublishDraft draftIdParam) = do
       day <- checkOneE (hLog h) $ selectDays h "posts" ["post_create_date"] "post_id=?" [Id postId]
       withTransactionDBE h $ do
         updateInDb h "posts" "post_name=?,post_category_id=?,post_text=?,post_main_pic_id=?" "post_id=?" [Txt draftName, Id . fromCatResp $ catResp, Txt draftTxt, Id mPicId, Id postId]
-        deletePostsPicsTags (hDelMany h) [postId]
+        deletePicsTagsForPost (hDelMany h) postId
         insertMany h "postspics" ["post_id", "pic_id"] (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertMany h "poststags" ["post_id", "tag_id"] (zip (repeat postId) (fmap tag_idTR tagResps))
       lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId

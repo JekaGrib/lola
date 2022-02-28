@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -18,8 +19,8 @@ import Types
 data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    selectCats :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Cat]
+    selectSubCats :: CategoryId -> m [SubCategoryId],
+    selectCats :: CategoryId -> m [Cat]
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -28,12 +29,22 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectOnly' conn)
-        (select' conn)
+        (selectCats' conn)
+        (selectSubCats' conn)
+
+selectCats' conn catId =
+  select' conn $
+    Select 
+      ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] 
+      "categories" 
+      (WherePair "category_id=?" (Id catId))
+selectSubCats' conn catId =
+  let wh = WherePair "super_category_id=?" (Id catId)
+  select' conn $ Select ["category_id"] "categories"
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
-makeCatResp h catId = do
-  Cat catName superCatId <- checkOneE (hLog h) $ selectCats h "categories" ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] "category_id=?" [Id catId]
+makeCatResp h@Handle{..} catId = do
+  Cat catName superCatId <- catchOneSelE hLog $ selectCats catId
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
     0 -> return $ CatResponse {cat_id = catId, cat_name = catName, one_level_sub_cats = subCatsIds}
@@ -43,4 +54,4 @@ makeCatResp h catId = do
 
 findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
 findOneLevelSubCats h catId =
-  checkListE (hLog h) $ selectNums h "categories" ["category_id"] "super_category_id=?" [Id catId]
+  catchSelE (hLog h) $ selectSubCats catId
