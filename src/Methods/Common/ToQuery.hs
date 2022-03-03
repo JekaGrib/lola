@@ -11,33 +11,6 @@ import Types
 toQ :: (ToStr a) => a -> Query
 toQ = fromString . toStr
 
-toSelQ :: Table -> [Param] -> Where -> Query
-toSelQ table params where' =
-  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where'
-
-toSelLimQ :: Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
-toSelLimQ table orderBy page limitNumber params where' =
-  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1) * limitNumber) ++ " LIMIT " ++ show (page * limitNumber)
-
-toUpdQ :: Table -> Set -> Where -> Query
-toUpdQ table set where' =
-  fromString $ "UPDATE " ++ table ++ " SET " ++ set ++ " WHERE " ++ where'
-
-toDelQ :: Table -> Where -> Query
-toDelQ table where' =
-  fromString $ "DELETE FROM " ++ table ++ " WHERE " ++ where'
-
-toExQ :: Table -> Where -> Query
-toExQ table where' =
-  fromString $ "SELECT EXISTS (SELECT 1 FROM " ++ table ++ " WHERE " ++ where' ++ ")"
-
-toInsRetQ :: Table -> ReturnParam -> [Param] -> Query
-toInsRetQ table returnName insNames =
-  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) RETURNING " ++ returnName
-
-toInsManyQ :: Table -> [Param] -> Query
-toInsManyQ table insNames =
-  fromString $ "INSERT INTO " ++ table ++ " ( " ++ intercalate "," insNames ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insNames) ++ " ) "
 
 class ToStr a where
   toStr :: a -> String
@@ -54,10 +27,6 @@ instance ToStr Select where
 
 instance ToVal Select where
   toVal (Select keys t wh) = toVal wh
-
-Table -> OrderBy -> Page -> Limit -> [Param] -> Where -> Query
-toSelLimQ table orderBy page limitNumber params where' =
-  fromString $ "SELECT " ++ intercalate ", " params ++ " FROM " ++ table ++ " WHERE " ++ where' ++ " ORDER BY " ++ orderBy ++ " OFFSET " ++ show ((page -1) * limitNumber) ++ " LIMIT " ++ show (page * limitNumber)
 
 data SelectLim =
   SelectLim [DbKey] Table Where OrderBy Page Limit
@@ -191,7 +160,7 @@ data SortOrd = ASC | DESC
 class AddJoinTable a where
   addJoinTable :: a -> JoinTable
 
-instance AddJoinTable [a] where
+instance (AddJoinTable a) => AddJoinTable [a] where
   addJoinTable xs = concatMap addJoinTable xs
 
 data OrderBy =
@@ -212,6 +181,7 @@ instance ToStr OrderBy where
   toStr (ByPostId sOrd)       = "posts.post_id " ++ show sOrd
   toStr (ByCommId sOrd)       = "comment_id " ++ show sOrd
   toStr (ByDraftId sOrd)      = "draft_id " ++ show sOrd
+  toStr (OrderList xs)        = intercalate "," . map toStr $ xs 
 
 instance AddJoinTable OrderBy where
   addJoinTable (ByPostPicsNumb _) =  

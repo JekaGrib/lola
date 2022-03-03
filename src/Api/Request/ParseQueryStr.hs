@@ -27,6 +27,10 @@ instance ParseQueryStr LogIn where
       <$> parseIdParam req "user_id"
       <*> parseTxtParam req 50 "password"
 
+instance CheckExist LogIn where
+  checkExist h (LogIn usId pwd) =
+    isExistUser h "user_id" usId
+
 newtype Token = Token Text
   deriving (Show)
 
@@ -46,6 +50,10 @@ instance ParseQueryStr CreateUser where
       <*> parseTxtParam req 50 "last_name"
       <*> parseIdParam req "user_pic_id"
 
+instance CheckExist LogIn where
+  checkExist h (LogIn usId pwd) =
+    isExistUser h "pic_id" usId
+
 newtype DeleteUser = DeleteUser Id
   deriving (Show)
 
@@ -53,6 +61,10 @@ instance ParseQueryStr DeleteUser where
   parseQueryStr req =
     DeleteUser
       <$> parseIdParam req "user_id"
+
+instance CheckExist DeleteUser where
+  checkExist h (DeleteUser usId pwd) =
+    isExistUser h "user_id" usId
 
 data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId}
   deriving (Show)
@@ -209,14 +221,58 @@ instance ParseQueryStr DeletePost where
     DeletePost
       <$> parseIdParam req "post_id"
 
+data GetPosts = 
+  GetPosts GetPostsF GetPostsOrd
+
+data GetPostsF = 
+  GetPostsF 
+    (Maybe Day) 
+    (Maybe Day) 
+    (Maybe Day) 
+    (Maybe TagId)
+    (Maybe [TagId])
+    (Maybe [TagId])
+    (Maybe Text)
+    (Maybe Text)
+    (Maybe Text)
+    (Maybe AuthorName)
+    (Maybe CategoryId)
+  deriving (Show)
+
+instance ParseQueryStr GetPostsF where
+  parseQueryStr req =
+    GetPostsF
+      <$> parseMaybeDayParam      req "crated_at"
+      <*> parseMaybeDayParam      req "crated_at_lt"
+      <*> parseMaybeDayParam      req "crated_at_gt"
+      <*> parseMaybeIdParam       req "tag"
+      <*> parseMaybeIdArrayParam  req "tags_in"
+      <*> parseMaybeIdArrayParam  req "tags_all"
+      <*> parseMaybeTxtParam   req 50 "name_in"
+      <*> parseMaybeTxtParam   req 50 "text_in"
+      <*> parseMaybeTxtParam   req 50 "everywhere_in"
+      <*> parseMaybeTxtParam   req 50 "author_name"
+      <*> parseMaybeIdParam       req "category_id"
+
+
+data GetPostsOrd = 
+  GetPostsOrd 
+    Maybe (SortOrd,Int)
+    Maybe (SortOrd,Int)
+    Maybe (SortOrd,Int)
+    Maybe (SortOrd,Int)
+  deriving (Show)
+
 data CreateComment = CreateComment Id Text
   deriving (Show)
 
 instance ParseQueryStr CreateComment where
   parseQueryStr req =
     CreateComment
-      <$> parseIdParam req "post_id"
-      <*> parseTxtParam req 1000 "comment_text"
+      <$> parseMaybeSortOrdParam req "sort_by_pics_number"
+      <*> parseMaybeSortOrdParam req "sort_by_category"
+      <*> parseMaybeSortOrdParam req "sort_by_author"
+      <*> parseMaybeSortOrdParam req "sort_by_date"
 
 data GetComments = GetComments Id Page
   deriving (Show)
@@ -267,6 +323,15 @@ parsePageParam req paramKey = do
   paramTxt <- checkParam req paramKey
   tryReadPage paramTxt
 
+parseMaybeTxtParam :: (Monad m) => Request -> Int -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
+parseMaybeTxtParam req leng paramKey = do
+  maybeParamTxt <- checkMaybeParam req paramKey
+  case maybeParamTxt of
+    Just paramTxt -> do
+      txt <- checkLength leng paramKey paramTxt
+      return $ Just txt
+    Nothing -> return Nothing
+
 parseMaybeIdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
 parseMaybeIdParam req paramKey = do
   maybeParamTxt <- checkMaybeParam req paramKey
@@ -274,6 +339,34 @@ parseMaybeIdParam req paramKey = do
     Just paramTxt -> do
       num <- tryReadId paramKey paramTxt
       return (Just num)
+    Nothing -> return Nothing
+
+parseMaybeIdArrayParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe [Id])
+parseMaybeIdArrayParam req paramKey = do
+  maybeParamTxt <- checkMaybeParam req paramKey
+  case maybeParamTxt of
+    Just paramTxt -> do
+      ids <- tryReadIdArray paramKey paramTxt
+      return (Just ids)
+    Nothing -> return Nothing
+
+parseMaybeDayParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Day)
+parseMaybeDayParam req paramKey = do
+  maybeParamTxt <- checkMaybeParam req paramKey
+  case maybeParamTxt of
+    Just paramTxt -> do
+      day <- tryReadDay paramKey paramTxt
+      return (Just day)
+    Nothing -> return Nothing
+
+parseMaybeSortOrdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,Int))
+parseMaybeSortOrdParam req paramKey = do
+  maybeParamTxt <- checkMaybeParam req paramKey
+  case maybeParamTxt of
+    Just paramTxt -> do
+      sOrd <- tryReadSortOrd paramKey paramTxt
+      ind <- findParamIndex req paramKey 
+      return (Just (sOrd,ind))
     Nothing -> return Nothing
 
 checkParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
@@ -301,3 +394,6 @@ checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m T
 checkLength leng paramKey txt = case splitAt leng (unpack txt) of
   (_, []) -> return txt
   _ -> throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
+
+findParamIndex :: Request -> QueryParamKey -> Maybe Int
+findParamIndex req paramKey = elemIndex paramKey . fmap fst . queryToQueryText $ queryString req

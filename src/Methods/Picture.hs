@@ -60,8 +60,8 @@ sendPicture Handle{..} picIdNum = do
       [("Content-Type", "image/jpeg")]
       (lazyByteString lbs)
 
-browsePicture :: (MonadCatch m) => Handle m -> BrowsePicture -> ExceptT ReqError m ResponseInfo
-browsePicture h@Handle{..} (BrowsePicture picUrlParam) = do
+loadPicture :: (MonadCatch m) => Handle m -> LoadPicture -> ExceptT ReqError m ResponseInfo
+loadPicture h@Handle{..} (LoadPicture picUrlParam) = do
   lbs <- checkPicUrlGetPic h picUrlParam
   let sbs = BSL.toStrict lbs
   picId <- catchInsRetE hLog $ insertRetPicBS sbs

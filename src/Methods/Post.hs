@@ -23,7 +23,7 @@ import Methods.Common.Selecty (Post (..), Tag)
 import Methods.Post.LimitArg (FilterArg (..), LimitArg (..), SortArg (..), chooseArgs, isDateASC)
 import Network.Wai (Request)
 import Oops
-import ParseQueryStr (DeletePost (..))
+import ParseQueryStr (DeletePost (..),GetPosts(..))
 import Types
 
 data Handle m = Handle
@@ -67,14 +67,14 @@ getPost h postIdParam = do
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response"
   okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName, post_create_date = pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl (hConf h) picId, post_pics = fmap (inPicIdUrl (hConf h)) picsIds, post_tags = fmap inTagResp tagS}
 
-getPosts :: (MonadCatch m) => Handle m -> Request -> Page -> ExceptT ReqError m ResponseInfo
-getPosts h req pageNum = do
+getPosts :: (MonadCatch m) => Handle m -> Page -> GetPosts -> ExceptT ReqError m ResponseInfo
+getPosts h pageNum gP = do
+  LimitArg filterArgs sortArgs <- chooseArgs gP
   let extractParams = ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-  LimitArg filterArgs sortArgs <- chooseArgs req
   let defTable = "posts JOIN authors ON authors.author_id = posts.author_id"
-  let defOrderBy = if isDateASC sortArgs then "post_create_date ASC, post_id ASC" else "post_create_date DESC, post_id DESC"
-  let defWhere = "true"
-  let defValues = []
+  let defOrderBy = if isDateASC sortArgs then [ByPostDate ASC, ByPostId ASC] else [ByPostDate DESC, ByPostId DESC]
+  let orderBy = OrderList $ sortArgs ++ defOrderBy
+  posts <- selectLimPosts orderBy filterArgs
   posts <- checkListE (hLog h) $ selectLimitPosts h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs
   let postIdsValues = fmap (Id . post_idP) posts
   let postCatsIds = fmap post_cat_idP posts

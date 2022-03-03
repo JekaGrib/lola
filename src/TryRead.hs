@@ -7,6 +7,7 @@ module TryRead where
 import Control.Monad (when)
 import Control.Monad.Trans.Except (ExceptT, catchE, throwE)
 import Data.Text (Text, pack, unpack)
+import qualified Data.Text (take,toUpper) as T
 import Data.Time.Calendar (Day, fromGregorianValid)
 import Oops
 import Types
@@ -29,21 +30,21 @@ tryReadPage txt = do
 
 tryReadNumArray :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m [Integer]
 tryReadNumArray paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ " Empty input."
-tryReadNumArray paramKey xs = case reads . unpack $ xs of
+tryReadNumArray paramKey txt = case reads . unpack $ txt of
   [([], "")] -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It must be NOT empty array of numbers. Example: [3,45,24,7] "
   [(a, "")] -> return a
   _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It must be array of numbers. Example: [3,45,24,7] "
 
 tryReadIdArray :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m [Id]
-tryReadIdArray paramKey xs = do
-  nums <- tryReadNumArray paramKey xs
+tryReadIdArray paramKey txt = do
+  nums <- tryReadNumArray paramKey txt
   mapM (checkBigIntId paramKey) nums
 
 tryReadDay :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Day
 tryReadDay paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ " Empty input."
-tryReadDay paramKey xs = do
+tryReadDay paramKey txt = do
   let infoErrStr = ". Date must have format (yyyy-mm-dd). Example: 2020-12-12"
-  case filter (' ' /=) . unpack $ xs of
+  case filter (' ' /=) . unpack $ txt of
     [] -> throwE $ SimpleError $ "Empty input." ++ infoErrStr
     [a, b, c, d, '-', e, f, '-', g, h] -> do
       year <- tryReadInteger paramKey (pack [a, b, c, d]) `catchE` addToSimpleErr infoErrStr
@@ -55,6 +56,13 @@ tryReadDay paramKey xs = do
         Just x -> return x
         Nothing -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ unpack xs ++ ". Invalid day, month, year combination." ++ infoErrStr
     _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ infoErrStr
+
+tryReadSortOrd :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m SortOrd
+tryReadSortOrd paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
+tryReadSortOrd paramKey txt = case  T.toUpper . T.take 3 $ txt of
+  "ASC" -> return ASC
+  "DESC" -> return DESC
+  _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be <ASC> or <DESC>"
 
 checkBigIntId :: (Monad m) => QueryParamKey -> Integer -> ExceptT ReqError m Id
 checkBigIntId paramKey num

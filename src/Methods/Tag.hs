@@ -97,8 +97,6 @@ updateTag Handle{..} (UpdateTag tagIdNum tagNameParam) = do
 
 deleteTag :: (Monad m, MonadCatch m) => Handle m -> DeleteTag -> ExceptT ReqError m ResponseInfo
 deleteTag Handle{..} (DeleteTag tagIdNum) = do
-  let logpair = ("tag_id", tagIdNum)
-  catchExistE hLog logpair $ isExistTag tagIdNum
   let deleteTgDr = deleteDbTagForDrafts tagIdNum
   let deleteTgPos = deleteDbTagForPosts tagIdNum
   let deleteTg = deleteDbTag tagIdNum

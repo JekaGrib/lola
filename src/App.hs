@@ -29,7 +29,7 @@ import Methods.Picture (browsePicture, sendPicture)
 import Methods.Post (deletePost, getPost, getPosts)
 import Methods.Tag (createTag, deleteTag, getTag, updateTag)
 import Methods.User (createUser, deleteUser, getUser)
-import Network.HTTP.Types (status200, status404)
+import Network.HTTP.Types (status200,status500, status404)
 import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, strictRequestBody)
 import Oops (ReqError (..), hideErr, hideLogInErr, logOnErr)
 import ParseQueryStr (ParseQueryStr, parseQueryStr)
@@ -37,9 +37,9 @@ import TryRead (tryReadId, tryReadPage)
 import Types
 
 data Handle m = Handle
-  { hLog :: LogHandle m,
-    hMeth :: Methods.Handle m,
-    getBody :: Request -> m BSL.ByteString
+  { hLog :: LogHandle m
+  , hMeth :: Methods.Handle m
+  , getBody :: Request -> m BSL.ByteString
   }
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
@@ -75,7 +75,7 @@ fromE respE = case respE of
       [("Content-Type", "application/json; charset=utf-8")]
       (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
   Left (SecretError _) -> ResponseInfo status404 [] "Status 404 Not Found"
-  Left (DatabaseError _) -> ResponseInfo status200 [] "Internal server error"
+  Left (DatabaseError _) -> ResponseInfo status500 [] "Internal server error"
 
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx h req = do
@@ -188,7 +188,7 @@ chooseRespEx h req = do
     ["getPosts", page] -> do
       lift $ logInfo (hLog h) "Get posts command"
       pageNum <- tryReadPage page
-      getPosts (hPost methH) req pageNum
+      preParseQueryStr h req $ getPosts (hPost methH) pageNum
     ["deletePost"] -> do
       lift $ logInfo (hLog h) "Delete post command"
       tokenAdminAuth (hAuth methH) req
@@ -236,3 +236,8 @@ getBodyAndCheckUserToken h req = do
   (usIdNum, _) <- checkUserTokenParam (hAuth . hMeth $ h) tokenParam
   body <- checkDraftReqJson json
   return (usIdNum, body)
+
+checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
+checkReqLength req = case splitAt 20 $ queryString req of
+  (_, []) -> return ()
+  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"

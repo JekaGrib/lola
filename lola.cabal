@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e395b0d3152fe8696397ed9773dabfe73dd94ccedbc79369ea0e3d7a0a06d7d6
+-- hash: 437a963d6c7379d3f2f06fe99eab44afd700fc6f27e15be88e74affc7d82ad39
 
 name:           lola
 version:        0.1.0.0
@@ -27,7 +27,9 @@ source-repository head
 
 library
   exposed-modules:
-      Api.Request
+      Api.Request.CheckExist
+      Api.Request.JSON
+      Api.Request.ParseQueryStr
       Api.Response
       App
       CheckJsonReq
@@ -44,6 +46,7 @@ library
       Methods.Comment
       Methods.Common
       Methods.Common.DeleteMany
+      Methods.Common.Insert
       Methods.Common.MakeCatResp
       Methods.Common.Selecty
       Methods.Common.ToQuery
@@ -54,7 +57,6 @@ library
       Methods.Tag
       Methods.User
       Oops
-      ParseQueryStr
       TryRead
       Types
   other-modules:

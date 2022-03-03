@@ -10,7 +10,14 @@ import Control.Monad.Trans.Except (ExceptT, catchE, throwE)
 import Database.PostgreSQL.Simple (FormatError, QueryError, ResultError, SqlError)
 import Logger (LogHandle (..), logWarning)
 
-data ReqError = SecretError String | SimpleError String | DatabaseError String | SecretLogInError String | SecretTokenError String
+data ReqError = 
+  SecretError String 
+  | SimpleError String 
+  | DatabaseError String 
+  | SecretLogInError String 
+  | SecretTokenError String 
+  | Error400 String
+  | Error404 String
   deriving (Eq, Show)
 
 data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException

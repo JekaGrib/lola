@@ -21,172 +21,72 @@ import Database.PostgreSQL.Simple.Types (PGArray(..),In(..))
 
 data LimitArg = LimitArg [FilterArg] [SortArg]
 
-data FilterArg = FilterArg {tableFil :: String, whereFil :: String, valuesFil :: ([DbValue], [DbValue])}
+chooseArgs (GetPosts gPF gPOrd) =
+  let filterArgs = chooseFilterArgs gPF
+  let sortArgs = chooseSortArgs gPOrd
+  return $ LimitArg filterArgs sortArgs
 
-data SortArg = SortArg {tableSort :: String, orderBySort :: String, sortDate :: SortDate}
+chooseFilterArgs (GetPostsF crAt crLt crGt tag tagsIn tagsAll nameIn textIn evIn catId auName) = do
+  filt1 <- toCreatedF crAt crLt crGt
+  filt2 <- toTagF tag tagsIn tagsAll
+  filt3 <- toInF nameIn textIn evIn
+  let filt4 = toCatIdF catId
+  let filt5 = toAuNameF auName
+  let filterArgs = concatMap toList [filt1,filt2,filt3,filt4,filt5]
+  return filterArgs
 
-data SortArgPriority = SortArgPriority {sortArgSAP :: SortArg, sortPrioSAP :: SortPriority}
+toCreatedF crAt crLt crGt = case (crAt,crLt,crGt) of
+  (Just day,Nothing ,Nothing)  -> return . Just $ CreatedF (At day)
+  (Nothing ,Just day,Nothing)  -> return . Just $ CreatedF (AtLt day)
+  (Nothing ,Nothing ,Just day) -> return . Just $ CreatedF (AtGt day)
+  (Nothing ,Nothing ,Nothing)  -> return empty
+  _ -> throwE $ SimpleError "Invalid combination of filter parameters"
 
-data SortDate = DateASC | DateDESC
-  deriving (Eq, Show, Read)
+toTagF tag tagsIn tagsAll = case (tag,tagsIn,tagsAll) of
+  (Just iD,Nothing ,Nothing)   -> return . Just $ TagF (TagId iD)
+  (Nothing ,Just ids,Nothing)  -> return . Just $ TagF (TagsIn ids)
+  (Nothing ,Nothing ,Just ids) -> return . Just $ TagF (TagsAll ids)
+  (Nothing ,Nothing ,Nothing)  -> return empty
+  _ -> throwE $ SimpleError "Invalid combination of filter parameters"
+
+toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
+  (Just txt,Nothing ,Nothing)  -> return . Just $ InF (Name (escape txt))
+  (Nothing ,Just txt,Nothing)  -> return . Just $ InF (PostText (escape txt))
+  (Nothing ,Nothing ,Just txt) -> return . Just $ InF $
+    let escTxt = escape txt  
+    in EveryWhere [PostText escTxt,Name escTxt,UsersName escTxt,CatName escTxt,TagName escTxt]
+  (Nothing ,Nothing ,Nothing)  -> return empty
+  _ -> throwE $ SimpleError "Invalid combination of filter parameters"
+
+toCatIdF (Just catId) = Just $ CatIdF catId
+toCatIdF _ = empty
+
+toAuNameF (Just auN) = Just $ AuthorNameF auName
+toAuNameF _ = empty 
+
+chooseSortArgs (GetPostsOrd byPicN byCat byAu byDate) = do
+  let sort1 = fmap toPicNOrd byPicN
+  let sort2 = fmap toCatOrd byCat
+  let sort3 = fmap toAuthorOrd byAu
+  let sort4 = fmap toDateOrd byDate
+  let sortArgs = checkSortPriority . concatMap toList [sort1,sort2,sort3,sort4]
+
+checkSortPriority = sortBy (compare `on` snd)
+
+toPicNOrd (sortOrd,n) = (ByPostPicsNumb sortOrd,n)
+toCatOrd (sortOrd,n) = (ByPostCat sortOrd,n)
+toAuthorOrd (sortOrd,n) = (ByPostAuthor sortOrd,n)
+toDateOrd (sortOrd,n) = (ByPostDate sortOrd,n)
 
 type SortPriority = Int
 
 defDateSort :: SortDate
 defDateSort = DateDESC
 
-isDateASC :: [SortArg] -> Bool
-isDateASC = foldr (\(SortArg _ _ c) cont -> (c == DateASC) || cont) False
+isDateASC :: [OrderBy] -> Bool
+isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ACS) || cont) False
 
-chooseArgs :: (Monad m) => Request -> ExceptT ReqError m LimitArg
-chooseArgs req = do
-  checkReqLength req
-  let filterDateList = ["created_at", "created_at_lt", "created_at_gt"]
-  let filterTagList = ["tag", "tags_in", "tags_all"]
-  let filterInList = ["name_in", "text_in", "everywhere_in"]
-  let filterParamsList = filterDateList ++ ["category_id", "author_name"] ++ filterTagList ++ filterInList
-  let sortList = ["sort_by_pics_number", "sort_by_category", "sort_by_author", "sort_by_date"]
-  mapM_ (checkComb req) [filterDateList, filterTagList, filterInList]
-  maybeFilterArgs <- mapM (chooseFilterArgPreCheck req) filterParamsList
-  let filterArgs = concatMap toList maybeFilterArgs
-  maybeSortArgPrios <- mapM (chooseSortArgPrioPreCheck req) sortList
-  let sortArgs = sortArsInOrder maybeSortArgPrios
-  return $ LimitArg filterArgs sortArgs
 
-checkComb :: (Monad m) => Request -> [Text] -> ExceptT ReqError m ()
-checkComb req list = case fmap (isExistParam req) list of
-  (True : True : _) -> throwE $ SimpleError "Invalid combination of filter parameters"
-  (_ : True : True : _) -> throwE $ SimpleError "Invalid combination of filter parameters"
-  (True : _ : True : _) -> throwE $ SimpleError "Invalid combination of filter parameters"
-  _ -> return ()
-
-chooseFilterArgPreCheck :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArgPreCheck req paramKey = do
-  maybeParam <- checkMaybeParam req paramKey
-  case maybeParam of
-    Just txt -> chooseFilterArg paramKey txt
-    Nothing -> return Nothing
-
-chooseFilterArg :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m (Maybe FilterArg)
-chooseFilterArg paramKey x = let val = Txt x in case paramKey of
-  "created_at" -> do
-    day <- tryReadDay paramKey x
-    let table = ""
-    let where' = "post_create_date = ?"
-    let values = ([], [Day day])
-    return . Just $ FilterArg table where' values
-  "created_at_lt" -> do
-    day <- tryReadDay paramKey x
-    let table = ""
-    let where' = "post_create_date < ?"
-    let values = ([], [Day day])
-    return . Just $ FilterArg table where' values
-  "created_at_gt" -> do
-    day <- tryReadDay paramKey x
-    let table = ""
-    let where' = "post_create_date > ?"
-    let values = ([], [Day day])
-    return . Just $ FilterArg table where' values
-  "category_id" -> do
-    iD <- tryReadId paramKey x
-    let table = ""
-    let where' = "post_category_id = ?"
-    let values = ([], [Id iD])
-    return . Just $ FilterArg table where' values
-  "tag" -> do
-    iD <- tryReadId paramKey x
-    let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id = ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where' = "true"
-    let values = ([Id iD], [])
-    return . Just $ FilterArg table where' values
-  "tags_in" -> do
-    xs <- tryReadIdArray paramKey x
-    let table = "JOIN (SELECT post_id FROM poststags WHERE tag_id IN ? GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where' = "true"
-    let values = ([IdIn (In xs)], [])
-    return . Just $ FilterArg table where' values
-  "tags_all" -> do
-    xs <- tryReadIdArray paramKey x
-    let table = "JOIN (SELECT post_id, array_agg(ARRAY[tag_id]::bigint[]) AS tags_id FROM poststags GROUP BY post_id) AS t ON posts.post_id=t.post_id"
-    let where' = "tags_id @> ?"
-    let values = ([], [IdArray (PGArray xs)])
-    return . Just $ FilterArg table where' values
-  "name_in" -> do
-    _ <- checkLength 50 paramKey x
-    let table = ""
-    let where' = "post_name ILIKE ?"
-    let values = ([], [Txt $ Data.Text.concat ["%", escape x, "%"]])
-    return . Just $ FilterArg table where' values
-  "text_in" -> do
-    _ <- checkLength 50 paramKey x
-    let table = ""
-    let where' = "post_text ILIKE ?"
-    let values = ([], [Txt $ Data.Text.concat ["%", escape x, "%"]])
-    return . Just $ FilterArg table where' values
-  "everywhere_in" -> do
-    _ <- checkLength 50 paramKey x
-    let table = "JOIN users AS usrs ON authors.user_id=usrs.user_id JOIN categories AS c ON c.category_id=posts.post_category_id JOIN (SELECT pt.post_id, bool_or(tag_name ILIKE ? ) AS isintag FROM poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id  GROUP BY pt.post_id) AS tg ON tg.post_id=posts.post_id"
-    let where' = "(post_text ILIKE ? OR post_name ILIKE ? OR usrs.first_name ILIKE ? OR c.category_name ILIKE ? OR isintag = TRUE)"
-    let values = ([Txt $ Data.Text.concat ["%", escape x, "%"]], replicate 4 $ Txt $ Data.Text.concat ["%", escape x, "%"])
-    return . Just $ FilterArg table where' values
-  "author_name" -> do
-    _ <- checkLength 50 paramKey x
-    let table = "JOIN users AS us ON authors.user_id=us.user_id"
-    let where' = "us.first_name = ?"
-    let values = ([], [val])
-    return . Just $ FilterArg table where' values
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter" ++ unpack paramKey
-
-chooseSortArgPrioPreCheck :: (Monad m) => Request -> Text -> ExceptT ReqError m (Maybe SortArgPriority)
-chooseSortArgPrioPreCheck req paramKey = do
-  maybeParam <- checkMaybeParam req paramKey
-  case maybeParam of
-    Just txt -> do
-      maybeSortArg <- chooseSortArg paramKey txt
-      return $ addSortPriority req paramKey maybeSortArg
-    Nothing -> return Nothing
-
-chooseSortArg :: (Monad m) => Text -> Text -> ExceptT ReqError m (Maybe SortArg)
-chooseSortArg paramKey "DESC" = case paramKey of
-  "sort_by_pics_number" -> do
-    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-    let orderBy = "count_pics DESC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_category" -> do
-    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-    let orderBy = "category_name DESC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_author" -> do
-    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-    let orderBy = "u.first_name DESC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_date" -> do
-    let joinTable = ""
-    let orderBy = "post_create_date DESC"
-    return . Just $ SortArg joinTable orderBy DateDESC
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey
-chooseSortArg paramKey "ASC" = case paramKey of
-  "sort_by_pics_number" -> do
-    let joinTable = "JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
-    let orderBy = "count_pics ASC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_category" -> do
-    let joinTable = "JOIN categories ON posts.post_category_id=categories.category_id"
-    let orderBy = "category_name ASC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_author" -> do
-    let joinTable = "JOIN users AS u ON authors.user_id=u.user_id"
-    let orderBy = "u.first_name ASC"
-    return . Just $ SortArg joinTable orderBy defDateSort
-  "sort_by_date" -> do
-    let joinTable = ""
-    let orderBy = "post_create_date ASC"
-    return . Just $ SortArg joinTable orderBy DateASC
-  _ -> throwE $ SimpleError $ "Can`t parse query parameter: " ++ unpack paramKey
-chooseSortArg paramKey txt
-  | Data.Text.toUpper txt == "ASC" = chooseSortArg paramKey "ASC"
-  | Data.Text.toUpper txt == "DESC" = chooseSortArg paramKey "DESC"
-  | otherwise = throwE $ SimpleError $ "Invalid sort value: " ++ unpack txt ++ ". It should be only 'ASC' or 'DESC'"
 
 checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
 checkReqLength req = case splitAt 20 $ queryString req of
@@ -205,8 +105,7 @@ addSortPriority req paramKey maybeSortArg = do
 findParam :: Request -> Text -> Maybe (Maybe Text)
 findParam req txt = lookup txt . queryToQueryText $ queryString req
 
-findParamIndex :: Request -> QueryParamKey -> Maybe Int
-findParamIndex req paramKey = elemIndex paramKey . fmap fst . queryToQueryText $ queryString req
+
 
 isExistParam :: Request -> Text -> Bool
 isExistParam req txt = case findParam req txt of
@@ -245,6 +144,7 @@ data InF =
   | Name Text
   | UsersName Text
   | CatName Text
+  | TagName Text
   | EveryWhere [InF]
 
 class ToWhere a where
@@ -257,17 +157,21 @@ instance InF ToWhere where
     WherePair " post_name ILIKE %?% " (Txt (escape txt))
   toWhere (UsersName txt) = 
     WherePair " usrs.first_name ILIKE %?% " (Txt (escape txt))
-  toWhere (CatName txt) =
+  toWhere (TagName txt) =
     let sel = Select 
       ["post_id"] 
       "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" 
       (WherePair " tag_name ILIKE %?% " (Txt (escape txt)))
     in WhereSelect " posts.post_id IN " sel
+  toWhere (CatName txt) =
+    WherePair " c.category_name ILIKE %?% " (Txt (escape txt))
   toWhere EveryWhere xs = WhereOr (fmap toWhere xs)
+  
 
 instance AddJoinTable InF where
-  addJoinTable (UsersName _) = "JOIN users AS us ON authors.user_id=us.user_id"
-  addJoinTable _ = ""
+  addJoinTable (UsersName _) = " JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable (CatName _) = " JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable _ = " JOIN categories AS c ON c.category_id=posts.post_category_id"
 
 instance CreatedF ToWhere where
   toWhere (At day) = 

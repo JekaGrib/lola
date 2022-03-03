@@ -113,7 +113,8 @@ type CommentText = DbTxtValue
 
 type Key = DbTxtValue
 
-
+data SortOrd = ASC | DESC
+  deriving (Eq,Show)
 
 data DbValue = 
   Txt Text 
