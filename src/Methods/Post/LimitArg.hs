@@ -21,7 +21,7 @@ import Database.PostgreSQL.Simple.Types (PGArray(..),In(..))
 
 data LimitArg = LimitArg [FilterArg] [SortArg]
 
-chooseArgs (GetPosts gPF gPOrd) =
+chooseArgs (GetPosts _ gPF gPOrd) =
   let filterArgs = chooseFilterArgs gPF
   let sortArgs = chooseSortArgs gPOrd
   return $ LimitArg filterArgs sortArgs

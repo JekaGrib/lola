@@ -15,214 +15,165 @@ import Oops (ReqError (..))
 import TryRead (tryReadId, tryReadPage)
 import Types
 
+
+checkQStr :: (Monad m,ParseQueryStr a,CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
+checkQStr h qStr =
+  a <- parseQueryStr qStr
+  checkExist a
+  return a
+
 class (Show a) => ParseQueryStr a where
-  parseQueryStr :: (Monad m) => Request -> ExceptT ReqError m a
+  parseQueryStr :: (Monad m) => QueryText -> ExceptT ReqError m a
 
 data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
   deriving (Show)
 
 instance ParseQueryStr LogIn where
-  parseQueryStr req =
+  parseQueryStr qStr =
     LogIn
-      <$> parseIdParam req "user_id"
-      <*> parseTxtParam req 50 "password"
+      <$> parseIdParam qStr "user_id"
+      <*> parseTxtParam qStr 50 "password"
 
 instance CheckExist LogIn where
-  checkExist h (LogIn usId pwd) =
-    isExistUser h "user_id" usId
+  checkExist h (LogIn usId _) =
+    checkExist h (UserId usId)
 
 newtype Token = Token Text
   deriving (Show)
 
 instance ParseQueryStr Token where
-  parseQueryStr req =
+  parseQueryStr qStr =
     Token
-      <$> parseTxtParam req 100 "token"
+      <$> parseTxtParam qStr 100 "token"
 
 data CreateUser = CreateUser {pwdCU :: Text, fNameCU :: Text, lNameCU :: Text, picIdCU :: PictureId}
   deriving (Show)
 
 instance ParseQueryStr CreateUser where
-  parseQueryStr req =
+  parseQueryStr qStr =
     CreateUser
-      <$> parseTxtParam req 50 "password"
-      <*> parseTxtParam req 50 "first_name"
-      <*> parseTxtParam req 50 "last_name"
-      <*> parseIdParam req "user_pic_id"
+      <$> parseTxtParam qStr 50 "password"
+      <*> parseTxtParam qStr 50 "first_name"
+      <*> parseTxtParam qStr 50 "last_name"
+      <*> parseIdParam qStr "user_pic_id"
 
-instance CheckExist LogIn where
-  checkExist h (LogIn usId pwd) =
-    isExistUser h "pic_id" usId
+instance CheckExist CreateUser where
+  checkExist h (CreateUser _ _ _ picId) =
+    checkExist h (PictureId picId)
 
-newtype DeleteUser = DeleteUser Id
-  deriving (Show)
-
-instance ParseQueryStr DeleteUser where
-  parseQueryStr req =
-    DeleteUser
-      <$> parseIdParam req "user_id"
-
-instance CheckExist DeleteUser where
-  checkExist h (DeleteUser usId pwd) =
-    isExistUser h "user_id" usId
 
 data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId}
   deriving (Show)
 
 instance ParseQueryStr CreateAdmin where
-  parseQueryStr req =
+  parseQueryStr qStr =
     CreateAdmin
-      <$> parseTxtParam req 50 "create_admin_key"
-      <*> parseTxtParam req 50 "password"
-      <*> parseTxtParam req 50 "first_name"
-      <*> parseTxtParam req 50 "last_name"
-      <*> parseIdParam req "user_pic_id"
+      <$> parseTxtParam qStr 50 "create_admin_key"
+      <*> parseTxtParam qStr 50 "password"
+      <*> parseTxtParam qStr 50 "first_name"
+      <*> parseTxtParam qStr 50 "last_name"
+      <*> parseIdParam qStr "user_pic_id"
+
+instance CheckExist CreateAdmin where
+  checkExist h (CreateAdmin _ _ _ _ picId) =
+    checkExist h (PictureId picId)
 
 data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
   deriving (Show)
 
 instance ParseQueryStr CreateAuthor where
-  parseQueryStr req =
+  parseQueryStr qStr =
     CreateAuthor
-      <$> parseIdParam req "user_id"
-      <*> parseTxtParam req 1000 "author_info"
+      <$> parseIdParam qStr "user_id"
+      <*> parseTxtParam qStr 1000 "author_info"
 
-newtype GetAuthor = GetAuthor Id
-  deriving (Show)
+instance CheckExist CreateAuthor where
+  checkExist h (CreateAuthor usId _) =
+    checkExist h (UserId usId)
 
-instance ParseQueryStr GetAuthor where
-  parseQueryStr req =
-    GetAuthor
-      <$> parseIdParam req "author_id"
 
-data UpdateAuthor = UpdateAuthor {author_idUA :: Id, user_idUA :: Id, author_infoUA :: Text}
+data UpdateAuthor = UpdateAuthor { user_idUA :: Id, author_infoUA :: Text}
   deriving (Show)
 
 instance ParseQueryStr UpdateAuthor where
-  parseQueryStr req =
+  parseQueryStr qStr =
     UpdateAuthor
-      <$> parseIdParam req "author_id"
-      <*> parseIdParam req "user_id"
-      <*> parseTxtParam req 1000 "author_info"
+      <$> parseIdParam qStr "user_id"
+      <*> parseTxtParam qStr 1000 "author_info"
 
-newtype DeleteAuthor = DeleteAuthor Id
-  deriving (Show)
+instance CheckExist UpdateAuthor where
+  checkExist h (UpdateAuthor usId _) =
+    checkExist h (UserId usId)
 
-instance ParseQueryStr DeleteAuthor where
-  parseQueryStr req =
-    DeleteAuthor
-      <$> parseIdParam req "author_id"
-
-newtype CreateCategory = CreateCategory Text
+data CreateCategory = 
+  CreateSubCategory Text Id
+  | CreateCategory Text
   deriving (Show)
 
 instance ParseQueryStr CreateCategory where
-  parseQueryStr req =
-    CreateCategory
-      <$> parseTxtParam req 50 "category_name"
+  parseQueryStr qStr = (<|>)
+    (CreateSubCategory
+      <$> parseTxtParam qStr 50 "category_name"
+      <*> parseIdParam qStr "super_category_id")
+    (CreateCategory
+      <$> parseTxtParam qStr 50 "category_name")
 
-data CreateSubCategory = CreateSubCategory Text Id
-  deriving (Show)
 
-instance ParseQueryStr CreateSubCategory where
-  parseQueryStr req =
-    CreateSubCategory
-      <$> parseTxtParam req 50 "category_name"
-      <*> parseIdParam req "super_category_id"
+instance CheckExist UpdateAuthor where
+  checkExist h (CreateSubCategory _ catId) =
+    checkExist h (CategoryId catId)
+  checkExist h _ = return ()
 
-data UpdateCategory = UpdateCategory Id Text (Maybe Id)
+data UpdateCategory = UpdateCategory Text (Maybe Id)
   deriving (Show)
 
 instance ParseQueryStr UpdateCategory where
-  parseQueryStr req =
+  parseQueryStr qStr =
     UpdateCategory
-      <$> parseIdParam req "category_id"
-      <*> parseTxtParam req 50 "category_name"
-      <*> parseMaybeIdParam req "super_category_id"
+      <$> parseTxtParam qStr 50 "category_name"
+      <*> parseMaybeIdParam qStr "super_category_id"
 
-newtype DeleteCategory = DeleteCategory Id
-  deriving (Show)
-
-instance ParseQueryStr DeleteCategory where
-  parseQueryStr req =
-    DeleteCategory
-      <$> parseIdParam req "category_id"
+instance CheckExist UpdateCategory where
+  checkExist h (UpdateCategory _ (Just catId)) =
+    checkExist h (CategoryId catId)
+  checkExist h _ = return ()
 
 newtype CreateTag = CreateTag Text
   deriving (Show)
 
 instance ParseQueryStr CreateTag where
-  parseQueryStr req =
+  parseQueryStr qStr =
     CreateTag
-      <$> parseTxtParam req 50 "tag_name"
+      <$> parseTxtParam qStr 50 "tag_name"
 
-data UpdateTag = UpdateTag Id Text
+data UpdateTag = UpdateTag Text
   deriving (Show)
 
 instance ParseQueryStr UpdateTag where
-  parseQueryStr req =
+  parseQueryStr qStr =
     UpdateTag
-      <$> parseIdParam req "tag_id"
-      <*> parseTxtParam req 50 "tag_name"
+      <$> parseTxtParam qStr 50 "tag_name"
 
-newtype DeleteTag = DeleteTag Id
-  deriving (Show)
-
-instance ParseQueryStr DeleteTag where
-  parseQueryStr req =
-    DeleteTag
-      <$> parseIdParam req "tag_id"
-
-newtype CreatePostsDraft = CreatePostsDraft Id
-  deriving (Show)
-
-instance ParseQueryStr CreatePostsDraft where
-  parseQueryStr req =
-    CreatePostsDraft
-      <$> parseIdParam req "post_id"
-
-newtype GetDraft = GetDraft Id
-  deriving (Show)
-
-instance ParseQueryStr GetDraft where
-  parseQueryStr req =
-    GetDraft
-      <$> parseIdParam req "draft_id"
 
 newtype GetDrafts = GetDrafts Page
   deriving (Show)
 
 instance ParseQueryStr GetDrafts where
-  parseQueryStr req =
+  parseQueryStr qStr =
     GetDrafts
-      <$> parsePageParam req "page"
+      <$> parsePageParam qStr "page"
 
-newtype DeleteDraft = DeleteDraft Id
-  deriving (Show)
 
-instance ParseQueryStr DeleteDraft where
-  parseQueryStr req =
-    DeleteDraft
-      <$> parseIdParam req "draft_id"
-
-newtype PublishDraft = PublishDraft Id
-  deriving (Show)
-
-instance ParseQueryStr PublishDraft where
-  parseQueryStr req =
-    PublishDraft
-      <$> parseIdParam req "draft_id"
-
-newtype DeletePost = DeletePost Id
-  deriving (Show)
-
-instance ParseQueryStr DeletePost where
-  parseQueryStr req =
-    DeletePost
-      <$> parseIdParam req "post_id"
 
 data GetPosts = 
-  GetPosts GetPostsF GetPostsOrd
+  GetPosts Page GetPostsF GetPostsOrd
+
+instance ParseQueryStr GetPosts where
+  parseQueryStr qStr =
+    GetPosts
+      <$> parsePageParam qStr "page"
+      <*> parseQueryStr qStr
+      <*> parseQueryStr qStr
 
 data GetPostsF = 
   GetPostsF 
@@ -240,20 +191,26 @@ data GetPostsF =
   deriving (Show)
 
 instance ParseQueryStr GetPostsF where
-  parseQueryStr req =
+  parseQueryStr qStr =
     GetPostsF
-      <$> parseMaybeDayParam      req "crated_at"
-      <*> parseMaybeDayParam      req "crated_at_lt"
-      <*> parseMaybeDayParam      req "crated_at_gt"
-      <*> parseMaybeIdParam       req "tag"
-      <*> parseMaybeIdArrayParam  req "tags_in"
-      <*> parseMaybeIdArrayParam  req "tags_all"
-      <*> parseMaybeTxtParam   req 50 "name_in"
-      <*> parseMaybeTxtParam   req 50 "text_in"
-      <*> parseMaybeTxtParam   req 50 "everywhere_in"
-      <*> parseMaybeTxtParam   req 50 "author_name"
-      <*> parseMaybeIdParam       req "category_id"
+      <$> parseMaybeDayParam      qStr "crated_at"
+      <*> parseMaybeDayParam      qStr "crated_at_lt"
+      <*> parseMaybeDayParam      qStr "crated_at_gt"
+      <*> parseMaybeIdParam       qStr "tag"
+      <*> parseMaybeIdArrayParam  qStr "tags_in"
+      <*> parseMaybeIdArrayParam  qStr "tags_all"
+      <*> parseMaybeTxtParam   qStr 50 "name_in"
+      <*> parseMaybeTxtParam   qStr 50 "text_in"
+      <*> parseMaybeTxtParam   qStr 50 "everywhere_in"
+      <*> parseMaybeTxtParam   qStr 50 "author_name"
+      <*> parseMaybeIdParam       qStr "category_id"
 
+instance CheckExist GetPostsF where
+  checkExist h (GetPostsF _ _ _ maybTag maybTagsIn maybTagsAll _ _ _ _ maybCat) = do
+    checkExist h $ fmap TagId maybTag
+    checkExist h $ (fmap . fmap) TagId maybTagsIn
+    checkExist h $ (fmap . fmap) TagId maybTagsAll
+    checkExist h $ fmap CategoryId maybTag
 
 data GetPostsOrd = 
   GetPostsOrd 
@@ -263,137 +220,143 @@ data GetPostsOrd =
     Maybe (SortOrd,Int)
   deriving (Show)
 
-data CreateComment = CreateComment Id Text
+instance ParseQueryStr GetPostsOrd where
+  parseQueryStr qStr =
+    GetPostsOrd
+      <$> parseMaybeSortOrdParam qStr "sort_by_pics_number"
+      <*> parseMaybeSortOrdParam qStr "sort_by_category"
+      <*> parseMaybeSortOrdParam qStr "sort_by_author"
+      <*> parseMaybeSortOrdParam qStr "sort_by_date"
+
+data CreateComment = CreateComment PostId Text
   deriving (Show)
 
 instance ParseQueryStr CreateComment where
-  parseQueryStr req =
+  parseQueryStr qStr =
     CreateComment
-      <$> parseMaybeSortOrdParam req "sort_by_pics_number"
-      <*> parseMaybeSortOrdParam req "sort_by_category"
-      <*> parseMaybeSortOrdParam req "sort_by_author"
-      <*> parseMaybeSortOrdParam req "sort_by_date"
+      <$> parseIdParam qStr "post_id"
+      <*> parseTxtParam qStr 1000 "comment_text"
+
+instance CheckExist CreateComment where
+  checkExist h (CreateComment pId _) =
+    checkExist h (PostId pId)
 
 data GetComments = GetComments Id Page
   deriving (Show)
 
 instance ParseQueryStr GetComments where
-  parseQueryStr req =
+  parseQueryStr qStr =
     GetComments
-      <$> parseIdParam req "post_id"
-      <*> parsePageParam req "page"
+      <$> parseIdParam qStr "post_id"
+      <*> parsePageParam qStr "page"
 
-data UpdateComment = UpdateComment Id Text
+instance CheckExist GetComments where
+  checkExist h (GetComments pId _) =
+    checkExist h (PostId pId)
+
+data UpdateComment = UpdateComment Text
   deriving (Show)
 
 instance ParseQueryStr UpdateComment where
-  parseQueryStr req =
+  parseQueryStr qStr =
     UpdateComment
-      <$> parseIdParam req "comment_id"
-      <*> parseTxtParam req 1000 "comment_text"
+      <$> parseTxtParam qStr 1000 "comment_text"
 
-newtype DeleteComment = DeleteComment Id
+
+newtype LoadPicture = LoadPicture Text
   deriving (Show)
 
-instance ParseQueryStr DeleteComment where
-  parseQueryStr req =
-    DeleteComment
-      <$> parseIdParam req "comment_id"
+instance ParseQueryStr LoadPicture where
+  parseQueryStr qStr =
+    LoadPicture
+      <$> parseTxtParam qStr 500 "pic_url"
 
-newtype BrowsePicture = BrowsePicture Text
-  deriving (Show)
-
-instance ParseQueryStr BrowsePicture where
-  parseQueryStr req =
-    BrowsePicture
-      <$> parseTxtParam req 500 "pic_url"
-
-parseTxtParam :: (Monad m) => Request -> Int -> QueryParamKey -> ExceptT ReqError m Text
-parseTxtParam req leng paramKey = do
-  paramTxt <- checkParam req paramKey
+parseTxtParam :: (Monad m) => QueryText -> Int -> QueryParamKey -> ExceptT ReqError m Text
+parseTxtParam qStr leng paramKey = do
+  paramTxt <- checkParam qStr paramKey
   checkLength leng paramKey paramTxt
 
-parseIdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Id
-parseIdParam req paramKey = do
-  paramTxt <- checkParam req paramKey
+parseIdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Id
+parseIdParam qStr paramKey = do
+  paramTxt <- checkParam qStr paramKey
   tryReadId paramKey paramTxt
 
-parsePageParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Page
-parsePageParam req paramKey = do
-  paramTxt <- checkParam req paramKey
+parsePageParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Page
+parsePageParam qStr paramKey = do
+  paramTxt <- checkParam qStr paramKey
   tryReadPage paramTxt
 
-parseMaybeTxtParam :: (Monad m) => Request -> Int -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
-parseMaybeTxtParam req leng paramKey = do
-  maybeParamTxt <- checkMaybeParam req paramKey
+parseMaybeTxtParam :: (Monad m) => QueryText -> Int -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
+parseMaybeTxtParam qStr leng paramKey = do
+  maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
       txt <- checkLength leng paramKey paramTxt
       return $ Just txt
     Nothing -> return Nothing
 
-parseMaybeIdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
-parseMaybeIdParam req paramKey = do
-  maybeParamTxt <- checkMaybeParam req paramKey
+parseMaybeIdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
+parseMaybeIdParam qStr paramKey = do
+  maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
       num <- tryReadId paramKey paramTxt
       return (Just num)
     Nothing -> return Nothing
 
-parseMaybeIdArrayParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe [Id])
-parseMaybeIdArrayParam req paramKey = do
-  maybeParamTxt <- checkMaybeParam req paramKey
+parseMaybeIdArrayParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe [Id])
+parseMaybeIdArrayParam qStr paramKey = do
+  maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
       ids <- tryReadIdArray paramKey paramTxt
       return (Just ids)
     Nothing -> return Nothing
 
-parseMaybeDayParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Day)
-parseMaybeDayParam req paramKey = do
-  maybeParamTxt <- checkMaybeParam req paramKey
+parseMaybeDayParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Day)
+parseMaybeDayParam qStr paramKey = do
+  maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
       day <- tryReadDay paramKey paramTxt
       return (Just day)
     Nothing -> return Nothing
 
-parseMaybeSortOrdParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,Int))
-parseMaybeSortOrdParam req paramKey = do
-  maybeParamTxt <- checkMaybeParam req paramKey
+parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,Int))
+parseMaybeSortOrdParam qStr paramKey = do
+  maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
       sOrd <- tryReadSortOrd paramKey paramTxt
-      ind <- findParamIndex req paramKey 
+      ind <- findParamIndex qStr paramKey 
       return (Just (sOrd,ind))
     Nothing -> return Nothing
 
-checkParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m Text
-checkParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
-  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
-  Just (Just txt) -> checkSingleParam req paramKey txt
-  Just Nothing -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
-  Nothing -> throwE $ SimpleError $ "Can't find parameter:" ++ unpack paramKey
+checkParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Text
+checkParam qStr paramKey = case lookup paramKey $ qStr of
+  Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
+  Just (Just txt) -> checkSingleParam qStr paramKey txt
+  Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
+  Nothing -> throwE $ BadReqError $ "Can't find parameter:" ++ unpack paramKey
 
-checkMaybeParam :: (Monad m) => Request -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
-checkMaybeParam req paramKey = case lookup paramKey $ queryToQueryText $ queryString req of
-  Just (Just "") -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
+checkMaybeParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
+checkMaybeParam qStr paramKey = case lookup paramKey $ qStr of
+  Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
   Just (Just txt) -> do
-    txt1 <- checkSingleParam req paramKey txt
+    txt1 <- checkSingleParam qStr paramKey txt
     return (Just txt1)
-  Just Nothing -> throwE $ SimpleError $ "Can't parse parameter:" ++ unpack paramKey
+  Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
   Nothing -> return Nothing
 
-checkSingleParam :: (Monad m) => Request -> QueryParamKey -> Text -> ExceptT ReqError m Text
-checkSingleParam req paramKey txt = case lookup paramKey . delete (paramKey, Just txt) $ queryToQueryText $ queryString req of
+checkSingleParam :: (Monad m) => QueryText -> QueryParamKey -> Text -> ExceptT ReqError m Text
+checkSingleParam qStr paramKey txt = case lookup paramKey . delete (paramKey, Just txt) $ qStr of
   Nothing -> return txt
-  Just _ -> throwE $ SimpleError $ "Multiple parameter: " ++ unpack paramKey
+  Just _ -> throwE $ BadReqError $ "Multiple parameter: " ++ unpack paramKey
 
 checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
 checkLength leng paramKey txt = case splitAt leng (unpack txt) of
   (_, []) -> return txt
-  _ -> throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
+  _ -> throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
 
-findParamIndex :: Request -> QueryParamKey -> Maybe Int
-findParamIndex req paramKey = elemIndex paramKey . fmap fst . queryToQueryText $ queryString req
+findParamIndex :: QueryText -> QueryParamKey -> Maybe Int
+findParamIndex qStr paramKey = elemIndex paramKey . fmap fst  $ qStr

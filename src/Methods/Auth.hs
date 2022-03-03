@@ -72,9 +72,9 @@ type UserAccessMode = (UserId, AccessMode)
 
 data AccessMode = UserMode | AdminMode
 
-tokenAdminAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ()
-tokenAdminAuth h req = hideErr $ do
-  Token tokenParam <- parseQueryStr req
+tokenAdminAuth :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ()
+tokenAdminAuth h qStr = hideErr $ do
+  Token tokenParam <- parseQueryStr qStr
   lift $ logInfo (hLog h) "Token parsed"
   checkAdminTokenParam h tokenParam
 
@@ -94,9 +94,9 @@ checkAdminTokenParam Handle{..} tokenParam = hideTokenErr $
         Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"
     _ -> throwE . SecretTokenError $ "INVALID token"
 
-tokenUserAuth :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m UserAccessMode
-tokenUserAuth h req = hideTokenErr $ do
-  Token tokenParam <- parseQueryStr req
+tokenUserAuth :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m UserAccessMode
+tokenUserAuth h qStr = hideTokenErr $ do
+  Token tokenParam <- parseQueryStr qStr
   lift $ logInfo (hLog h) "Token parsed"
   checkUserTokenParam h tokenParam
 

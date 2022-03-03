@@ -62,6 +62,12 @@ checkOneIfExistE (k,v) xs = case xs of
   [x] -> return x
   _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
+checkOneIfResExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
+checkOneIfResExistE (k,v) xs = case xs of
+  [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
+  [x] -> return x
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
+
 catchOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
 catchOneSelE logH m = 
   catchSelE logH m >>= checkOneE
@@ -73,6 +79,12 @@ catchMaybeOneSelE logH m =
 catchOneSelIfExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
 catchOneSelIfExistsE (k,v) logH m = 
   catchSelE logH m >>= checkOneIfExistE (k,v)
+
+catchOneSelIfResExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
+catchOneSelIfResExistsE logH m = 
+  catchSelE logH m >>= checkOneIfExistE (k,v)
+
+
 
 
 catchDbErrE :: (MonadCatch m) => m a -> ExceptT ReqError m a
@@ -91,6 +103,8 @@ catchExistE logH (k,v) m = do
   isExist <- catchDbErrE m 
   checkExistE (k,v) isExist
 
+
+
 checkExistE :: 
   (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> Bool -> ExceptT ReqError m ()
 checkExistE (k,v) isExist = 
@@ -101,6 +115,20 @@ checkExistE (k,v) isExist =
         $ SimpleError
         $ k ++ ": " ++ show v
           ++ " doesn`t exist."
+
+catchResExistE ::
+  (MonadCatch m,Show a) => LogHandle m -> (UncheckedExId -> m Bool) -> UncheckedExId -> ExceptT ReqError m ()
+catchResExistE logH func id = do
+  lift $ logDebug logH $ "Checking existence request entity in the DB"
+  isEx <- catchDbErrE $ func id
+  checkResExistE isEx id
+
+checkResExistE :: 
+  (MonadCatch m,Show a) => LogHandle m -> Bool -> ExceptT ReqError m ()
+checkResExistE isEx id = 
+  unless isEx . throwE $ ResourseEntityNotExistError id
+
+
 
 catchInsRetE ::
   (MonadCatch m) =>

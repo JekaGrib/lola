@@ -16,8 +16,10 @@ data ReqError =
   | DatabaseError String 
   | SecretLogInError String 
   | SecretTokenError String 
-  | Error400 String
-  | Error404 String
+  | BadReqError String
+  | ResourseNotExistError String
+  | NotImplementedError
+
   deriving (Eq, Show)
 
 data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
@@ -82,11 +84,8 @@ catchDbOutputErr m =
             )
 
 toSecret :: ReqError -> ReqError
-toSecret (SimpleError str) = SecretError str
-toSecret (SecretError str) = SecretError str
-toSecret (DatabaseError str) = SecretError ("DatabaseError. " ++ str)
-toSecret (SecretLogInError str) = SecretError ("LogInError. " ++ str)
-toSecret (SecretTokenError str) = SecretError ("TokenError. " ++ str)
+toSecret err = SecretError (show err)
+
 
 simpleToSecretLogIn :: ReqError -> ReqError
 simpleToSecretLogIn (SimpleError str) = SecretLogInError str

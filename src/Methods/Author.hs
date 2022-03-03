@@ -105,19 +105,19 @@ createAuthor h@Handle{..} (CreateAuthor usIdParam auInfoParam) = do
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
 
-getAuthor :: (MonadCatch m) => Handle m -> GetAuthor -> ExceptT ReqError m ResponseInfo
-getAuthor Handle{..} (GetAuthor auIdParam) = do
+getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
+getAuthor Handle{..} auIdNum = do
   let logpair = ("author_id", auIdParam)
-  Author auId auInfo usId <- checkOneSelIfExistE hLog logpair $ selectAuthors auIdParam
+  Author auId auInfo usId <- catchOneSelIfExistE hLog logpair $ selectAuthors auIdParam
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
 
-updateAuthor :: (MonadCatch m) => Handle m -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
-updateAuthor h@Handle{..} (UpdateAuthor auIdParam usIdParam auInfoParam) = do
-  let logpair1 = ("user_id", usIdParam)
-  catchExistE hLog logpair1 $ isExistUser usIdParam
-  let logpair2 = ("author_id", auIdParam)
-  catchExistE hLog logpair2 $ isExistAuthor auIdParam
+updateAuthor :: (MonadCatch m) => Handle m -> AuthorId -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
+updateAuthor h@Handle{..} auIdNum (UpdateAuthor usIdParam auInfoParam) = do
+  let logpair1 = ("author_id", auIdNum)
+  catchExistE hLog logpair1 $ isExistAuthor auIdNum
+  let logpair2 = ("user_id", usIdParam)
+  catchExistE hLog logpair2 $ isExistUser usIdParam
   isntUserOtherAuthor h usIdParam auIdParam
   catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auIdParam
   lift $ logInfo hLog $ "Author_id: " ++ show auIdParam ++ " updated."

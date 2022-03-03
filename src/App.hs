@@ -25,7 +25,7 @@ import Methods.Category (createCategory, createSubCategory, deleteCategory, getC
 import Methods.Comment (createComment, deleteComment, getComments, updateComment)
 import Methods.Common (ResponseInfo (..))
 import Methods.Draft (createNewDraft, createPostsDraft, deleteDraft, getDraft, getDrafts, publishDraft, updateDraft)
-import Methods.Picture (browsePicture, sendPicture)
+import Methods.Picture (loadPicture, sendPicture)
 import Methods.Post (deletePost, getPost, getPosts)
 import Methods.Tag (createTag, deleteTag, getTag, updateTag)
 import Methods.User (createUser, deleteUser, getUser)
@@ -77,146 +77,171 @@ fromE respE = case respE of
   Left (SecretError _) -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status500 [] "Internal server error"
 
+data ReqInfo = ReqInfo StdMethod [Text] QueryText (Maybe ByteString)
+
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
-chooseRespEx h req = do
-  let methH = hMeth h
-  lift $ logDebug (hLog h) $ "Incoming request: " ++ show req
-  case pathInfo req of
-    ["logIn"] -> hideLogInErr $ do
+chooseRespEx Handle{..} req = do
+  lift $ logDebug hLog $ "Incoming request: " ++ show req
+  meth <- pullMethod req
+  let path = pathInfo req
+  let qStr = queryToQueryText $ queryString req
+  let reqInfo = ReqInfo meth path qStr Nothing
+  case path of
+     ("users":_) -> workWithUsers (hUs hMeth) reqInfo
+    (POST,["users","logIn"]) -> hideLogInErr $ do
       lift $ logInfo (hLog h) "LogIn command"
       preParseQueryStr h req $ logIn (hAuth methH)
-    ["createUser"] -> do
-      lift $ logInfo (hLog h) "Create user command"
-      preParseQueryStr h req $ createUser (hUs methH)
-    ["getUser", usId] -> do
-      lift $ logInfo (hLog h) "Get user command"
-      usIdNum <- tryReadId "user_id" usId
-      lift $ logInfo (hLog h) $ "User_id parameter parsed:" ++ show usIdNum
-      getUser (hUs methH) usIdNum
-    ["deleteUser"] -> do
-      lift $ logInfo (hLog h) "Delete user command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteUser (hUs methH)
-    ["createAdmin"] -> hideErr $ do
+    (POST,["users","admin"]) -> hideErr $ do
       lift $ logInfo (hLog h) "Create admin command"
       preParseQueryStr h req $ createAdmin (hAdm methH)
-    ["createAuthor"] -> do
+    (POST,["users"]) -> do
+      lift $ logInfo (hLog h) "Create user command"
+      preParseQueryStr h req $ createUser (hUs methH)
+    (GET,["users",usIdTxt]) -> do
+      lift $ logInfo (hLog h) "Get user command"
+      usId <- tryReadId "user_id" usIdTxt
+      lift $ logInfo (hLog h) $ "User_id parameter parsed:" ++ show usId
+      getUser (hUs methH) usIdNum
+    (DELETE,["users",usIdTxt]) -> do
+      lift $ logInfo (hLog h) "Delete user command"
+      tokenAdminAuth (hAuth methH) req
+      usId <- tryReadId "user_id" usIdTxt
+      deleteUser (hUs methH) usId
+    (POST,["authors"]) -> do
       lift $ logInfo (hLog h) "Create author command"
       tokenAdminAuth (hAuth methH) req
       preParseQueryStr h req $ createAuthor (hAu methH)
-    ["getAuthor"] -> do
+    (GET,["authors",auIdTxt]) -> do
       lift $ logInfo (hLog h) "Get author command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ getAuthor (hAu methH)
-    ["updateAuthor"] -> do
+      auId <- tryReadId "author_id" auIdTxt
+      getAuthor (hAu methH) auId
+    (PUT,["authors",auIdTxt]) -> do
       lift $ logInfo (hLog h) "Update author command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ updateAuthor (hAu methH)
-    ["deleteAuthor"] -> do
+      auId <- tryReadId "author_id" auIdTxt
+      preParseQueryStr h req $ updateAuthor (hAu methH) auId
+    (DELETE,["authors",auIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete author command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteAuthor (hAu methH)
-    ["createCategory"] -> do
+      auId <- tryReadId "author_id" auIdTxt
+      deleteAuthor (hAu methH) auId
+    (POST,["categories"]) -> do
       lift $ logInfo (hLog h) "Create category command"
       tokenAdminAuth (hAuth methH) req
       preParseQueryStr h req $ createCategory (hCat methH)
-    ["createSubCategory"] -> do
-      lift $ logInfo (hLog h) "Create sub category command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ createSubCategory (hCat methH)
-    ["getCategory", catId] -> do
+    (GET,["categories",catIdTxt]) -> do
       lift $ logInfo (hLog h) "Get category command"
-      catIdNum <- tryReadId "category_id" catId
-      getCategory (hCat methH) catIdNum
-    ["updateCategory"] -> do
+      catId <- tryReadId "category_id" catIdTxt
+      getCategory (hCat methH) catId
+    (PUT,["categories",catIdTxt]) -> do
       lift $ logInfo (hLog h) "Update category command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ updateCategory (hCat methH)
-    ["deleteCategory"] -> do
+      catId <- tryReadId "category_id" catIdTxt
+      preParseQueryStr h req $ updateCategory (hCat methH) catId
+    (DELETE,["categories",catIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete category command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteCategory (hCat methH)
-    ["createTag"] -> do
+      catId <- tryReadId "category_id" catIdTxt
+      deleteCategory (hCat methH) catId
+    ("tags":_) -> workWithTags (hTag hMeth) reqInfo
+    (POST,["tags"]) -> do
       lift $ logInfo (hLog h) "Create tag command"
       tokenAdminAuth (hAuth methH) req
       preParseQueryStr h req $ createTag (hTag methH)
-    ["getTag", tagId] -> do
+    (GET,["tags",tagIdTxt]) -> do
       lift $ logInfo (hLog h) "Get tag command"
-      tagIdNum <- tryReadId "tag_id" tagId
-      getTag (hTag methH) tagIdNum
-    ["updateTag"] -> do
+      tagId <- tryReadId "tag_id" tagIdTxt
+      getTag (hTag methH) tagId
+    (PUT,["tags",tagIdTxt]) -> do
       lift $ logInfo (hLog h) "Update tag command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ updateTag (hTag methH)
-    ["deleteTag"] -> do
+      checkReqAuthAndUpdateTag (hTag methH) reqInfo
+    (DELETE,["tags",tagIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete tag command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteTag (hTag methH)
-    ["createNewDraft"] -> do
+      tagId <- tryReadId "tag_id" tagIdTxt
+      deleteTag (hTag methH) tagId
+    (POST,["drafts"]) -> do
       lift $ logInfo (hLog h) "Create new draft command"
-      (usIdNum, body) <- getBodyAndCheckUserToken h req
-      createNewDraft (hDr methH) usIdNum body
-    ["createPostsDraft"] -> do
-      lift $ logInfo (hLog h) "Create post`s draft command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ createPostsDraft (hDr methH) usIdNum
-    ["getDraft"] -> do
-      lift $ logInfo (hLog h) "Get draft command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ getDraft (hDr methH) usIdNum
-    ["getDrafts"] -> do
-      lift $ logInfo (hLog h) "Get drafts command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ getDrafts (hDr methH) usIdNum
-    ["updateDraft", draftId] -> do
-      lift $ logInfo (hLog h) "Update draft command"
-      draftIdNum <- tryReadId "draft_id" draftId
-      (usIdNum, body) <- getBodyAndCheckUserToken h req
-      updateDraft (hDr methH) usIdNum draftIdNum body
-    ["deleteDraft"] -> do
-      lift $ logInfo (hLog h) "Delete draft command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteDraft (hDr methH) usIdNum
-    ["publishDraft"] -> do
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      body <- getBodyAndCheck h req
+      createNewDraft (hDr methH) usId body
+    (POST,["drafts",draftIdTxt,"posts"]) -> do
       lift $ logInfo (hLog h) "Publish draft command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ publishDraft (hDr methH) usIdNum
-    ["getPost", postId] -> do
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      draftId <- tryReadId "draft_id" draftIdTxt
+      publishDraft (hDr methH) usId
+    (GET,["drafts",draftIdTxt]) -> do
+      lift $ logInfo (hLog h) "Get draft command"
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      draftId <- tryReadId "draft_id" draftIdTxt
+      getDraft (hDr methH) usId draftId
+    (GET,["drafts"]) -> do
+      lift $ logInfo (hLog h) "Get drafts command"
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      preParseQueryStr h req $ getDrafts (hDr methH) usId
+    (PUT,["drafts",draftIdTxt]) -> do
+      lift $ logInfo (hLog h) "Update draft command"
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      draftId <- tryReadId "draft_id" draftIdTxt
+      body <- getBodyAndCheck h req
+      updateDraft (hDr methH) usIdN draftId body
+    (DELETE,["drafts",draftIdTxt]) -> do
+      lift $ logInfo (hLog h) "Delete draft command"
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      draftId <- tryReadId "draft_id" draftIdTxt
+      deleteDraft (hDr methH) usId draftId    
+    (POST,["posts",postIdTxt,"drafts"]) -> do
+      lift $ logInfo (hLog h) "Create post`s draft command"
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      postId <- tryReadId "post_id" postIdTxt
+      createPostsDraft (hDr methH) usId postId
+    (GET,["posts",postIdTxt]) -> do
       lift $ logInfo (hLog h) "Get post command"
-      postIdNum <- tryReadId "post_id" postId
-      getPost (hPost methH) postIdNum
-    ["getPosts", page] -> do
+      postId <- tryReadId "post_id" postIdTxt
+      getPost (hPost methH) postId
+    (GET,["posts"]) -> do
       lift $ logInfo (hLog h) "Get posts command"
-      pageNum <- tryReadPage page
-      preParseQueryStr h req $ getPosts (hPost methH) pageNum
-    ["deletePost"] -> do
+      preParseQueryStr h req $ getPosts (hPost methH) 
+    (DELETE,["posts",postIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete post command"
       tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ deletePost (hPost methH)
-    ["createComment"] -> do
+      postId <- tryReadId "post_id" postIdTxt
+      deletePost (hPost methH) postId
+    (POST,["comments"]) -> do
       lift $ logInfo (hLog h) "Create comment command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ createComment (hCom methH) usIdNum
-    ["getComments"] -> do
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      preParseQueryStr h req $ createComment (hCom methH) usId
+    (GET,["comments"]) -> do
       lift $ logInfo (hLog h) "Get comments command"
       preParseQueryStr h req $ getComments (hCom methH)
-    ["updateComment"] -> do
+    (PUT,["comments",commIdTxt]) -> do
       lift $ logInfo (hLog h) "Update comment command"
-      (usIdNum, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ updateComment (hCom methH) usIdNum
-    ["deleteComment"] -> do
+      (usId, _) <- tokenUserAuth (hAuth methH) req
+      commId <- tryReadId "comment_id" commIdTxt
+      preParseQueryStr h req $ updateComment (hCom methH) usId commId
+    (DELETE,["comments",commIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete comment command"
-      (usIdNum, accessMode) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ deleteComment (hCom methH) usIdNum accessMode
-    ["browsePicture"] -> do
-      lift $ logInfo (hLog h) "browsePicture command"
+      (usId, accessMode) <- tokenUserAuth (hAuth methH) req
+      commId <- tryReadId "comment_id" commIdTxt
+      deleteComment (hCom methH) usId accessMode commId
+    (POST, ["pictures"]) -> do
+      lift $ logInfo (hLog h) "Load picture command"
       _ <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ browsePicture (hPic methH)
-    ["picture", picId] -> do
-      lift $ logInfo (hLog h) "Picture command"
-      picIdNum <- tryReadId "picture_id" picId
-      sendPicture (hPic methH) picIdNum
+      preParseQueryStr h req $ loadPicture (hPic methH)
+    (GET,["pictures",picIdTxt]) -> do
+      lift $ logInfo (hLog h) "Get picture command"
+      picId <- tryReadId "picture_id" picIdTxt
+      sendPicture (hPic methH) picId
     _ -> throwE $ SecretError "Unknown response"
+
+pullMethod req = do
+  let eithReqMeth = parseMethod . requestMethod $ req
+  case eithReqMeth of
+    Right meth -> return meth
+    Left _ -> throwE $ NotImplementedError
+
+
 
 parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
 parseQueryStrAndLog h req = do
@@ -228,6 +253,11 @@ preParseQueryStr :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> (a
 preParseQueryStr h req foo = do
   queStr <- parseQueryStrAndLog h req
   foo queStr
+
+getBodyAndCheck :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m DraftRequest
+getBodyAndCheck h req = do
+  json <- lift $ getBody h req
+  body <- checkDraftReqJson json
 
 getBodyAndCheckUserToken :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m (UserId, DraftRequest)
 getBodyAndCheckUserToken h req = do

@@ -13,15 +13,25 @@ import Oops
 import Types
 
 tryReadInteger :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Integer
-tryReadInteger paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
+tryReadInteger paramKey "" = throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
 tryReadInteger paramKey txt = case reads . unpack $ txt of
   [(a, "")] -> return a
-  _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be whole number"
+  _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be whole number"
 
 tryReadId :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Id
 tryReadId paramKey txt = do
   num <- tryReadInteger paramKey txt
   checkBigIntId paramKey num
+
+tryReadResourseInteger :: (Monad m) => [Text] -> Text -> ExceptT ReqError m Integer
+tryReadResourseInteger path txt = case reads . unpack $ txt of
+  [(a, "")] -> return a
+  _ -> throwE $ BadReqError $ "For resourse: " ++ show path ++ ". Wrong id: " ++ getTxtstart txt 
+
+tryReadResourseId :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Id
+tryReadResourseId path txt = do
+  num <- tryReadInteger path txt
+  checkBigIntResourseId path num
 
 tryReadPage :: (Monad m) => Text -> ExceptT ReqError m Page
 tryReadPage txt = do
@@ -29,9 +39,9 @@ tryReadPage txt = do
   checkPage num
 
 tryReadNumArray :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m [Integer]
-tryReadNumArray paramKey "" = throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ " Empty input."
+tryReadNumArray paramKey "" = throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ " Empty input."
 tryReadNumArray paramKey txt = case reads . unpack $ txt of
-  [([], "")] -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It must be NOT empty array of numbers. Example: [3,45,24,7] "
+  [([], "")] -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It must be NOT empty array of numbers. Example: [3,45,24,7] "
   [(a, "")] -> return a
   _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It must be array of numbers. Example: [3,45,24,7] "
 
@@ -66,8 +76,14 @@ tryReadSortOrd paramKey txt = case  T.toUpper . T.take 3 $ txt of
 
 checkBigIntId :: (Monad m) => QueryParamKey -> Integer -> ExceptT ReqError m Id
 checkBigIntId paramKey num
-  | num <= 0 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " . Id should be greater then 0"
-  | num > 9223372036854775805 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ ". Id should be less then 9223372036854775805"
+  | num <= 0 = throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ " . Id should be greater then 0"
+  | num > 9223372036854775805 = throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ ". Id should be less then 9223372036854775805"
+  | otherwise = return (fromInteger num)
+
+checkBigIntResourseId :: (Monad m) => [Text] -> Integer -> ExceptT ReqError m Id
+checkBigIntResourseId path num
+  | num <= 0 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ " . Id should be greater then 0"
+  | num > 9223372036854775805 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ ". Id should be less then 9223372036854775805"
   | otherwise = return (fromInteger num)
 
 checkPage :: (Monad m) => Integer -> ExceptT ReqError m Page

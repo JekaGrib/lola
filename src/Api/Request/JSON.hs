@@ -21,8 +21,7 @@ import Types
 import Data.Scientific (Scientific,floatingOrInteger)
 
 data DraftRequest = DraftRequest
-  { tokenDR :: Text,
-    draft_name :: Text,
+  { draft_name :: Text,
     draft_cat_id :: CategoryId,
     draft_textDR :: Text,
     draft_main_pic_id :: PictureId,
@@ -34,53 +33,44 @@ data DraftRequest = DraftRequest
 instance FromJSON DraftRequest where
   parseJSON = withObject "DraftRequest" $ \v ->
     DraftRequest
-      <$> v .: "token"
-      <*> v .: "draft_name"
+      <$> v .: "draft_name"
       <*> v .: "draft_category_id"
       <*> v .: "draft_text"
       <*> v .: "draft_main_pic_id"
       <*> v .: "draft_pics_ids"
       <*> v .: "draft_tags_ids"
 
+
 checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson json =
   case (decode json :: Maybe DraftRequest) of
-    Just body@(DraftRequest token nameParam catIdParam txtParam picId picsIds tagsIds) -> do
-      checkTokenLength 100 token
-      _ <- checkLength 50 "draft_name" nameParam
-      _ <- checkLength 10000 "draft_text" txtParam
-      _ <- checkNatural "draft_category_id" catIdParam
+    Just body@(DraftRequest name catId txt picId picsIds tagsIds) -> do
+      _ <- checkLength 50 "draft_name" name
+      _ <- checkLength 10000 "draft_text" txt
+      _ <- checkNatural "draft_category_id" catId      
       _ <- checkNatural "draft_main_pic_id" picId
       mapM_ (checkNatural "draft_tags_ids") tagsIds
       mapM_ (checkNatural "draft_pics_ids") picsIds
       return body
     Nothing -> whyBadDraftReq json
 
+instance CheckExist DraftRequest where 
+  checkExist h (DraftRequest _ catId _ picId picsIds tagsIds) = do
+    checkExist h (CategoryId catId)
+    checkExist h (PictureId  picId)
+    checkExist h (fmap PictureId picId)
+    checkExist h (fmap TagId     tagsIds)
+
+
+
 whyBadDraftReq :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m a
 whyBadDraftReq json =
   case (decode json :: Maybe Object) of
     Just obj -> do
-      mapM_ (checkTxt obj) ["token", "draft_name", "draft_text"]
+      mapM_ (checkTxt obj) [ "draft_name", "draft_text"]
       mapM_ (checkId obj) ["draft_category_id", "draft_main_pic_id"]
       mapM_ (checkIdArr obj) ["draft_tags_ids", "draft_pics_ids"]
       throwE $ SimpleError "Invalid request body"
-    Nothing -> throwE $ SimpleError "Invalid request body"
-
-pullTokenDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
-pullTokenDraftReqJson json =
-  case (decode json :: Maybe DraftRequest) of
-    Just (DraftRequest token _ _ _ _ _ _) -> do
-      checkTokenLength 100 token
-      return token
-    Nothing -> pullTokenJson json
-
-pullTokenJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m Text
-pullTokenJson json =
-  case (decode json :: Maybe Object) of
-    Just obj -> do
-      token <- hideTokenErr $ checkTxt obj "token"
-      checkTokenLength 100 token
-      return token
     Nothing -> throwE $ SimpleError "Invalid request body"
 
 checkId :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()

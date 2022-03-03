@@ -103,42 +103,42 @@ getComments Handle{..} (GetComments postIdParam pageNum) = do
   okHelper $ CommentsResponse {pageCR = pageNum, post_id9 = postIdParam, comments = fmap inCommResp comms}
 
 updateComment :: (MonadCatch m) => Handle m -> UserId -> UpdateComment -> ExceptT ReqError m ResponseInfo
-updateComment h@Handle{..} usIdNum (UpdateComment commIdParam txtParam) = do
-  isCommAuthorIfExist h commIdParam usIdNum
-  catchUpdE hLog $ updateDbComm txtParam commIdParam
-  postId <- catchOneSelE hLog $ selectPostsForComm commIdParam
-  lift $ logInfo hLog  $ "Comment_id: " ++ show commIdParam ++ " updated"
-  okHelper $ CommentResponse {comment_id = commIdParam, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
+updateComment h@Handle{..} usId commId (UpdateComment txtParam) = do
+  isCommAuthorIfExist h commId usId
+  catchUpdE hLog $ updateDbComm txtParam commId
+  postId <- catchOneSelE hLog $ selectPostsForComm commId
+  lift $ logInfo hLog  $ "Comment_id: " ++ show commId ++ " updated"
+  okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postId, user_id6 = usIdNum}
 
-deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> DeleteComment -> ExceptT ReqError m ResponseInfo
-deleteComment h@Handle{..} usIdNum accessMode (DeleteComment commIdParam) = do
-  let logpair = ("comment_id", commIdParam)
-  catchExistE hLog logpair $ isExistComm commIdParam
+deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> CommentId -> ExceptT ReqError m ResponseInfo
+deleteComment h@Handle{..} usId accessMode commId = do
+  let logpair = ("comment_id", commId)
+  catchExistE hLog logpair $ isExistComm commId
   case accessMode of
     AdminMode -> return ()
     UserMode -> do
-      postId <- catchOneSelE hLog $ selectPostsForComm commIdParam
-      isCommOrPostAuthor h commIdParam postId usIdNum
-  deleteDbCommE h commIdParam
-  lift $ logInfo hLog $ "Comment_id: " ++ show commIdParam ++ " deleted"
+      postId <- catchOneSelE hLog $ selectPostsForComm commId
+      isCommOrPostAuthor h commId postId usId
+  deleteDbCommE h commId
+  lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " deleted"
   okHelper $ OkResponse {ok = True}    
 
 isCommOrPostAuthor :: (MonadCatch m) => Handle m -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
-isCommOrPostAuthor Handle{..} commIdParam postId usIdNum = do
+isCommOrPostAuthor Handle{..} commId postId usId = do
   usPostId <- catchOneSelE hLog $ selectUsersForPost postId
-  usComId <- catchOneSelE hLog $ selectUsersForComm commIdParam
-  unless (usPostId == usIdNum || usComId == usIdNum)
+  usComId <- catchOneSelE hLog $ selectUsersForComm commId
+  unless (usPostId == usId || usComId == usId)
     $ throwE
     $ SimpleError
     $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdParam ++ " and not author of post_id: " ++ show postId
 
 isCommAuthorIfExist :: (MonadCatch m) => Handle m -> CommentId -> UserId -> ExceptT ReqError m ()
-isCommAuthorIfExist Handle {..} commIdParam usIdNum = do
-  usId <- catchOneSelE hLog $ selectUsersForComm commIdParam
-  unless (usId == usIdNum)
+isCommAuthorIfExist Handle {..} commId usId = do
+  usIdForComm <- catchOneSelE hLog $ selectUsersForComm commId
+  unless (usIdForComm == usId)
     $ throwE
     $ SimpleError
-    $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdParam
+    $ "user_id: " ++ show usId ++ " is not author of comment_id: " ++ show commId
 
 
 deleteDbCommE :: (MonadCatch m) => CommentId -> ExceptT ReqError m ()

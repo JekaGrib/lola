@@ -71,17 +71,17 @@ createUser h (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdParam, user_pic_urlUTR = makeMyPicUrl (hConf h) picIdParam, user_create_dateUTR = day}
 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
-getUser h usIdNum = do
+getUser h usId = do
   let selectParams = ["first_name", "last_name", "user_pic_id", "user_create_date"]
   User fName lName picId usCreateDate <- checkOneIfExistE (hLog h) (selectUsers h) "users" selectParams "user_id=?" (Id usIdNum)
-  okHelper $ UserResponse {user_id = usIdNum, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl (hConf h) picId, user_create_date = usCreateDate}
+  okHelper $ UserResponse {user_id = usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl (hConf h) picId, user_create_date = usCreateDate}
 
-deleteUser :: (MonadCatch m) => Handle m -> DeleteUser -> ExceptT ReqError m ResponseInfo
-deleteUser h (DeleteUser usIdParam) = do
-  isExistInDbE h "users" "user_id=?" (Id usIdParam)
-  let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [Id $ cDefUsId (hConf h), Id usIdParam]
-  let deleteUs = deleteFromDb h "users" "user_id=?" [Id usIdParam]
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [Id usIdParam]
+deleteUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
+deleteUser h usId = do
+  isExistInDbE h "users" "user_id=?" (Id usId)
+  let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [Id $ cDefUsId (hConf h), Id usId]
+  let deleteUs = deleteFromDb h "users" "user_id=?" [Id usId]
+  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [Id usId]
   case maybeAuId of
     Just authorId -> do
       let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [Id $ cDefAuthId (hConf h), Id authorId ]
@@ -91,7 +91,7 @@ deleteUser h (DeleteUser usIdParam) = do
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)
     Nothing ->
       withTransactionDBE h (updateCom >> deleteUs)
-  lift $ logInfo (hLog h) $ "User_id: " ++ show usIdParam ++ " deleted"
+  lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
 isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()

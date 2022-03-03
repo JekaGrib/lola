@@ -33,6 +33,7 @@ data Handle m = Handle
   , isExistTag           :: TagId -> m Bool
   , insertReturnTag      :: TagName -> m TagId
   , withTransactionDB    :: forall a. m a -> m a
+  , hAuth                :: Methods.Auth.Handle
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -74,6 +75,37 @@ insertReturnTag' conn tagName = do
   insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
 
 
+workWithTags h@Handle{..} (ReqInfo meth path qStr _) = 
+  case (meth,path) of
+    (POST,["tags"]) -> do
+      lift $ logInfo hLog "Create tag command"
+      tokenAdminAuth (hAuth methH) req
+      checkQStr hExist qStr >>= createTag (hTag methH)
+    (GET,["tags",tagIdTxt]) -> do
+      lift $ logInfo hLog "Get tag command"
+      tagId <- tryReadId "tag_id" tagIdTxt
+      getTag (hTag methH) tagId
+    (PUT,["tags",tagIdTxt]) -> do
+      lift $ logInfo hLog  "Update tag command"
+      checkReqAuthAndUpdateTag (hTag methH) reqInfo
+    (DELETE,["tags",tagIdTxt]) -> do
+      lift $ logInfo hLog  "Delete tag command"
+      tokenAdminAuth (hAuth methH) req
+      tagId <- tryReadId "tag_id" tagIdTxt
+      deleteTag (hTag methH) tagId
+
+checkReqAuthAndCreateTag h@Handle{..} (ReqInfo meth path qStr _) =
+  tokenAdminAuth hAuth qStr
+  crT <-  qStr
+  createTag h crT
+
+checkReqAuthAndUpdateTag h@Handle{..} (ReqInfo meth path qStr _) =
+  tokenAdminAuth hAuth qStr
+  Just tagId <- checkResourse hExist path 
+  updT <- checkQStr hExist qStr
+  updateTag h updT
+
+
 createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
 createTag Handle{..} (CreateTag tagNameParam) = do
   tagId <- catchInsRetE hLog $ insertReturnTag tagNameParam
@@ -81,28 +113,31 @@ createTag Handle{..} (CreateTag tagNameParam) = do
   okHelper $ TagResponse tagId tagNameParam
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
-getTag Handle{..} tagIdNum = do
-  let logpair = ("tag_id", tagIdNum)
-  tagName <- catchOneSelIfExistE hLog logpair $ selectTagNames tagIdNum
-  lift $ logInfo hLog $ "Tag_id: " ++ show tagIdNum ++ " sending in response"
-  okHelper $ TagResponse tagIdNum tagName
+getTag Handle{..} tagId = do
+  let logpair = ("tag_id", tagId)
+  tagName <- catchOneSelIfExistE hLog logpair $ selectTagNames tagId
+  lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " sending in response"
+  okHelper $ TagResponse tagId tagName
 
-updateTag :: (Monad m, MonadCatch m) => Handle m -> UpdateTag -> ExceptT ReqError m ResponseInfo
-updateTag Handle{..} (UpdateTag tagIdNum tagNameParam) = do
-  let logpair = ("tag_id", tagIdNum)
-  catchExistE hLog logpair $ isExistTag tagIdNum
-  catchUpdE hLog $ updateDbTag tagNameParam tagIdNum
-  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " updated"
-  okHelper $ TagResponse tagIdNum tagNameParam
+updateTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> UpdateTag -> ExceptT ReqError m ResponseInfo
+updateTag Handle{..} tagId (UpdateTag tagNameParam) = do
+  catchResExistE hLog isExistTag tagId
+  catchUpdE hLog $ updateDbTag tagNameParam tagId
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " updated"
+  okHelper $ TagResponse tagId tagNameParam
 
-deleteTag :: (Monad m, MonadCatch m) => Handle m -> DeleteTag -> ExceptT ReqError m ResponseInfo
-deleteTag Handle{..} (DeleteTag tagIdNum) = do
-  let deleteTgDr = deleteDbTagForDrafts tagIdNum
-  let deleteTgPos = deleteDbTagForPosts tagIdNum
-  let deleteTg = deleteDbTag tagIdNum
+deleteTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
+deleteTag Handle{..} tagId = do
+  catchResExistE hLog isExistTag tagId
+  let deleteTgDr = deleteDbTagForDrafts tagId
+  let deleteTgPos = deleteDbTagForPosts tagId
+  let deleteTg = deleteDbTag tagId
   withTransactionDBE (deleteTgDr >> deleteTgPos >> deleteTg)
-  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagIdNum ++ " deleted"
+  lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " deleted"
   okHelper $ OkResponse {ok = True}
+
+
+
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

@@ -93,8 +93,7 @@ createCategory Handle{..} (CreateCategory catNameParam) = do
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
   okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = []}
 
-createSubCategory :: (MonadCatch m) => Handle m -> CreateSubCategory -> ExceptT ReqError m ResponseInfo
-createSubCategory Handle{..} (CreateSubCategory catNameParam superCatIdParam) = do
+createCategory Handle{..} (CreateSubCategory catNameParam superCatIdParam) = do
   let logpair = ("category_id", superCatIdParam)
   catchExistsE hLog logpair $ isExistCat superCatIdParam
   catId <- catchInsRetE hLog $ insertReturnSubCat catNameParam superCatIdParam
@@ -110,8 +109,8 @@ getCategory Handle{..} catId = do
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " sending in response"
   okHelper catResp
 
-updateCategory :: (MonadCatch m) => Handle m -> UpdateCategory -> ExceptT ReqError m ResponseInfo
-updateCategory h@Handle{..} (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
+updateCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
+updateCategory h@Handle{..} catId (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
   let logpair = ("category_id", catIdParam)
   catchExistsE hLog logpair $ isExistCat catIdParam
   case maybeSuperCatIdParam of
@@ -126,17 +125,17 @@ updateCategory h@Handle{..} (UpdateCategory catIdParam catNameParam maybeSuperCa
   lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " updated."
   okHelper catResp
 
-deleteCategory :: (MonadCatch m) => Handle m -> DeleteCategory -> ExceptT ReqError m ResponseInfo
-deleteCategory h@Handle{..} (DeleteCategory catIdParam) = do
-  let logpair = ("category_id", catIdParam)
-  catchExistsE hLog logpair $ isExistCat catIdParam
-  allSubCats <- findAllSubCats h catIdParam
-  let allCats = catIdParam : allSubCats
+deleteCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
+deleteCategory h@Handle{..} catId = do
+  let logpair = ("category_id", catId)
+  catchExistsE hLog logpair $ isExistCat catId
+  allSubCats <- findAllSubCats h catId
+  let allCats = catId : allSubCats
   let updatePos = catchUpdE hLog $ updateDbCatsForPosts (cDefCatId hConf) allCats
   let updateDr = catchUpdE hLog $ updateDbCatsForDrafts (cDefCatId hConf) allCats
   let deleteCat = deleteDbCats allCats
   withTransactionDBE h (updatePos >> updateDr >> deleteCat)
-  lift $ logInfo (hLog h) $ "Category_id: " ++ show catIdParam ++ " deleted."
+  lift $ logInfo (hLog h) $ "Category_id: " ++ show catId ++ " deleted."
   okHelper $ OkResponse {ok = True}
 
 checkRelationCats :: (MonadCatch m) => Handle m -> CategoryId -> CategoryId -> ExceptT ReqError m ()

@@ -59,23 +59,23 @@ makeH conf logH =
         (Methods.Common.DeleteMany.makeH conf)
 
 getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
-getPost h postIdParam = do
-  Post pId auId auInfo usId pName pDate pCatId pText picId <- checkOneIfExistE (hLog h) (selectPosts h) "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"] "post_id=?" (Id postIdParam)
-  picsIds <- checkListE (hLog h) $ selectNums h "postspics" ["pic_id"] "post_id=?" [Id postIdParam]
-  tagS <- checkListE (hLog h) $ selectTags h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "post_id=?" [Id postIdParam]
+getPost h postId = do
+  Post pId auId auInfo usId pName pDate pCatId pText picId <- checkOneIfExistE (hLog h) (selectPosts h) "posts JOIN authors ON authors.author_id = posts.author_id " ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"] "post_id=?" (Id postId)
+  picsIds <- checkListE (hLog h) $ selectNums h "postspics" ["pic_id"] "post_id=?" [Id postId]
+  tagS <- checkListE (hLog h) $ selectTags h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "post_id=?" [Id postId]
   catResp <- makeCatResp (hCatResp h) pCatId
   lift $ logInfo (hLog h) $ "Post_id: " ++ show pId ++ " sending in response"
   okHelper $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName, post_create_date = pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl (hConf h) picId, post_pics = fmap (inPicIdUrl (hConf h)) picsIds, post_tags = fmap inTagResp tagS}
 
-getPosts :: (MonadCatch m) => Handle m -> Page -> GetPosts -> ExceptT ReqError m ResponseInfo
-getPosts h pageNum gP = do
+getPosts :: (MonadCatch m) => Handle m -> GetPosts -> ExceptT ReqError m ResponseInfo
+getPosts h gP@(GetPosts page _ _) = do
   LimitArg filterArgs sortArgs <- chooseArgs gP
   let extractParams = ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
   let defTable = "posts JOIN authors ON authors.author_id = posts.author_id"
   let defOrderBy = if isDateASC sortArgs then [ByPostDate ASC, ByPostId ASC] else [ByPostDate DESC, ByPostId DESC]
   let orderBy = OrderList $ sortArgs ++ defOrderBy
   posts <- selectLimPosts orderBy filterArgs
-  posts <- checkListE (hLog h) $ selectLimitPosts h defTable defOrderBy pageNum (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs
+  posts <- checkListE (hLog h) $ selectLimitPosts h defTable defOrderBy page (cPostsLimit . hConf $ h) extractParams defWhere defValues filterArgs sortArgs
   let postIdsValues = fmap (Id . post_idP) posts
   let postCatsIds = fmap post_cat_idP posts
   manyCatResp <- mapM (makeCatResp (hCatResp h)) postCatsIds
@@ -83,13 +83,13 @@ getPosts h pageNum gP = do
   tagSMany <- mapM (checkListE (hLog h) . selectTags h "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" ["tags.tag_id", "tag_name"] "post_id=?") $ fmap (: []) postIdsValues
   let allParams = zip4 posts manyCatResp manyPostPicsIds tagSMany
   lift $ logInfo (hLog h) $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response"
-  okHelper $ PostsResponse {page10 = pageNum, posts10 = fmap (\(Post pId auId auInfo usId pName pDate _ pText picId, catResp, pics, tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName, post_create_date = pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl (hConf h) picId, post_pics = fmap (inPicIdUrl (hConf h)) pics, post_tags = fmap inTagResp tagS}) allParams}
+  okHelper $ PostsResponse {page10 = page, posts10 = fmap (\(Post pId auId auInfo usId pName pDate _ pText picId, catResp, pics, tagS) -> PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName, post_create_date = pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl (hConf h) picId, post_pics = fmap (inPicIdUrl (hConf h)) pics, post_tags = fmap inTagResp tagS}) allParams}
 
-deletePost :: (MonadCatch m) => Handle m -> DeletePost -> ExceptT ReqError m ResponseInfo
-deletePost h (DeletePost postIdParam) = do
-  isExistInDbE h "posts"  "post_id=?" (Id postIdParam)
-  withTransactionDBE h $ deleteAllAboutPost (hDelMany h) postIdParam
-  lift $ logInfo (hLog h) $ "Post_id: " ++ show postIdParam ++ " deleted"
+deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
+deletePost h postId = do
+  isExistInDbE h "posts"  "post_id=?" (Id postId)
+  withTransactionDBE h $ deleteAllAboutPost (hDelMany h) postId
+  lift $ logInfo (hLog h) $ "Post_id: " ++ show postId ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
 isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
