@@ -84,10 +84,13 @@ chooseRespEx Handle{..} req = do
   lift $ logDebug hLog $ "Incoming request: " ++ show req
   meth <- pullMethod req
   let path = pathInfo req
+  checkPathLength path
   let qStr = queryToQueryText $ queryString req
+  checkLengthQStr qStr
   let reqInfo = ReqInfo meth path qStr Nothing
   case path of
-     ("users":_) -> workWithUsers (hUs hMeth) reqInfo
+    ["users","admin"] -> workWithAdmin (hAdm hMeth) reqInfo
+    ("users":_) -> workWithUsers (hUs hMeth) reqInfo
     (POST,["users","logIn"]) -> hideLogInErr $ do
       lift $ logInfo (hLog h) "LogIn command"
       preParseQueryStr h req $ logIn (hAuth methH)
@@ -145,22 +148,7 @@ chooseRespEx Handle{..} req = do
       catId <- tryReadId "category_id" catIdTxt
       deleteCategory (hCat methH) catId
     ("tags":_) -> workWithTags (hTag hMeth) reqInfo
-    (POST,["tags"]) -> do
-      lift $ logInfo (hLog h) "Create tag command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ createTag (hTag methH)
-    (GET,["tags",tagIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get tag command"
-      tagId <- tryReadId "tag_id" tagIdTxt
-      getTag (hTag methH) tagId
-    (PUT,["tags",tagIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update tag command"
-      checkReqAuthAndUpdateTag (hTag methH) reqInfo
-    (DELETE,["tags",tagIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete tag command"
-      tokenAdminAuth (hAuth methH) req
-      tagId <- tryReadId "tag_id" tagIdTxt
-      deleteTag (hTag methH) tagId
+    
     (POST,["drafts"]) -> do
       lift $ logInfo (hLog h) "Create new draft command"
       (usId, _) <- tokenUserAuth (hAuth methH) req
@@ -239,9 +227,29 @@ pullMethod req = do
   let eithReqMeth = parseMethod . requestMethod $ req
   case eithReqMeth of
     Right meth -> return meth
-    Left _ -> throwE $ NotImplementedError
+    Left x -> throwE $ NotImplementedError $ "Wrong method: " ++ show x
+
+checkPathLength path =
+  case drop 3 path of
+    [] -> mapM_ checkPathTextLength path
+    _ -> throwE $ UriTooLongError "Request path too long"
+
+checkPathTextLength :: (Monad m) => Text -> ExceptT ReqError m ()
+checkPathTextLength txt = case splitAt 20 (unpack txt) of
+  (_, []) -> return ()
+  (x,_) -> throwE $ UriTooLongError $ "Request path part too long: " ++ unpack x ++ "..."
+
+ 
+checkLengthQStr qStr = 
+  case drop 12 qStr of
+    [] -> when ((sum . map lengthQText $ qStr) > 600) $ throwE $ UriTooLongError "Query string too long"
+    _ -> throwE $ UriTooLongError "Query string too long"
 
 
+lengthQText (txtKey,maybeTxt) = 
+  case maybeTxt of
+    Just txt -> genericLength txtKey + genericLength txt
+    Nothing  -> genericLength txtKey 
 
 parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
 parseQueryStrAndLog h req = do

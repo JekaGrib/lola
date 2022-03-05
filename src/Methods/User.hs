@@ -25,18 +25,21 @@ import Data.Time.Calendar ( Day)
 
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectNums :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    selectUsers :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [User],
-    updateInDb :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    deleteFromDb :: Table -> Where -> [DbValue] -> m (),
-    isExistInDb :: Table -> Where -> DbValue -> m Bool,
-    insertReturn :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
-    getDay :: m Day,
-    getTokenKey :: m String,
-    withTransactionDB :: forall a. m a -> m a,
-    hDelMany :: Methods.Common.DeleteMany.Handle m
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectUsers :: UserId -> m [User]
+  , selectAuthsForUser :: UserId -> m [Auth]
+  , selectDraftsForAuthor :: AuthorId -> m [DraftId]
+  , updateDbUserForComms :: UserId -> UserId -> m ()
+  , updateDbAuthorForPosts :: AuthorId -> AuthorId -> m ()
+  , updateDbTokenKeyForUser :: TokenKey -> UserId -> m ()
+  , deleteDbUser :: UserId -> m ()
+  , deleteDbUser :: AuthorId -> m ()
+  , insertReturnUser :: InsertUser -> m UserId
+  , getDay :: m Day
+  , getTokenKey :: m TokenKey
+  , withTransactionDB :: forall a. m a -> m a
+  , hDelMany :: Methods.Common.DeleteMany.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -56,43 +59,119 @@ makeH conf logH =
         (withTransaction conn)
         (Methods.Common.DeleteMany.makeH conf)
 
+
+selectUsers' conn usId = do
+  let wh = WherePair "user_id=?" (Id usId)
+  select' conn $
+    Select 
+      ["first_name", "last_name", "user_pic_id", "user_create_date"]
+      "users" 
+      wh
+selectAuthsForUser' conn usId = do
+  let wh = WherePair "user_id=?" (Id usId)
+  select' conn $ Select ["password", "admin"] "users" wh
+selectDraftsForAuthor' conn auId = do
+  let wh = WherePair "author_id=?" (Id auId)
+  selectOnly' conn $ Select ["draft_id"] "drafts" wh
+updateDbUserForComms' conn newUsId usId = do
+  let set = SetPair "user_id=?" (Txt newUsId)
+  let wh = WherePair "user_id=?" (Id usId)
+  updateInDb' conn (Update "comments" [set] wh)
+updateDbAuthorForPosts' conn newAuId auId = do
+  let set = SetPair "author_id=?" (Txt newAuId)
+  let wh = WherePair "author_id=?" (Id auId)
+  updateInDb' conn (Update "posts" [set] wh)
+updateDbTokenKeyForUser' conn tokenKey usId = do
+  let set = SetPair "token_key=?" (Str tokenKey)
+  let wh = WherePair "user_id=?" (Id usId)
+  updateInDb' conn (Update "users" set wh)
+deleteDbUser' conn usId = do
+  let wh = WherePair "user_id=?" (Txt usId)
+  deleteFromDb' conn (Delete "users" wh)
+deleteDbAuthor' conn auId = do
+  let wh = WherePair "author_id=?" (Txt auId)
+  deleteFromDb' conn (Delete "authors" wh)
+insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
+  let insPair1 = InsertPair "password"         (Txt  pwd)
+  let insPair2 = InsertPair "first_name"       (Txt  fName)
+  let insPair3 = InsertPair "last_name"        (Txt  lName)
+  let insPair4 = InsertPair "user_pic_id"      (Id   picId)
+  let insPair5 = InsertPair "user_create_date" (Day  day)
+  let insPair6 = InsertPair "admin"            (Bool bool)
+  let insPair7 = InsertPair "token_key"        (Str  tokenKey)
+  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6,insPair7]
+  insertReturn' conn (InsertRet "users" insPairs "user_id")
+
+workWithUsers :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
+workWithUsers Handle{..} (ReqInfo meth path qStr _) = 
+  case (meth,path) of
+    (POST,["users","logIn"]) -> hideLogInErr $ do
+      lift $ logInfo hLog "LogIn command"
+      checkQStr hExist qStr >>= logIn h
+    (POST,["users"]) -> do
+      lift $ logInfo hLog "Create user command"
+      checkQStr hExist qStr >>= createUser h
+    (GET,["users",usIdTxt]) -> do
+      lift $ logInfo hLog "Get user command"
+      usId <- checkUserResourse h usIdTxt
+      getUser h usId
+    (DELETE,["users",usIdTxt]) -> do
+      lift $ logInfo hLog "Delete user command"
+      tokenAdminAuth hAuth req
+      usId <- checkUserResourse h usIdTxt
+      deleteUser h usId
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
-createUser h (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
-  day <- lift $ getDay h
-  tokenKey <- lift $ getTokenKey h
+createUser Handle{..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
+  day <- lift $ getDay 
+  tokenKey <- lift $ getTokenKey 
   let hashPwdParam = txtSha1 pwdParam
-  isExistInDbE h "pics" "pic_id=?" (Id picIdParam)
-  let insNames = ["password", "first_name", "last_name", "user_pic_id", "user_create_date", "admin", "token_key"]
-  let insValues = [Txt hashPwdParam, Txt fNameParam, Txt lNameParam, Id picIdParam, Day day, Bool False, Txt (pack tokenKey)]
-  usId <- insertReturnE h "users" "user_id" insNames insValues
-  lift $ logDebug (hLog h) $ "DB return user_id:" ++ show usId ++ "and token key"
-  lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " created"
+  let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day False tokenKey
+  usId <- catchInsRetE hLog $ insertReturnUser insUser
+  lift $ logDebug hLog $ "DB return user_id:" ++ show usId ++ "and token key"
+  lift $ logInfo hLog $ "User_id: " ++ show usId ++ " created"
   let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
   okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdParam, user_pic_urlUTR = makeMyPicUrl (hConf h) picIdParam, user_create_dateUTR = day}
 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
-getUser h usId = do
-  let selectParams = ["first_name", "last_name", "user_pic_id", "user_create_date"]
-  User fName lName picId usCreateDate <- checkOneIfExistE (hLog h) (selectUsers h) "users" selectParams "user_id=?" (Id usIdNum)
-  okHelper $ UserResponse {user_id = usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl (hConf h) picId, user_create_date = usCreateDate}
+getUser Handle{..} usId = do
+  User fName lName picId usCreateDate <- catchOneSelE hLog $ selectUsers usId
+  okHelper $ UserResponse {user_id = usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl hConf picId, user_create_date = usCreateDate}
 
 deleteUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
-deleteUser h usId = do
-  isExistInDbE h "users" "user_id=?" (Id usId)
-  let updateCom = updateInDb h "comments" "user_id=?" "user_id=?" [Id $ cDefUsId (hConf h), Id usId]
-  let deleteUs = deleteFromDb h "users" "user_id=?" [Id usId]
-  maybeAuId <- checkMaybeOneE (hLog h) $ selectNums h "authors" ["author_id"] "user_id=?" [Id usId]
+deleteUser Handle{..} usId = do
+  let updateCom = updateDbUserForComms (cDefUsId hConf) usId
+  let deleteUs = deleteDbUser usId
+  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthsForUser usId
   case maybeAuId of
     Just authorId -> do
-      let updatePost = updateInDb h "posts" "author_id=?" "author_id=?" [Id $ cDefAuthId (hConf h), Id authorId ]
-      draftsIds <- checkListE (hLog h) $ selectNums h "drafts" ["draft_id"] "author_id=?" [Id authorId]
-      let deleteDr = deleteAllAboutDrafts (hDelMany h) draftsIds
-      let deleteAu = deleteFromDb h "authors" "author_id=?" [Id authorId]
+      let updatePost = updateAuthorForPosts' (cDefAuthId hConf ) authorId 
+      draftsIds <- catchSelE hLog $ selectDraftsForAuthor authorId
+      let deleteDr = deleteAllAboutDrafts hDelMany draftsIds
+      let deleteAu = deleteAuthor authorId
       withTransactionDBE h (updateCom >> updatePost >> deleteDr >> deleteAu >> deleteUs)
     Nothing ->
       withTransactionDBE h (updateCom >> deleteUs)
   lift $ logInfo (hLog h) $ "User_id: " ++ show usId ++ " deleted"
   okHelper $ OkResponse {ok = True}
+
+logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
+logIn Handle{..} (LogIn usIdParam pwdParam) = do
+  let logpair = ("user_id",usIdParam)
+  Auth pwd admBool <- catchOneSelIfExistE hLog logpair $ selectAuthsForUser usIdParam
+  checkPwd pwdParam pwd
+  tokenKey <- lift $ getTokenKey 
+  catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
+  if admBool
+    then do
+      let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
+      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as admin."
+      okHelper $ TokenResponse {tokenTR = usToken}
+    else do
+      let usToken = pack $ show usIdParam ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
+      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
+      okHelper $ TokenResponse {tokenTR = usToken}
 
 isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
 isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
@@ -102,3 +181,7 @@ insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
+
+checkUserResourse Handle{..} usIdTxt =
+  iD <- tryReadResourseId "user_id" usIdTxt
+  isExistResourseE hExist (UserId iD)

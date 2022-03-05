@@ -26,7 +26,7 @@ data Handle m = Handle
   , selectKeys :: m [Key]
   , insertReturnUser :: InsertUser -> m UserId
   , getDay :: m Day
-  , getTokenKey :: m String
+  , getTokenKey :: m TokenKey
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO

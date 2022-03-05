@@ -44,7 +44,7 @@ newtype Token = Token Text
 instance ParseQueryStr Token where
   parseQueryStr qStr =
     Token
-      <$> parseTxtParam qStr 100 "token"
+      <$> parseTxtParam qStr 50 "token"
 
 data CreateUser = CreateUser {pwdCU :: Text, fNameCU :: Text, lNameCU :: Text, picIdCU :: PictureId}
   deriving (Show)
@@ -85,7 +85,7 @@ instance ParseQueryStr CreateAuthor where
   parseQueryStr qStr =
     CreateAuthor
       <$> parseIdParam qStr "user_id"
-      <*> parseTxtParam qStr 1000 "author_info"
+      <*> parseTxtParam qStr 500 "author_info"
 
 instance CheckExist CreateAuthor where
   checkExist h (CreateAuthor usId _) =
@@ -99,7 +99,7 @@ instance ParseQueryStr UpdateAuthor where
   parseQueryStr qStr =
     UpdateAuthor
       <$> parseIdParam qStr "user_id"
-      <*> parseTxtParam qStr 1000 "author_info"
+      <*> parseTxtParam qStr 500 "author_info"
 
 instance CheckExist UpdateAuthor where
   checkExist h (UpdateAuthor usId _) =
@@ -235,7 +235,7 @@ instance ParseQueryStr CreateComment where
   parseQueryStr qStr =
     CreateComment
       <$> parseIdParam qStr "post_id"
-      <*> parseTxtParam qStr 1000 "comment_text"
+      <*> parseTxtParam qStr 500 "comment_text"
 
 instance CheckExist CreateComment where
   checkExist h (CreateComment pId _) =
@@ -260,7 +260,7 @@ data UpdateComment = UpdateComment Text
 instance ParseQueryStr UpdateComment where
   parseQueryStr qStr =
     UpdateComment
-      <$> parseTxtParam qStr 1000 "comment_text"
+      <$> parseTxtParam qStr 500 "comment_text"
 
 
 newtype LoadPicture = LoadPicture Text

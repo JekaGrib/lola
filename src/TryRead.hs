@@ -23,15 +23,8 @@ tryReadId paramKey txt = do
   num <- tryReadInteger paramKey txt
   checkBigIntId paramKey num
 
-tryReadResourseInteger :: (Monad m) => [Text] -> Text -> ExceptT ReqError m Integer
-tryReadResourseInteger path txt = case reads . unpack $ txt of
-  [(a, "")] -> return a
-  _ -> throwE $ BadReqError $ "For resourse: " ++ show path ++ ". Wrong id: " ++ getTxtstart txt 
-
 tryReadResourseId :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Id
-tryReadResourseId path txt = do
-  num <- tryReadInteger path txt
-  checkBigIntResourseId path num
+tryReadResourseId paramKey txt = tryReadId paramKey txt `catchE` fromBadReqToResNotExistError 
 
 tryReadPage :: (Monad m) => Text -> ExceptT ReqError m Page
 tryReadPage txt = do
@@ -82,8 +75,8 @@ checkBigIntId paramKey num
 
 checkBigIntResourseId :: (Monad m) => [Text] -> Integer -> ExceptT ReqError m Id
 checkBigIntResourseId path num
-  | num <= 0 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ " . Id should be greater then 0"
-  | num > 9223372036854775805 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ ". Id should be less then 9223372036854775805"
+  | num <= 0 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ " . Id too small"
+  | num > 9223372036854775805 = throwE $ ResourseNotExistError $ "For resourse: " ++ show path ++ ". Id too big"
   | otherwise = return (fromInteger num)
 
 checkPage :: (Monad m) => Integer -> ExceptT ReqError m Page
@@ -96,6 +89,11 @@ getTxtstart :: Text -> String
 getTxtstart txt = case splitAt 20 (unpack txt) of
   (str, []) -> str
   (str, _) -> str ++ "... "
+
+checkIdLength :: (Monad m) => Text -> ExceptT ReqError m ()
+checkIdLength leng txt = case splitAt 20 (unpack txt) of
+  (_, []) -> return ()
+  _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
 
 {-
 tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer

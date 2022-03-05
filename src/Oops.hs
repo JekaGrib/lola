@@ -18,7 +18,8 @@ data ReqError =
   | SecretTokenError String 
   | BadReqError String
   | ResourseNotExistError String
-  | NotImplementedError
+  | NotImplementedError String
+  | UriTooLongError String
 
   deriving (Eq, Show)
 
@@ -86,7 +87,6 @@ catchDbOutputErr m =
 toSecret :: ReqError -> ReqError
 toSecret err = SecretError (show err)
 
-
 simpleToSecretLogIn :: ReqError -> ReqError
 simpleToSecretLogIn (SimpleError str) = SecretLogInError str
 simpleToSecretLogIn e = e
@@ -94,3 +94,7 @@ simpleToSecretLogIn e = e
 simpleToSecretToken :: ReqError -> ReqError
 simpleToSecretToken (SimpleError str) = SecretTokenError str
 simpleToSecretToken e = e
+
+fromBadReqToResNotExistError :: ReqError -> ReqError
+fromBadReqToResNotExistError (BadReqError str) = ResourseNotExistError str
+fromBadReqToResNotExistError e = e

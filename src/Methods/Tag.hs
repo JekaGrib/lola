@@ -74,36 +74,29 @@ insertReturnTag' conn tagName = do
   let insPair = InsertPair "tag_name" (Txt tagName)
   insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
 
-
+workWithTags :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
 workWithTags h@Handle{..} (ReqInfo meth path qStr _) = 
   case (meth,path) of
     (POST,["tags"]) -> do
       lift $ logInfo hLog "Create tag command"
-      tokenAdminAuth (hAuth methH) req
-      checkQStr hExist qStr >>= createTag (hTag methH)
+      tokenAdminAuth hAuth  req
+      checkQStr hExist qStr >>= createTag h
     (GET,["tags",tagIdTxt]) -> do
       lift $ logInfo hLog "Get tag command"
-      tagId <- tryReadId "tag_id" tagIdTxt
-      getTag (hTag methH) tagId
+      tagId <- checkTagResourse h tagIdTxt
+      getTag h tagId
     (PUT,["tags",tagIdTxt]) -> do
       lift $ logInfo hLog  "Update tag command"
-      checkReqAuthAndUpdateTag (hTag methH) reqInfo
+      tokenAdminAuth hAuth req
+      tagId <- checkTagResourse h tagIdTxt
+      checkQStr hExist qStr >>= updateTag h tagId
     (DELETE,["tags",tagIdTxt]) -> do
       lift $ logInfo hLog  "Delete tag command"
-      tokenAdminAuth (hAuth methH) req
-      tagId <- tryReadId "tag_id" tagIdTxt
-      deleteTag (hTag methH) tagId
+      tokenAdminAuth hAuth req
+      tagId <- checkTagResourse h tagIdTxt
+      deleteTag h tagId
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
 
-checkReqAuthAndCreateTag h@Handle{..} (ReqInfo meth path qStr _) =
-  tokenAdminAuth hAuth qStr
-  crT <-  qStr
-  createTag h crT
-
-checkReqAuthAndUpdateTag h@Handle{..} (ReqInfo meth path qStr _) =
-  tokenAdminAuth hAuth qStr
-  Just tagId <- checkResourse hExist path 
-  updT <- checkQStr hExist qStr
-  updateTag h updT
 
 
 createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
@@ -114,21 +107,18 @@ createTag Handle{..} (CreateTag tagNameParam) = do
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag Handle{..} tagId = do
-  let logpair = ("tag_id", tagId)
-  tagName <- catchOneSelIfExistE hLog logpair $ selectTagNames tagId
+  tagName <- catchOneSelE hLog logpair $ selectTagNames tagId
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " sending in response"
   okHelper $ TagResponse tagId tagName
 
 updateTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> UpdateTag -> ExceptT ReqError m ResponseInfo
 updateTag Handle{..} tagId (UpdateTag tagNameParam) = do
-  catchResExistE hLog isExistTag tagId
   catchUpdE hLog $ updateDbTag tagNameParam tagId
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " updated"
   okHelper $ TagResponse tagId tagNameParam
 
 deleteTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 deleteTag Handle{..} tagId = do
-  catchResExistE hLog isExistTag tagId
   let deleteTgDr = deleteDbTagForDrafts tagId
   let deleteTgPos = deleteDbTagForPosts tagId
   let deleteTg = deleteDbTag tagId
@@ -137,7 +127,9 @@ deleteTag Handle{..} tagId = do
   okHelper $ OkResponse {ok = True}
 
 
-
+checkTagResourse Handle{..} tagIdTxt =
+  iD <- tryReadResourseId "tag_id" tagIdTxt
+  isExistResourseE hExist (TagId iD)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

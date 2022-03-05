@@ -134,7 +134,7 @@ isCommOrPostAuthor Handle{..} commId postId usId = do
 
 isCommAuthorIfExist :: (MonadCatch m) => Handle m -> CommentId -> UserId -> ExceptT ReqError m ()
 isCommAuthorIfExist Handle {..} commId usId = do
-  usIdForComm <- catchOneSelE hLog $ selectUsersForComm commId
+  usIdForComm <- catchOneSelIfExistE hLog $ selectUsersForComm commId
   unless (usIdForComm == usId)
     $ throwE
     $ SimpleError

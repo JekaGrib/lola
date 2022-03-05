@@ -24,9 +24,6 @@ data Handle m = Handle
   { hConf :: Config
   , hLog :: LogHandle m
   , selectTokenKeysForUser :: UserId -> m [TokenKey]
-  , selectAuthsForUser :: UserId -> m [Auth]
-  , updateDbTokenKeyForUser :: TokenKey -> UserId -> m ()
-  , getTokenKey :: m String
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -38,35 +35,10 @@ makeH conf logH =
         (selectOnly' conn)
         (select' conn)
         (updateInDb' conn)
-        getTokenKey'
 
 selectTokenKeysForUser' conn usId = 
   let wh = WherePair "user_id=?" (Id usId)
   selectOnly' conn $ Select ["token_key"] "users" wh
-selectAuthsForUser' conn usId = 
-  let wh = WherePair "user_id=?" (Id usId)
-  selectOnly' conn $ Select ["password", "admin"] "users" wh
-updateDbTokenKeyForUser' conn tokenKey usId = do
-  let set = SetPair "token_key=?" (Str tokenKey)
-  let wh = WherePair "user_id=?" (Id usId)
-  updateInDb' conn (Update "users" set wh)
-
-logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
-logIn Handle{..} (LogIn usIdParam pwdParam) = do
-  let logpair = ("user_id",usIdParam)
-  Auth pwd admBool <- checkOneIfExistE hLog logpair $ selectAuthsForUser usIdParam
-  checkPwd pwdParam pwd
-  tokenKey <- lift $ getTokenKey 
-  catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
-  if admBool
-    then do
-      let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as admin."
-      okHelper $ TokenResponse {tokenTR = usToken}
-    else do
-      let usToken = pack $ show usIdParam ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
-      okHelper $ TokenResponse {tokenTR = usToken}
 
 type UserAccessMode = (UserId, AccessMode)
 
