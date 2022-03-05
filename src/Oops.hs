@@ -20,6 +20,9 @@ data ReqError =
   | ResourseNotExistError String
   | NotImplementedError String
   | UriTooLongError String
+  | ForbiddenError String
+  | UnauthorizedError String
+  | ReqBodyTooLargeError String
 
   deriving (Eq, Show)
 

@@ -48,10 +48,22 @@ insertRetPicBS conn sbs =
   let insPair = InsertPair "pic" (BS (Binary sbs))
   insertReturn' conn (InsertRet "pics" [insPair] "pic_id")
 
+workWithPics :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
+workWithPics h@Handle{..} (ReqInfo meth path qStr _) = 
+  case (meth,path) of
+    (POST, ["pictures"]) -> do
+      lift $ logInfo hLog "Load picture command"
+      _ <- tokenUserAuth hAuth req
+      checkQStr hExist qStr >>= loadPicture h
+    (GET,["pictures",picIdTxt]) -> do
+      lift $ logInfo hLog "Get picture command"
+      picId <- checkPicResourse h picIdTxt
+      sendPicture h picId
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture Handle{..} picIdNum = do
-  let logpair = ("pic_id", picIdNum)
-  bs <- checkOneSelIfExistE hLog logpair $ selectPicBS picIdNum
+  bs <- catchOneSelE hLog $ selectPicBS picIdNum
   let lbs = BSL.fromStrict bs
   lift $ logInfo hLog $ "Pic_id: " ++ show picIdNum ++ " sending in response"
   return $
@@ -76,3 +88,9 @@ checkPicUrlGetPic Handle{..} url = do
   case decodeImage sbs of
     Right _ -> return lbs
     Left _ -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+
+checkPicResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m PictureId
+checkPicResourse Handle{..} picIdTxt =
+  iD <- tryReadResourseId "pic_id" picIdTxt
+  isExistResourseE hExist (PicId iD)
+  return iD

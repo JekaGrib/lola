@@ -29,8 +29,6 @@ data Handle m = Handle
   , selectLimCommsForPost :: PostId -> OrderBy -> Page -> Limit -> m [Comment]
   , updateDbComm :: CommentText -> CommentId -> m ()
   , deleteDbComm :: CommentId -> m ()
-  , isExistComm :: CommentId -> m Bool
-  , isExistPost :: PostId -> m Bool
   , insertReturnComm :: CommentText -> PostId -> UserId -> m CommentId
   }
 
@@ -46,8 +44,6 @@ makeH conf logH =
         (selectLimCommsForPost' conn)
         (updateDbComm' conn)
         (deleteDbComm' conn)
-        (isExistComm' conn)
-        (isExistPost' conn)
         (insertReturnComm' conn)
 
 selectUsersForPost' conn postId = do
@@ -72,12 +68,6 @@ updateDbComm' conn commTxt commId = do
 deleteDbComm' conn commId = do
   let wh = WherePair "comment_id=?" (Id commId)
   deleteFromDb' conn (Delete "comments" wh)
-isExistComm' conn commId = do
-  let wh = WherePair "comment_id=?" (Id commId)
-  isExistInDb' conn (Exists "comments" wh)
-isExistPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  isExistInDb' conn (Exists "posts" wh)
 insertReturnComm' conn commTxt postId usId = do
   let insPair1 = InsertPair "comment_text" (Txt commTxt)
   let insPair2 = InsertPair "post_id" (Id postId)
@@ -85,18 +75,36 @@ insertReturnComm' conn commTxt postId usId = do
   let insPairs = [insPair1,insPair2,insPair3]
   insertReturn' conn (InsertRet "comments" [insPair] "comment_id")
 
+workWithComms :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
+workWithComms h@Handle{..} (ReqInfo meth path qStr _) = 
+  case (meth,path) of
+    (POST,["comments"]) -> do
+      lift $ logInfo hLog "Create comment command"
+      (usId, _) <- tokenUserAuth hAuth req
+      checkQStr hExist qStr >>= createComment h usId
+    (GET,["comments"]) -> do
+      lift $ logInfo hLog "Get comments command"
+      checkQStr hExist qStr >>= getComments h
+    (PUT,["comments",commIdTxt]) -> do
+      lift $ logInfo hLog "Update comment command"
+      (usId, _) <- tokenUserAuth hAuth  req
+      commId <- checkCommResourse h commIdTxt
+      checkQStr hExist qStr >>= updateComment h usId commId
+    (DELETE,["comments",commIdTxt]) -> do
+      lift $ logInfo hLog "Delete comment command"
+      (usId, accessMode) <- tokenUserAuth hAuth  req
+      commId <- checkCommResourse h commIdTxt
+      deleteComment h usId accessMode commId
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    
 createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> ExceptT ReqError m ResponseInfo
 createComment Handle{..} usIdNum (CreateComment postIdParam txtParam) = do
-  let logpair = ("post_id", postIdParam)
-  catchExistE hLog logpair $ isExistPost postIdParam
   commId <- catchInsRetE hLog $ insertReturnComm txtParam postIdParam usIdNum
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " created"
   okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdParam, user_id6 = usIdNum}
 
 getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m ResponseInfo
 getComments Handle{..} (GetComments postIdParam pageNum) = do
-  let logpair = ("post_id", postIdParam)
-  catchExistE hLog logpair $ isExistPost postIdParam
   let orderBy = ByCommId DESC
   comms <- catchSelE hLog $ selectLimCommsForPost' conn postIdParam orderBy pageNum (cCommLimit hConf)  
   lift $ logInfo hLog $ "Comments_id: " ++ show (fmap comment_idC comms) ++ " sending in response"
@@ -104,7 +112,7 @@ getComments Handle{..} (GetComments postIdParam pageNum) = do
 
 updateComment :: (MonadCatch m) => Handle m -> UserId -> UpdateComment -> ExceptT ReqError m ResponseInfo
 updateComment h@Handle{..} usId commId (UpdateComment txtParam) = do
-  isCommAuthorIfExist h commId usId
+  isCommAuthor h commId usId
   catchUpdE hLog $ updateDbComm txtParam commId
   postId <- catchOneSelE hLog $ selectPostsForComm commId
   lift $ logInfo hLog  $ "Comment_id: " ++ show commId ++ " updated"
@@ -112,8 +120,6 @@ updateComment h@Handle{..} usId commId (UpdateComment txtParam) = do
 
 deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> CommentId -> ExceptT ReqError m ResponseInfo
 deleteComment h@Handle{..} usId accessMode commId = do
-  let logpair = ("comment_id", commId)
-  catchExistE hLog logpair $ isExistComm commId
   case accessMode of
     AdminMode -> return ()
     UserMode -> do
@@ -129,17 +135,22 @@ isCommOrPostAuthor Handle{..} commId postId usId = do
   usComId <- catchOneSelE hLog $ selectUsersForComm commId
   unless (usPostId == usId || usComId == usId)
     $ throwE
-    $ SimpleError
+    $ ForbiddenError
     $ "user_id: " ++ show usIdNum ++ " is not author of comment_id: " ++ show commIdParam ++ " and not author of post_id: " ++ show postId
 
-isCommAuthorIfExist :: (MonadCatch m) => Handle m -> CommentId -> UserId -> ExceptT ReqError m ()
-isCommAuthorIfExist Handle {..} commId usId = do
-  usIdForComm <- catchOneSelIfExistE hLog $ selectUsersForComm commId
+isCommAuthor :: (MonadCatch m) => Handle m -> CommentId -> UserId -> ExceptT ReqError m ()
+isCommAuthor Handle {..} commId usId = do
+  usIdForComm <- catchOneSelE hLog $ selectUsersForComm commId
   unless (usIdForComm == usId)
     $ throwE
-    $ SimpleError
+    $ ForbiddenError
     $ "user_id: " ++ show usId ++ " is not author of comment_id: " ++ show commId
 
+checkCommResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m CommentId
+checkCommResourse Handle{..} commIdTxt =
+  iD <- tryReadResourseId "comment_id" commIdTxt
+  isExistResourseE hExist (CommentId iD)
+  return iD
 
 deleteDbCommE :: (MonadCatch m) => CommentId -> ExceptT ReqError m ()
 deleteDbCommE Handle {..} commId = do

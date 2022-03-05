@@ -32,9 +32,7 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectOnly' conn)
-        (select' conn)
-        (updateInDb' conn)
+        (selectTokenKeysForUser' conn)
 
 selectTokenKeysForUser' conn usId = 
   let wh = WherePair "user_id=?" (Id usId)

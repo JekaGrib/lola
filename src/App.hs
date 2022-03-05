@@ -91,63 +91,12 @@ chooseRespEx Handle{..} req = do
   case path of
     ["users","admin"] -> workWithAdmin (hAdm hMeth) reqInfo
     ("users":_) -> workWithUsers (hUs hMeth) reqInfo
-    (POST,["users","logIn"]) -> hideLogInErr $ do
-      lift $ logInfo (hLog h) "LogIn command"
-      preParseQueryStr h req $ logIn (hAuth methH)
-    (POST,["users","admin"]) -> hideErr $ do
-      lift $ logInfo (hLog h) "Create admin command"
-      preParseQueryStr h req $ createAdmin (hAdm methH)
-    (POST,["users"]) -> do
-      lift $ logInfo (hLog h) "Create user command"
-      preParseQueryStr h req $ createUser (hUs methH)
-    (GET,["users",usIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get user command"
-      usId <- tryReadId "user_id" usIdTxt
-      lift $ logInfo (hLog h) $ "User_id parameter parsed:" ++ show usId
-      getUser (hUs methH) usIdNum
-    (DELETE,["users",usIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete user command"
-      tokenAdminAuth (hAuth methH) req
-      usId <- tryReadId "user_id" usIdTxt
-      deleteUser (hUs methH) usId
-    (POST,["authors"]) -> do
-      lift $ logInfo (hLog h) "Create author command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ createAuthor (hAu methH)
-    (GET,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get author command"
-      tokenAdminAuth (hAuth methH) req
-      auId <- tryReadId "author_id" auIdTxt
-      getAuthor (hAu methH) auId
-    (PUT,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update author command"
-      tokenAdminAuth (hAuth methH) req
-      auId <- tryReadId "author_id" auIdTxt
-      preParseQueryStr h req $ updateAuthor (hAu methH) auId
-    (DELETE,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete author command"
-      tokenAdminAuth (hAuth methH) req
-      auId <- tryReadId "author_id" auIdTxt
-      deleteAuthor (hAu methH) auId
-    (POST,["categories"]) -> do
-      lift $ logInfo (hLog h) "Create category command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ createCategory (hCat methH)
-    (GET,["categories",catIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get category command"
-      catId <- tryReadId "category_id" catIdTxt
-      getCategory (hCat methH) catId
-    (PUT,["categories",catIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update category command"
-      tokenAdminAuth (hAuth methH) req
-      catId <- tryReadId "category_id" catIdTxt
-      preParseQueryStr h req $ updateCategory (hCat methH) catId
-    (DELETE,["categories",catIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete category command"
-      tokenAdminAuth (hAuth methH) req
-      catId <- tryReadId "category_id" catIdTxt
-      deleteCategory (hCat methH) catId
+    ("authors":_) -> workWithAuthors (hAu hMeth) reqInfo
+    ("categories":_) -> workWithCats (hCat hMeth) reqInfo
     ("tags":_) -> workWithTags (hTag hMeth) reqInfo
+    ("drafts":_) -> do
+      body <- pullReqBody h req
+      workWithDrafts (hDr hMeth) (ReqInfo meth path qStr (Just body))
     
     (POST,["drafts"]) -> do
       lift $ logInfo (hLog h) "Create new draft command"
@@ -196,32 +145,12 @@ chooseRespEx Handle{..} req = do
       tokenAdminAuth (hAuth methH) req
       postId <- tryReadId "post_id" postIdTxt
       deletePost (hPost methH) postId
-    (POST,["comments"]) -> do
-      lift $ logInfo (hLog h) "Create comment command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ createComment (hCom methH) usId
-    (GET,["comments"]) -> do
-      lift $ logInfo (hLog h) "Get comments command"
-      preParseQueryStr h req $ getComments (hCom methH)
-    (PUT,["comments",commIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update comment command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      commId <- tryReadId "comment_id" commIdTxt
-      preParseQueryStr h req $ updateComment (hCom methH) usId commId
-    (DELETE,["comments",commIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete comment command"
-      (usId, accessMode) <- tokenUserAuth (hAuth methH) req
-      commId <- tryReadId "comment_id" commIdTxt
-      deleteComment (hCom methH) usId accessMode commId
-    (POST, ["pictures"]) -> do
-      lift $ logInfo (hLog h) "Load picture command"
-      _ <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ loadPicture (hPic methH)
-    (GET,["pictures",picIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get picture command"
-      picId <- tryReadId "picture_id" picIdTxt
-      sendPicture (hPic methH) picId
-    _ -> throwE $ SecretError "Unknown response"
+    
+    
+    ("comments":_) -> workWithComms (hCom hMeth) reqInfo
+    ("pictures":_) -> workWithPics (hPic hMeth) reqInfo
+    xs -> throwE $ ResourseNotExistError $ "Unknown path : " ++ show xs
+
 
 pullMethod req = do
   let eithReqMeth = parseMethod . requestMethod $ req
@@ -250,6 +179,16 @@ lengthQText (txtKey,maybeTxt) =
   case maybeTxt of
     Just txt -> genericLength txtKey + genericLength txt
     Nothing  -> genericLength txtKey 
+
+pullReqBody :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ByteString
+pullReqBody h req = do
+  checkLengthReqBody req
+  lift $ getBody h req
+
+checkLengthReqBody req =
+  case requestBodyLength req of
+    ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"
+    _ -> return ()
 
 parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
 parseQueryStrAndLog h req = do

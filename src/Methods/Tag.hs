@@ -30,7 +30,6 @@ data Handle m = Handle
   , deleteDbTag          :: TagId -> m ()
   , deleteDbTagForDrafts :: TagId -> m ()
   , deleteDbTagForPosts  :: TagId -> m ()
-  , isExistTag           :: TagId -> m Bool
   , insertReturnTag      :: TagName -> m TagId
   , withTransactionDB    :: forall a. m a -> m a
   , hAuth                :: Methods.Auth.Handle
@@ -47,7 +46,6 @@ makeH conf logH =
         (deleteDbTag' conn)
         (deleteDbTagForDrafts' conn)
         (deleteDbTagForPosts' conn)
-        (isExistTag' conn)
         (insertReturnTag' conn)
         (withTransaction conn)
 
@@ -67,9 +65,6 @@ deleteDbTagForPosts' conn tagId = do
 deleteDbTagForDrafts' conn tagId = do
   let wh = WherePair "tag_id=?" (Id tagId)
   deleteFromDb' conn (Delete "draftstags" wh)
-isExistTag' conn tagId = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  isExistInDb' conn (Exists "tags" wh)
 insertReturnTag' conn tagName = do
   let insPair = InsertPair "tag_name" (Txt tagName)
   insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
@@ -107,7 +102,7 @@ createTag Handle{..} (CreateTag tagNameParam) = do
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag Handle{..} tagId = do
-  tagName <- catchOneSelE hLog logpair $ selectTagNames tagId
+  tagName <- catchOneSelE hLog $ selectTagNames tagId
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " sending in response"
   okHelper $ TagResponse tagId tagName
 
@@ -126,10 +121,11 @@ deleteTag Handle{..} tagId = do
   lift $ logInfo (hLog h) $ "Tag_id: " ++ show tagId ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
-
+checkTagResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m TagId
 checkTagResourse Handle{..} tagIdTxt =
   iD <- tryReadResourseId "tag_id" tagIdTxt
   isExistResourseE hExist (TagId iD)
+  return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

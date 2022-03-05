@@ -34,7 +34,7 @@ data Handle m = Handle
   , updateDbAuthorForPosts :: AuthorId -> AuthorId -> m ()
   , updateDbTokenKeyForUser :: TokenKey -> UserId -> m ()
   , deleteDbUser :: UserId -> m ()
-  , deleteDbUser :: AuthorId -> m ()
+  , deleteDbAuthor :: AuthorId -> m ()
   , insertReturnUser :: InsertUser -> m UserId
   , getDay :: m Day
   , getTokenKey :: m TokenKey
@@ -48,12 +48,15 @@ makeH conf logH =
    in Handle
         conf
         logH
-        (selectOnly' conn)
-        (select' conn)
-        (updateInDb' conn)
-        (deleteFromDb' conn)
-        (isExistInDb' conn)
-        (insertReturn' conn)
+        (selectUsers' conn)
+        (selectAuthsForUser' conn)
+        (selectDraftsForAuthor' conn)
+        (updateDbUserForComms' conn)
+        (updateDbAuthorForPosts' conn)
+        (updateDbTokenKeyForUser' conn)
+        (deleteDbUser' conn)
+        (deleteDbAuthor' conn)
+        (insertReturnUser' conn)
         getDay'
         getTokenKey'
         (withTransaction conn)
@@ -103,7 +106,7 @@ insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   insertReturn' conn (InsertRet "users" insPairs "user_id")
 
 workWithUsers :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithUsers Handle{..} (ReqInfo meth path qStr _) = 
+workWithUsers h@Handle{..} (ReqInfo meth path qStr _) = 
   case (meth,path) of
     (POST,["users","logIn"]) -> hideLogInErr $ do
       lift $ logInfo hLog "LogIn command"
@@ -158,8 +161,7 @@ deleteUser Handle{..} usId = do
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle{..} (LogIn usIdParam pwdParam) = do
-  let logpair = ("user_id",usIdParam)
-  Auth pwd admBool <- catchOneSelIfExistE hLog logpair $ selectAuthsForUser usIdParam
+  Auth pwd admBool <- catchOneSelE hLog $ selectAuthsForUser usIdParam
   checkPwd pwdParam pwd
   tokenKey <- lift $ getTokenKey 
   catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
@@ -173,15 +175,12 @@ logIn Handle{..} (LogIn usIdParam pwdParam) = do
       lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
       okHelper $ TokenResponse {tokenTR = usToken}
 
-isExistInDbE :: (MonadCatch m) => Handle m -> Table -> Where -> DbValue -> ExceptT ReqError m ()
-isExistInDbE h = checkIsExistE (hLog h) (isExistInDb h)
-
-insertReturnE :: (MonadCatch m) => Handle m -> Table -> String -> [String] -> [DbValue] -> ExceptT ReqError m Id
-insertReturnE h = checkInsRetE (hLog h) (insertReturn h)
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
 
+checkUserResourse :: Handle m -> Text -> ExceptT ReqError m UserId
 checkUserResourse Handle{..} usIdTxt =
   iD <- tryReadResourseId "user_id" usIdTxt
   isExistResourseE hExist (UserId iD)
+  return iD

@@ -53,6 +53,14 @@ insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6,insPair7]
   insertReturn' conn (InsertRet "users" insPairs "user_id")
 
+workWithAdmin :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
+workWithAdmin h@Handle{..} (ReqInfo meth path qStr _) = 
+  case (meth,path) of
+    (POST,["users","admin"]) -> hideErr $ do
+      lift $ logInfo hLog "Create admin command"
+      checkQStr hExist qStr >>= createAdmin h
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+
 createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin Handle{..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) = do
   keys <- catchSelE hLog selectKeys 
@@ -70,9 +78,9 @@ createAdmin Handle{..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picI
 checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
 checkKeyE keyParam key
   | keyParam == key = return ()
-  | otherwise = throwE $ SimpleError "Invalid create_admin_key"
+  | otherwise = throwE $ BadReqError "Invalid create_admin_key"
 
 getLastKey :: (MonadCatch m) => [Text] -> ExceptT ReqError m Text
-getLastKey [] = throwE $ SimpleError "DatabaseError.Empty output"
+getLastKey [] = throwE $ DatabaseError "Empty output. Table key is empty."
 getLastKey xs = return $ last xs
 

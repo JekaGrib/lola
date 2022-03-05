@@ -41,8 +41,8 @@ instance FromJSON DraftRequest where
       <*> v .: "draft_tags_ids"
 
 
-checkDraftReqJson :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m DraftRequest
-checkDraftReqJson json =
+checkDraftReqJson :: (MonadCatch m) => Handle m -> BSL.ByteString -> ExceptT ReqError m DraftRequest
+checkDraftReqJson h json =
   case (decode json :: Maybe DraftRequest) of
     Just body@(DraftRequest name catId txt picId picsIds tagsIds) -> do
       _ <- checkLength 50 "draft_name" name
@@ -51,6 +51,7 @@ checkDraftReqJson json =
       _ <- checkNatural "draft_main_pic_id" picId
       mapM_ (checkNatural "draft_tags_ids") tagsIds
       mapM_ (checkNatural "draft_pics_ids") picsIds
+      checkExist h body
       return body
     Nothing -> whyBadDraftReq json
 
@@ -59,7 +60,7 @@ instance CheckExist DraftRequest where
     checkExist h (CategoryId catId)
     checkExist h (PictureId  picId)
     checkExist h (fmap PictureId picId)
-    checkExist h (fmap TagId     tagsIds)
+    checkExist h (fmap TagId   tagsIds)
 
 
 
