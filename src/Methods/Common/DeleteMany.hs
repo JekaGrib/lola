@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.DeleteMany where
 
@@ -11,6 +11,8 @@ import Control.Monad.Catch (MonadCatch)
 import Data.List (intercalate)
 import Methods.Common
 import Types
+import Methods.Common.ToQuery
+
 
 data Handle m = Handle
   { hConf :: Config

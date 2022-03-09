@@ -16,7 +16,7 @@ import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
 import Logger
-import Methods.Common.ToQuery (toExQ)
+import Methods.Common.ToQuery 
 import Network.Wai.Handler.Warp (Settings, defaultSettings, setHost, setPort)
 import Types
 
@@ -339,7 +339,8 @@ parseConfDefCatId conf conn = do
 
 checkExistId :: Connection -> String -> String -> DbValue -> IO Id -> IO Id -> IO Id
 checkExistId conn table where' value ifTrue ifFalse = do
-  onlyChecks <- query conn (toExQ table where') [value]
+  let exi = Exists table (WherePair where' value)
+  onlyChecks <- query conn (toQ exi) (toVal exi)
   case onlyChecks of
     [Only True] -> ifTrue
     [Only False] -> do

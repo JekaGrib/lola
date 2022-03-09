@@ -1,12 +1,16 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+{-# LANGUAGE FlexibleInstances #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
-module Methods.Common.ToQuery (toSelQ, toSelLimQ, toUpdQ, toDelQ, toExQ, toInsRetQ, toInsManyQ) where
+module Methods.Common.ToQuery where
 
 import Data.List (intercalate)
 import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query)
+import Database.PostgreSQL.Simple (Query,In(In))
+import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
+import Data.Time.Calendar ( Day)
+import Data.Text (Text,pack, unpack)
 
 toQ :: (ToStr a) => a -> Query
 toQ = fromString . toStr
@@ -18,29 +22,35 @@ class ToStr a where
 class ToVal a where
   toVal :: a -> [DbValue]
 
+class AddJoinTable a where
+  addJoinTable :: a -> JoinTable
+
+class ToWhere a where
+  toWhere :: a -> Where
+
 data Select =
   Select [DbKey] Table Where
 
 instance ToStr Select where
   toStr (Select keys t wh) = 
-    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table ++ " WHERE " ++ toStr wh
+    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t ++ " WHERE " ++ toStr wh
 
 instance ToVal Select where
   toVal (Select keys t wh) = toVal wh
 
 data SelectLim =
-  SelectLim [DbKey] Table Where OrderBy Page Limit
+  SelectLim [DbKey] Table Where [Filter] OrderBy Page Limit
 
 instance ToStr SelectLim where
-  toStr (SelectLim keys t wh ord page limit) = 
-    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t 
-    ++ " WHERE " ++ toStr wh ++ " ORDER BY " ++ toStr ord 
-    ++ " OFFSET ? LIMIT ?" 
+  toStr (SelectLim keys t wh filterArgs ord page limit) = 
+    let table = t ++ addJoinTable ord ++ addJoinTable filterArgs
+    in "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table 
+       ++ " WHERE " ++ toStr wh ++ " ORDER BY " ++ toStr ord 
+       ++ " OFFSET ? LIMIT ?" 
 
 instance ToVal SelectLim where
-  toVal (SelectLim keys t wh ord page limit) = 
-    toVal wh ++ toVal ord 
-    ++ [Num ((page - 1) * limitNumber),Num (page * limitNumber)]
+  toVal (SelectLim keys t wh filterArgs ord page limit) = 
+    toVal wh ++ [Num ((page - 1) * limit),Num (page * limit)]
 
 data Where =
   Where Predicate
@@ -55,16 +65,16 @@ instance ToStr Where where
   toStr (WherePair str _) = str
   toStr (WhereSelect str sel) = str ++ "(" ++ toStr sel ++ ")"
   toStr (WhereSelectPair sel str _) = "(" ++ toStr sel ++ ")" ++ str
-  toStr WhereOr xs = "(" ++ intercalate " OR " xs ++ ")"
-  toStr WhereAnd xs = "(" ++ intercalate " AND " xs ++ ")"
+  toStr (WhereOr xs) = "(" ++ intercalate " OR " (map toStr xs) ++ ")"
+  toStr (WhereAnd xs) = "(" ++ intercalate " AND " (map toStr xs) ++ ")"
 
 instance ToVal Where where
   toVal (Where _) = []
   toVal (WherePair _ val) = [val]
   toVal (WhereSelect _ sel) = toVal sel 
   toVal (WhereSelectPair sel _ val) =  toVal sel  ++ [val]
-  toVal WhereOr xs = map toVal xs
-  toVal WhereAnd xs = map toVal xs
+  toVal (WhereOr xs) = concatMap toVal xs
+  toVal (WhereAnd xs) = concatMap toVal xs
 
 data Update = 
   Update Table [Set] Where
@@ -73,7 +83,7 @@ instance ToStr Update where
   toStr (Update t sets wh) = 
     "UPDATE " ++ t ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr wh
 
-instance ToVal Select where
+instance ToVal Update where
   toVal (Update t set wh) = toVal set ++ toVal wh
 
 data Set =
@@ -147,18 +157,13 @@ instance ToStr InsertMany where
 
 
 data InsertManyPair = 
-  InsertPair {insManyKey :: (DbKey,DbKey) , insManyVal :: [(Id,Id)]}
+  InsertManyPair {insManyKey :: (DbKey,DbKey) , insManyVal :: [(Id,Id)]}
 
 instance ToStr InsertManyPair where
   toStr (InsertManyPair (k1,k2) _) = " (" ++ k1 ++ "," ++ k2 ++ ") VALUES (?,?)"
 
 
 
-data SortOrd = ASC | DESC
-  deriving (Eq,Show)
-
-class AddJoinTable a where
-  addJoinTable :: a -> JoinTable
 
 instance (AddJoinTable a) => AddJoinTable [a] where
   addJoinTable xs = concatMap addJoinTable xs
@@ -172,6 +177,7 @@ data OrderBy =
   | ByCommId SortOrd
   | ByDraftId SortOrd
   | OrderList [OrderBy]
+   deriving (Eq)
 
 instance ToStr OrderBy where
   toStr (ByPostPicsNumb sOrd) = "count_pics " ++ show sOrd
@@ -191,4 +197,92 @@ instance AddJoinTable OrderBy where
   addJoinTable (ByPostAuthor _)   =  
     " JOIN users AS u ON authors.user_id=u.user_id"
   addJoinTable _                  =  ""
-  
+
+
+data Filter = 
+  CreatedF CreatedF
+  | CatIdF CategoryId
+  | TagF TagF
+  | InF InF
+  | AuthorNameF Text
+
+data CreatedF = 
+  At Day
+  | AtLt Day
+  | AtGt Day
+
+data TagF =
+  TagIdF TagId
+  | TagsIn [TagId]
+  | TagsAll [TagId]
+
+data InF =
+  PostText Text
+  | Name Text
+  | UsersName Text
+  | CatName Text
+  | TagName Text
+  | EveryWhere [InF]
+
+
+instance ToWhere Filter where
+  toWhere (CatIdF catId) = WherePair " post_category_id = ? " (Id catId)
+  toWhere (AuthorNameF auName) = WherePair " usrs.first_name = ? " (Txt auName)
+  toWhere (InF f) = toWhere f
+  toWhere (CreatedF f) = toWhere f
+  toWhere (TagF f) = toWhere f
+
+instance AddJoinTable Filter where
+  addJoinTable (AuthorNameF _) = " JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable (InF f) = addJoinTable f
+  addJoinTable _ = ""
+
+
+instance  ToWhere InF where
+  toWhere (PostText txt) = 
+    WherePair " post_text ILIKE %?% " (Txt (escape txt))
+  toWhere (Name txt) = 
+    WherePair " post_name ILIKE %?% " (Txt (escape txt))
+  toWhere (UsersName txt) = 
+    WherePair " usrs.first_name ILIKE %?% " (Txt (escape txt))
+  toWhere (TagName txt) = 
+    let sel = Select ["post_id"] "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" (WherePair " tag_name ILIKE %?% " (Txt (escape txt)))
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (CatName txt) =
+    WherePair " c.category_name ILIKE %?% " (Txt (escape txt))
+  toWhere (EveryWhere xs) = WhereOr (fmap toWhere xs)
+
+escape :: Text -> Text
+escape xs = pack $ concatMap escapeChar (unpack xs)
+
+escapeChar :: Char -> String
+escapeChar '\\' = "\\\\"
+escapeChar '%' = "\\%"
+escapeChar '_' = "\\_"
+escapeChar a = [a]
+
+
+instance AddJoinTable InF where
+  addJoinTable (UsersName _) = " JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable (CatName _) = " JOIN categories AS c ON c.category_id=posts.post_category_id"
+  addJoinTable _ = ""
+
+instance  ToWhere CreatedF where
+  toWhere (At day) = 
+    WherePair " post_create_date = ? " (Day day)
+  toWhere (AtLt day) = 
+    WherePair " post_create_date < ? " (Day day)
+  toWhere (AtGt day) = 
+    WherePair " post_create_date > ? " (Day day)
+
+instance  ToWhere TagF where
+  toWhere (TagIdF iD) = 
+    let sel = Select ["post_id"] "poststags" $ WherePair " tag_id = ? " (Id iD)
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (TagsIn idS) = 
+    let sel = Select ["post_id"] "poststags" $ WherePair " tag_id IN ? " (IdIn (In idS))
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (TagsAll idS) = 
+    let sel = Select ["array_agg(tag_id)"] "poststags" $ Where "posts.post_id = poststags.post_id"
+    in WhereSelectPair sel " @>?::bigint[] " (IdArray (PGArray idS))
+

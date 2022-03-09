@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Admin where
 
@@ -14,10 +14,13 @@ import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
 import Oops
-import ParseQueryStr (CreateAdmin (..))
+import Api.Request.QueryStr (CreateAdmin (..),checkQStr)
 import Types
 import Data.Time.Calendar ( Day)
-import Methods.Common.Insert (InserUser)
+import qualified Methods.Common.Exist (Handle, makeH)
+import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
+import Methods.Common.ToQuery
+import Network.HTTP.Types (StdMethod(..))
 
 
 data Handle m = Handle
@@ -27,6 +30,7 @@ data Handle m = Handle
   , insertReturnUser :: InsertUser -> m UserId
   , getDay :: m Day
   , getTokenKey :: m TokenKey
+  , hExist :: Methods.Common.Exist.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -39,6 +43,7 @@ makeH conf logH =
         (insertReturnUser' conn)
         getDay'
         getTokenKey'
+        (Methods.Common.Exist.makeH conf)
 
 selectKeys' conn = 
   selectOnly' conn $ Select ["create_admin_key"] "key" (Where "true")

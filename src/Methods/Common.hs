@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common where
 
@@ -13,7 +13,7 @@ import Crypto.Hash (Digest, hash)
 import Crypto.Hash.Algorithms (SHA1)
 import Data.Aeson (ToJSON, encode)
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, lazyByteString)
+import Data.ByteString.Builder (Builder, lazyByteString,toLazyByteString)
 import Data.List ((\\), intercalate)
 import Data.String (fromString)
 import Data.Text (Text, pack, unpack)
@@ -23,22 +23,29 @@ import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, 
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
 import Methods.Common.Selecty (Comment (..), Selecty, Tag (..))
-import Methods.Common.ToQuery (toDelQ, toExQ, toInsManyQ, toInsRetQ, toSelLimQ, toSelQ, toUpdQ)
-import Methods.Post.LimitArg
-import Network.HTTP.Types (ResponseHeaders, Status, status200)
+import Methods.Common.ToQuery
+import Network.HTTP.Types (ResponseHeaders, Status, status200,QueryText)
 import Oops
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
+import Methods.Common.ToQuery
+import Network.HTTP.Types (StdMethod(..))
+
 
 -- common logic functions:
 
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
+instance Show  ResponseInfo where
+  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". Builder: " ++ (show $ toLazyByteString b)
+
+data ReqInfo = ReqInfo StdMethod [Text] QueryText (Maybe ByteString)
+
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")] (lazyByteString . encode $ toJ)
 
 catchSelE :: (MonadCatch m) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
-catchSelE logH m = 
+catchSelE logH m = do
   lift $ logDebug logH "Select data from DB."
   xs <- catchDbErr $ lift m
   lift $ logInfo logH "Data received from DB"
@@ -56,7 +63,7 @@ checkMaybeOneE xs = case xs of
   [x] -> return (Just x)
   _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkOneIfExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
+{-checkOneIfExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
 checkOneIfExistE (k,v) xs = case xs of
   [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
   [x] -> return x
@@ -66,23 +73,23 @@ checkOneIfResExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqEr
 checkOneIfResExistE (k,v) xs = case xs of
   [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
   [x] -> return x
-  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs-}
 
 catchOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
 catchOneSelE logH m = 
   catchSelE logH m >>= checkOneE
 
-catchMaybeOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
+catchMaybeOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
 catchMaybeOneSelE logH m = 
   catchSelE logH m >>= checkMaybeOneE
 
-catchOneSelIfExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
+{-catchOneSelIfExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
 catchOneSelIfExistsE (k,v) logH m = 
   catchSelE logH m >>= checkOneIfExistE (k,v)
 
 catchOneSelIfResExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
 catchOneSelIfResExistsE logH m = 
-  catchSelE logH m >>= checkOneIfExistE (k,v)
+  catchSelE logH m >>= checkOneIfExistE (k,v)-}
 
 
 
@@ -96,14 +103,13 @@ catchUpdE logH m = do
   catchDbErrE m
   lift $ logInfo logH "Data updated in DB"
 
+{-
 catchExistE ::
   (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> m Bool -> ExceptT ReqError m ()
 catchExistE logH (k,v) m = do
   lift $ logDebug logH $ "Checking existence " ++ k ++ ": " ++ show v ++ " in the DB"
   isExist <- catchDbErrE m 
   checkExistE (k,v) isExist
-
-
 
 checkExistE :: 
   (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> Bool -> ExceptT ReqError m ()
@@ -116,6 +122,8 @@ checkExistE (k,v) isExist =
         $ k ++ ": " ++ show v
           ++ " doesn`t exist."
 
+checkResE logH path
+
 catchResExistE ::
   (MonadCatch m,Show a) => LogHandle m -> (UncheckedExId -> m Bool) -> UncheckedExId -> ExceptT ReqError m ()
 catchResExistE logH func id = do
@@ -124,10 +132,10 @@ catchResExistE logH func id = do
   checkResExistE isEx id
 
 checkResExistE :: 
-  (MonadCatch m,Show a) => LogHandle m -> Bool -> ExceptT ReqError m ()
+  (MonadCatch m,Show a) => LogHandle m -> Bool -> UncheckedExId -> ExceptT ReqError m ()
 checkResExistE isEx id = 
   unless isEx . throwE $ ResourseEntityNotExistError id
-
+-}
 
 
 catchInsRetE ::
@@ -152,6 +160,7 @@ checkOneM xs = case xs of
   [] -> throwM UnexpectedEmptyDbOutPutException
   [x] -> return x
   _ -> throwM UnexpectedMultipleDbOutPutException
+
 
 -- common IO handle functions:
 

@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Draft where
 
-import Api.Request (DraftRequest (..))
+import Api.Request.JSON (DraftRequest (..))
 import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), OkResponse (..), PicIdUrl (pic_idPU), PostIdOrNull (..), PostResponse (..), TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
@@ -23,38 +23,45 @@ import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Methods.Common.Selecty (Author (..), Draft (..), PostInfo (..), Tag (..))
-import Methods.Post.LimitArg (FilterArg, SortArg)
 import Oops
-import ParseQueryStr (CreatePostsDraft (..), DeleteDraft (..), GetDraft (..), GetDrafts (..), PublishDraft (..))
+import Api.Request.QueryStr ( GetDrafts (..),checkQStr)
 import Types
 import Data.Time.Calendar ( Day)
+import qualified Methods.Common.Auth (Handle, makeH)
+import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import qualified Methods.Common.Exist (Handle, makeH)
+import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
+import Methods.Common.ToQuery
+import Network.HTTP.Types (StdMethod(..))
+import TryRead (tryReadResourseId)
 
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectDrafts :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Day],
-    selectUsersForDraft :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Id],
-    selectUsersForPost :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Tag],
-    selectTags :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [Author],
-    selectDaysForPost :: Table -> [DbSelectParamKey] -> Where -> [DbValue] -> m [PostInfo],
-    selectLimDraftsForAuthor :: Table -> [DbSelectParamKey] -> Where -> [DbValue]-> m [Draft],
-    selectPicsForDraft :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbValue] -> [FilterArg] -> [SortArg] -> m [Draft],
-    selectTagsForDraft :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbValue] -> [FilterArg] -> [SortArg] -> m [Draft],
-    selectPostsForDraft :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbValue] -> [FilterArg] -> [SortArg] -> m [Draft],
-    selectAuthorsForUser :: Table -> OrderBy -> Page -> Limit -> [DbSelectParamKey] -> Where -> [DbValue] -> [FilterArg] -> [SortArg] -> m [Draft],
-    updateDbDraft :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    updateDbPost :: Table -> ToUpdate -> Where -> [DbValue] -> m (),
-    insertReturnDraft :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
-    insertManyDraftsPics :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
-    insertManyDraftsTags :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
-    insertReturnPost :: Table -> DbReturnParamKey -> [DbInsertParamKey] -> [DbValue] -> m Id,
-    insertManyPostsPics :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
-    insertManyPostsTags :: Table -> [DbInsertParamKey] -> [(Id, Id)] -> m (),
-    getDay :: m Day,
-    withTransactionDB :: forall a. m a -> m a,
-    hCatResp :: Methods.Common.MakeCatResp.Handle m,
-    hDelMany :: Methods.Common.DeleteMany.Handle m
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectDrafts :: DraftId -> m [Draft]
+  , selectUsersForDraft :: DraftId -> m [UserId]
+  , selectUsersForPost :: PostId -> m [UserId]
+  , selectTags :: TagId -> m [Tag]
+  , selectDaysForPost :: PostId -> m [Day]
+  , selectLimDraftsForAuthor :: AuthorId -> OrderBy -> Page -> Limit -> m [Draft]
+  , selectPicsForDraft :: PostId -> m [PictureId]
+  , selectTagsForDraft :: DraftId -> m [Tag]
+  , selectAuthorsForUser :: UserId -> m [Author]
+  , updateDbDraft :: DraftId -> UpdateDbDraft -> m ()
+  , updateDbPost :: PostId -> UpdateDbPost -> ToUpdate -> Where -> [DbValue] -> m ()
+  , insertReturnDraft :: InsertDraft -> m DraftId
+  , insertManyDraftsPics :: [(DraftId, PictureId)] -> m ()
+  , insertManyDraftsTags :: [(DraftId, TagId)] -> m ()
+  , insertReturnPost :: InsertPost -> m PostId
+  , insertManyPostsPics :: [(PostId, PictureId)] -> m ()
+  , insertManyPostsTags :: [(PostId, TagId)] -> m ()
+  , getDay :: m Day
+  , withTransactionDB :: forall a. m a -> m a
+  , hCatResp :: Methods.Common.MakeCatResp.Handle m
+  , hDelMany :: Methods.Common.DeleteMany.Handle m
+  , hAuth :: Methods.Common.Auth.Handle m
+  , hExist :: Methods.Common.Exist.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -85,6 +92,8 @@ makeH conf logH =
         (withTransaction conn)
         (Methods.Common.MakeCatResp.makeH conf logH)
         (Methods.Common.DeleteMany.makeH conf)
+        (Methods.Common.Auth.makeH conf logH)
+        (Methods.Common.Exist.makeH conf)
 
 
 
@@ -126,7 +135,7 @@ selectLimDraftsForAuthor' conn auId orderBy page limit = do
     SelectLim 
       ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
       "drafts JOIN authors ON authors.author_id = drafts.author_id" 
-      wh orderBy page limit
+      wh [] orderBy  page limit
 selectPicsForDraft' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   selectOnly' conn (Select ["pic_id"] "draftspics" wh)
@@ -177,7 +186,7 @@ insertReturnDraft' conn (InsertDraft auId drName catId drTxt picId) = do
 insertManyDraftsPics' conn xs = do
   let insPair = InsertManyPair  ("draft_id", "pic_id") xs
   insertMany' conn (InsertMany "draftspics" insPair)
-insertManyDraftsTags' conn xs
+insertManyDraftsTags' conn xs = do
   let insPair = InsertManyPair  ("draft_id", "tag_id") xs
   insertMany' conn (InsertMany "draftstags" insPair)
 insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
@@ -192,51 +201,47 @@ insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
 insertManyPostsPics' conn xs = do
   let insPair = InsertManyPair  ("post_id", "pic_id") xs
   insertMany' conn (InsertMany "postspics" insPair)
-insertManyPostsTags' conn xs
+insertManyPostsTags' conn xs = do
   let insPair = InsertManyPair  ("post_id", "tag_id") xs
   insertMany' conn (InsertMany "poststags" insPair)
 
 
-workWithDrafts :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
+workWithDrafts :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
 workWithDrafts h@Handle{..} (ReqInfo meth path qStr (Just json)) =
   case (meth,path) of
     (POST,["drafts"]) -> do
       lift $ logInfo (hLog h) "Create new draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       body <- checkDraftReqJson hExist json
       createNewDraft (hDr methH) usId body
     (POST,["drafts",draftIdTxt,"posts"]) -> do
       lift $ logInfo (hLog h) "Publish draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
       publishDraft (hDr methH) usId
     (GET,["drafts",draftIdTxt]) -> do
       lift $ logInfo (hLog h) "Get draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
       getDraft (hDr methH) usId draftId
     (GET,["drafts"]) -> do
       lift $ logInfo (hLog h) "Get drafts command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       checkQStr hExist qStr >>= getDrafts (hDr methH) usId
     (PUT,["drafts",draftIdTxt]) -> do
       lift $ logInfo (hLog h) "Update draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
       body <- checkDraftReqJson hExist json
       updateDraft (hDr methH) usIdN draftId body
     (DELETE,["drafts",draftIdTxt]) -> do
       lift $ logInfo (hLog h) "Delete draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
+      (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
       deleteDraft (hDr methH) usId draftId    
+    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
     
-    
-    (POST,["posts",postIdTxt,"drafts"]) -> do
-      lift $ logInfo (hLog h) "Create post`s draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      postId <- tryReadId "post_id" postIdTxt
-      createPostsDraft (hDr methH) usId postId 
+
 
 createNewDraft :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 createNewDraft h@Handle{..} usId drReq@(DraftRequest nameParam catIdParam txtParam picId picsIds tagsIds) = do
@@ -322,7 +327,7 @@ selectDraftAndMakeResp h@Handle{..} usId draftId = do
   draft <- catchOneSelE hLog $ selectDrafts  draftId
   makeDraftResp h auId draft
 
-makeDraftResp :: (MonadCatch m) => Handle m -> AutorId -> Draft -> ExceptT ReqError m DraftResponse
+makeDraftResp :: (MonadCatch m) => Handle m -> AuthorId -> Draft -> ExceptT ReqError m DraftResponse
 makeDraftResp Handle{..} auId (Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId) = do
   picsIds <- catchSelE hLog $ selectPicsForDraft draftIdParam
   tagS <- catchSelE hLog $ selectTagsForDraft draftIdParam
@@ -339,7 +344,7 @@ getDraftInfo h@Handle{..} usId (DraftRequest _ catIdParam _ picId picsIds tagsId
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp
 
 insertReturnAllDraft :: (MonadCatch m) => Handle m -> [PictureId] -> [TagId] -> [Param] -> [DbValue] -> m DraftId
-insertReturnAllDraft h@Handle{..} picsIds tagsIds insDr = withTransactionDBE h do
+insertReturnAllDraft h@Handle{..} picsIds tagsIds insDr = withTransactionDBE h $ do
   draftId <- insertReturnDraft insDr
   insertManyDraftsPics (zip (repeat draftId) picsIds)
   insertManyDraftsTags (zip (repeat draftId) tagsIds)
@@ -350,23 +355,16 @@ isDraftAuthor Handle{..} draftId usId = do
   usDraftId <- catchOneSelE hLog $ selectUsersForDraft draftId
   unless (usDraftId == usId)
     $ throwE
-    $ SimpleError
+    $ ForbiddenError
     $ "user_id: " ++ show usId ++ " is not author of draft_id: " ++ show draftId
 
-isPostAuthor :: (MonadCatch m) => Handle m -> PostId -> UserId -> ExceptT ReqError m ()
-isPostAuthor Handle{..} postId usId = do
-  usPostId <- catchOneSelE hLog  $ selectUsersForPost  postId
-  unless (usPostId == usId)
-    $ throwE
-    $ SimpleError
-    $ "user_id: " ++ show usId ++ " is not author of post_id: " ++ show postId
 
 isUserAuthorE :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
 isUserAuthorE Handle{..} usId = do
   lift $ logDebug hLog "Checking in DB is user author"
   maybeAu <- catchOneSelE hLog $ selectAuthorsForUser  usId
   case maybeAu of
-    Nothing -> throwE $ SimpleError $ "user_id: " ++ show usId ++ " isn`t author"
+    Nothing -> throwE $ ForbiddenError $ "user_id: " ++ show usId ++ " isn`t author"
     Just author -> return author
 
 isUserAuthorE_ :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ()
@@ -379,12 +377,12 @@ isNULL 0 = PostIdNull
 isNULL postId = PostIdExist postId
 
 
-checkDraftResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m DraftId
-checkDraftResourse Handle{..} draftIdTxt =
+checkDraftResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m DraftId
+checkDraftResourse Handle{..} draftIdTxt = do
   iD <- tryReadResourseId "draft_id" draftIdTxt
   isExistResourseE hExist (DraftId iD)
   return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
 

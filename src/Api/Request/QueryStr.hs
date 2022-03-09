@@ -1,25 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+{-# LANGUAGE TupleSections #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
-module ParseQueryStr where
+module Api.Request.QueryStr where
 
 --(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.List (delete)
+import Data.List (delete,elemIndex)
 import Data.Text (Text, unpack)
-import Network.HTTP.Types.URI (queryToQueryText)
+import Network.HTTP.Types.URI (queryToQueryText,QueryText)
 import Network.Wai (Request (..))
 import Oops (ReqError (..))
-import TryRead (tryReadId, tryReadPage)
+import TryRead (tryReadId, tryReadPage,tryReadSortOrd,tryReadDay,tryReadIdArray)
 import Types
+import Methods.Common.Exist (Handle, CheckExist(..),UncheckedExId(..))
+import Data.Time.Calendar ( Day)
+import Control.Applicative ((<|>))
+import Control.Monad.Catch (MonadCatch)
 
-
-checkQStr :: (Monad m,ParseQueryStr a,CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
-checkQStr h qStr =
+checkQStr :: (MonadCatch m,ParseQueryStr a,CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
+checkQStr h qStr = do
   a <- parseQueryStr qStr
-  checkExist a
+  checkExist h a
   return a
 
 class (Show a) => ParseQueryStr a where
@@ -106,23 +110,19 @@ instance CheckExist UpdateAuthor where
     checkExist h (UserId usId)
 
 data CreateCategory = 
-  CreateSubCategory Text Id
-  | CreateCategory Text
+  CreateCategory Text (Maybe Id)
   deriving (Show)
 
 instance ParseQueryStr CreateCategory where
-  parseQueryStr qStr = (<|>)
-    (CreateSubCategory
+  parseQueryStr qStr = 
+    CreateCategory
       <$> parseTxtParam qStr 50 "category_name"
-      <*> parseIdParam qStr "super_category_id")
-    (CreateCategory
-      <$> parseTxtParam qStr 50 "category_name")
+      <*> parseMaybeIdParam qStr "super_category_id"
 
-
-instance CheckExist UpdateAuthor where
-  checkExist h (CreateSubCategory _ catId) =
+instance CheckExist CreateCategory where
+  checkExist h (CreateCategory _ (Just catId)) =
     checkExist h (CategoryId catId)
-  checkExist h _ = return ()
+  checkExist _ _ = return ()
 
 data UpdateCategory = UpdateCategory Text (Maybe Id)
   deriving (Show)
@@ -136,7 +136,7 @@ instance ParseQueryStr UpdateCategory where
 instance CheckExist UpdateCategory where
   checkExist h (UpdateCategory _ (Just catId)) =
     checkExist h (CategoryId catId)
-  checkExist h _ = return ()
+  checkExist _ _ = return ()
 
 newtype CreateTag = CreateTag Text
   deriving (Show)
@@ -146,6 +146,9 @@ instance ParseQueryStr CreateTag where
     CreateTag
       <$> parseTxtParam qStr 50 "tag_name"
 
+instance CheckExist CreateTag where
+  checkExist _ _ = return ()
+
 data UpdateTag = UpdateTag Text
   deriving (Show)
 
@@ -154,6 +157,8 @@ instance ParseQueryStr UpdateTag where
     UpdateTag
       <$> parseTxtParam qStr 50 "tag_name"
 
+instance CheckExist UpdateTag where
+  checkExist _ _ = return ()
 
 newtype GetDrafts = GetDrafts Page
   deriving (Show)
@@ -167,7 +172,8 @@ instance ParseQueryStr GetDrafts where
 
 data GetPosts = 
   GetPosts Page GetPostsF GetPostsOrd
-
+  deriving (Show)
+   
 instance ParseQueryStr GetPosts where
   parseQueryStr qStr =
     GetPosts
@@ -214,10 +220,10 @@ instance CheckExist GetPostsF where
 
 data GetPostsOrd = 
   GetPostsOrd 
-    Maybe (SortOrd,Int)
-    Maybe (SortOrd,Int)
-    Maybe (SortOrd,Int)
-    Maybe (SortOrd,Int)
+    (Maybe (SortOrd,Int))
+    (Maybe (SortOrd,Int))
+    (Maybe (SortOrd,Int))
+    (Maybe (SortOrd,Int))
   deriving (Show)
 
 instance ParseQueryStr GetPostsOrd where
@@ -262,6 +268,8 @@ instance ParseQueryStr UpdateComment where
     UpdateComment
       <$> parseTxtParam qStr 500 "comment_text"
 
+instance CheckExist UpdateComment where
+  checkExist _ _ = return ()
 
 newtype LoadPicture = LoadPicture Text
   deriving (Show)
@@ -270,6 +278,9 @@ instance ParseQueryStr LoadPicture where
   parseQueryStr qStr =
     LoadPicture
       <$> parseTxtParam qStr 500 "pic_url"
+
+instance CheckExist LoadPicture where
+  checkExist _ _ = return ()
 
 parseTxtParam :: (Monad m) => QueryText -> Int -> QueryParamKey -> ExceptT ReqError m Text
 parseTxtParam qStr leng paramKey = do
@@ -328,8 +339,8 @@ parseMaybeSortOrdParam qStr paramKey = do
   case maybeParamTxt of
     Just paramTxt -> do
       sOrd <- tryReadSortOrd paramKey paramTxt
-      ind <- findParamIndex qStr paramKey 
-      return (Just (sOrd,ind))
+      let index = findParamIndex qStr paramKey
+      return $ fmap (sOrd,) index
     Nothing -> return Nothing
 
 checkParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Text

@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.MakeCatResp where
 
@@ -12,15 +12,16 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
 import Logger (LogHandle (..))
 import Methods.Common
+import Methods.Common.ToQuery (Select(..),Where(WherePair))
 import Methods.Common.Selecty (Cat (..))
 import Oops (ReqError)
 import Types
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectSubCats :: CategoryId -> m [SubCategoryId],
-    selectCats :: CategoryId -> m [Cat]
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectCats :: CategoryId -> m [Cat]
+  , selectSubCats :: CategoryId -> m [SubCategoryId]
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -32,15 +33,14 @@ makeH conf logH =
         (selectCats' conn)
         (selectSubCats' conn)
 
-selectCats' conn catId =
-  select' conn $
+selectCats' conn catId = select' conn $
     Select 
       ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] 
       "categories" 
       (WherePair "category_id=?" (Id catId))
-selectSubCats' conn catId =
+selectSubCats' conn catId = do
   let wh = WherePair "super_category_id=?" (Id catId)
-  select' conn $ Select ["category_id"] "categories"
+  selectOnly' conn $ Select ["category_id"] "categories" wh
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h@Handle{..} catId = do
@@ -53,5 +53,5 @@ makeCatResp h@Handle{..} catId = do
       return $ SubCatResponse {subCat_id = catId, subCat_name = catName, one_level_sub_categories = subCatsIds, super_category = superCatResp}
 
 findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
-findOneLevelSubCats h catId =
-  catchSelE (hLog h) $ selectSubCats catId
+findOneLevelSubCats Handle{..} catId =
+  catchSelE hLog $ selectSubCats catId

@@ -1,22 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+{-# LANGUAGE FlexibleInstances #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.Exist where
 
 import Methods.Common
+import Methods.Common.ToQuery
+import Control.Monad.Trans.Except (ExceptT,throwE)
+import Oops (ReqError(..))
+import Control.Monad.Catch (MonadCatch)
+import Types
+import Conf (Config (..), extractConn)
+import Control.Monad (unless)
 
 data Handle m = Handle
   { hConf :: Config
   , isExist :: UncheckedExId -> m Bool
   }
 
-makeH :: Config -> LogHandle IO -> Handle IO
-makeH conf logH =
+makeH :: Config -> Handle IO
+makeH conf =
   let conn = extractConn conf
    in Handle
         conf
-        logH
         (isExist' conn)
 
 data UncheckedExId =
@@ -69,37 +76,22 @@ isExist' conn (UserId usId) = do
   let wh = WherePair "user_id=?" (Id usId)
   isExistInDb' conn (Exists "users" wh)
 
-isExistResE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
-isExistResE h iD = do
-  isEx <- catchDbErr $ isExist h iD
-  unless isEx $
-    throwE $ ResourseNotExistError $ toPretty iD ++ " doesn`t exist"
-
-checkResourseEntity :: (MonadCatch m) => Handle m -> (Id -> UncheckedExId) -> Text -> ExceptT ReqError m ()
-checkResourseEntity h path func txt =
-  iD <- tryReadId path txt
-  isExistResourseE h (func iD)
-
 
 isExistResourseE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
 isExistResourseE h iD = do
-  isEx <- catchDbErr $ isExist h iD
+  isEx <- catchDbErrE $ isExist h iD
   unless isEx $
     throwE $ ResourseNotExistError $ toPretty iD ++ " doesn`t exist"
 
-checkIdResourse paramKey idTxt =
-  tryReadResourseId paramKey idTxt
-
-checkTagResourse  tagIdTxt
 
 isExistE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
 isExistE h iD = do
-  isEx <- catchDbErr $ isExist h iD
+  isEx <- catchDbErrE $ isExist h iD
   unless isEx $
     throwE $ BadReqError $ toPretty iD ++ " doesn`t exist"
 
 class CheckExist a where 
-  checkExist :: (Monad m) => Handle m -> a -> ExceptT ReqError m ()
+  checkExist :: (MonadCatch m) => Handle m -> a -> ExceptT ReqError m ()
 
 instance CheckExist UncheckedExId where
   checkExist = isExistE
@@ -107,9 +99,9 @@ instance CheckExist UncheckedExId where
 instance CheckExist [UncheckedExId] where
   checkExist h = mapM_ (isExistE h)
 
-instance CheckExist UncheckedExId where
-  checkExist Nothing = return ()
-  checkExist (Just iD) = isExistE h iD
+instance CheckExist a => CheckExist (Maybe a) where
+  checkExist _ Nothing = return ()
+  checkExist h (Just iD) = checkExist h iD
 
 {-
 fromUncheck (AuthorId iD) = iD

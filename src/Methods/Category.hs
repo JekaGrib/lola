@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Category where
 
@@ -19,21 +19,32 @@ import Methods.Common
 import Methods.Common.MakeCatResp (findOneLevelSubCats, makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Oops
-import ParseQueryStr (CreateCategory (..), CreateSubCategory (..), DeleteCategory (..), UpdateCategory (..))
+import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..),checkQStr)
 import Types
+import qualified Methods.Common.Auth (Handle, makeH)
+import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import qualified Methods.Common.Exist (Handle, makeH)
+import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
+import Methods.Common.ToQuery
+import Network.HTTP.Types (StdMethod(..))
+import TryRead (tryReadResourseId)
+
+
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    updateDbCat :: CatName -> CategoryId -> m (),
-    updateDbSubCat :: CatName -> SuperCatId -> CatId -> m (),
-    updateDbCatsForPosts :: CategoryId -> [CategoryId] -> m (),
-    updateDbCatsForDrafts :: CategoryId -> [CategoryId] -> m (),
-    deleteDbCats :: [CategoryId] -> m (),
-    insertRetCat :: CatName -> m CategoryId,
-    insertRetSubCat :: CatName -> SuperCatId -> m CategoryId,
-    withTransactionDB :: forall a. m a -> m a,
-    hCatResp :: Methods.Common.MakeCatResp.Handle m
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , updateDbCat :: CatName -> CategoryId -> m ()
+  , updateDbSubCat :: CatName -> SuperCatId -> CategoryId -> m ()
+  , updateDbCatsForPosts :: CategoryId -> [CategoryId] -> m ()
+  , updateDbCatsForDrafts :: CategoryId -> [CategoryId] -> m ()
+  , deleteDbCats :: [CategoryId] -> m ()
+  , insertReturnCat :: CatName -> m CategoryId
+  , insertReturnSubCat :: CatName -> SuperCatId -> m CategoryId
+  , withTransactionDB :: forall a. m a -> m a
+  , hCatResp :: Methods.Common.MakeCatResp.Handle m
+  , hAuth :: Methods.Common.Auth.Handle m
+  , hExist :: Methods.Common.Exist.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -47,10 +58,12 @@ makeH conf logH =
         (updateDbCatsForPosts' conn)
         (updateDbCatsForDrafts' conn)
         (deleteDbCats' conn)
-        (insertRetCat' conn)
-        (insertRetSubCat' conn)
+        (insertReturnCat' conn)
+        (insertReturnSubCat' conn)
         (withTransaction conn)
         (Methods.Common.MakeCatResp.makeH conf logH)
+        (Methods.Common.Auth.makeH conf logH)
+        (Methods.Common.Exist.makeH conf)
 
 updateDbCat' conn catName catId = do
   let set = SetPair "category_name=?" (Txt catName)
@@ -78,42 +91,43 @@ deleteDbCats' conn catIds = do
 insertReturnCat' conn catName = do
   let insPair = InsertPair "cat_name" (Txt catName)
   insertReturn' conn (InsertRet "categories" [insPair] "category_id")
-insertReturnSubCat' conn catName = do
-  let insPair = InsertPair "cat_name" (Txt catName)
-  insertReturn' conn (InsertRet "categories" [insPair] "category_id")
+insertReturnSubCat' conn catName superCatId = do
+  let insPair1 = InsertPair "cat_name" (Txt catName)
+  let insPair2 = InsertPair "super_category_id" (Id superCatId)
+  insertReturn' conn (InsertRet "categories" [insPair1,insPair2] "category_id")
 
 workWithUsers :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
 workWithUsers h@Handle{..} (ReqInfo meth path qStr _) = 
   case (meth,path) of
     (POST,["categories"]) -> do
       lift $ logInfo hLog "Create category command"
-      tokenAdminAuth (hAuth methH) req
-      preParseQueryStr h req $ createCategory h
+      tokenAdminAuth hAuth qStr
+      checkQStr hExist qStr >>= createCategory h
     (GET,["categories",catIdTxt]) -> do
       lift $ logInfo hLog "Get category command"
       catId <- checkCatResourse h catIdTxt
       getCategory h catId
     (PUT,["categories",catIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update category command"
-      tokenAdminAuth (hAuth methH) req
+      lift $ logInfo hLog "Update category command"
+      tokenAdminAuth hAuth qStr
       catId <- checkCatResourse h catIdTxt
-      preParseQueryStr h req $ updateCategory h catId
+      checkQStr hExist qStr >>= updateCategory h catId
     (DELETE,["categories",catIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete category command"
-      tokenAdminAuth (hAuth methH) req
+      lift $ logInfo hLog "Delete category command"
+      tokenAdminAuth hAuth qStr
       catId <- checkCatResourse h catIdTxt
       deleteCategory h catId
     (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
     
 
 createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
-createCategory Handle{..} (CreateCategory catNameParam) = do
+createCategory Handle{..} (CreateCategory catNameParam Nothing) = do
   catId <- catchInsRetE hLog $ insertReturnCat catNameParam
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
   okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = []}
-createCategory Handle{..} (CreateSubCategory catNameParam superCatIdParam) = do
+createCategory Handle{..} (CreateCategory catNameParam (Just superCatIdParam)) = do
   catId <- catchInsRetE hLog $ insertReturnSubCat catNameParam superCatIdParam
-  catResp <- makeCatResp (hCatResp h) catId
+  catResp <- makeCatResp hCatResp catId
   lift $ logInfo hLog $ "Sub_Category_id: " ++ show catId ++ " created"
   okHelper catResp
 
@@ -123,24 +137,24 @@ getCategory Handle{..} catId = do
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " sending in response"
   okHelper catResp
 
-updateCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
-updateCategory h@Handle{..} catId (UpdateCategory catIdParam catNameParam maybeSuperCatIdParam) = do
+updateCategory :: (MonadCatch m) => Handle m -> CategoryId -> UpdateCategory -> ExceptT ReqError m ResponseInfo
+updateCategory h@Handle{..} catId (UpdateCategory catNameParam maybeSuperCatIdParam) = do
   case maybeSuperCatIdParam of
     Just superCatIdParam -> do
-      checkRelationCats h catIdParam superCatIdParam
-      catchUpdE hLog $ updateDbSubCat catNameParam superCatIdParam catIdParam
+      checkRelationCats h catId superCatIdParam
+      catchUpdE hLog $ updateDbSubCat catNameParam superCatIdParam catId
     Nothing -> do
-      catchUpdE hLog $ updateDbCat catNameParam catIdParam
-  catResp <- makeCatResp hCatResp catIdParam
-  lift $ logInfo hLog $ "Category_id: " ++ show catIdParam ++ " updated."
+      catchUpdE hLog $ updateDbCat catNameParam catId
+  catResp <- makeCatResp hCatResp catId
+  lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " updated."
   okHelper catResp
 
 deleteCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
 deleteCategory h@Handle{..} catId = do
   allSubCats <- findAllSubCats h catId
   let allCats = catId : allSubCats
-  let updatePos = catchUpdE hLog $ updateDbCatsForPosts (cDefCatId hConf) allCats
-  let updateDr = catchUpdE hLog $ updateDbCatsForDrafts (cDefCatId hConf) allCats
+  let updatePos = updateDbCatsForPosts (cDefCatId hConf) allCats
+  let updateDr = updateDbCatsForDrafts (cDefCatId hConf) allCats
   let deleteCat = deleteDbCats allCats
   withTransactionDBE h (updatePos >> updateDr >> deleteCat)
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " deleted."
@@ -169,11 +183,11 @@ fromCatResp :: CatResponse -> CategoryId
 fromCatResp (SubCatResponse a _ _ _) = a
 fromCatResp (CatResponse a _ _) = a
 
-checkCatResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m CategoryId
-checkCatResourse Handle{..} catIdTxt =
+checkCatResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m CategoryId
+checkCatResourse Handle{..} catIdTxt = do
   iD <- tryReadResourseId "category_id" catIdTxt
   isExistResourseE hExist (CategoryId iD)
   return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = checkTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

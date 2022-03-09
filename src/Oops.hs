@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToSimpleErr) where
+module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr,hideResourseNotExistErr) where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)
@@ -12,7 +12,6 @@ import Logger (LogHandle (..), logWarning)
 
 data ReqError = 
   SecretError String 
-  | SimpleError String 
   | DatabaseError String 
   | SecretLogInError String 
   | SecretTokenError String 
@@ -21,7 +20,6 @@ data ReqError =
   | NotImplementedError String
   | UriTooLongError String
   | ForbiddenError String
-  | UnauthorizedError String
   | ReqBodyTooLargeError String
 
   deriving (Eq, Show)
@@ -43,14 +41,17 @@ hideErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideErr m = m `catchE` (throwE . toSecret)
 
 hideLogInErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideLogInErr m = m `catchE` (throwE . simpleToSecretLogIn)
+hideLogInErr m = m `catchE` (throwE . badReqToSecretLogIn)
 
 hideTokenErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideTokenErr m = m `catchE` (throwE . simpleToSecretToken)
+hideTokenErr m = m `catchE` (throwE . badReqToSecretToken)
 
-addToSimpleErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
-addToSimpleErr str2 (SimpleError str1) = throwE $ SimpleError $ str1 ++ str2
-addToSimpleErr _ e = throwE e
+hideResourseNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideResourseNotExistErr m = m `catchE` (throwE . badReqToResNotExistError)
+
+addToBadReqErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
+addToBadReqErr str2 (BadReqError str1) = throwE $ BadReqError $ str1 ++ str2
+addToBadReqErr _ e = throwE e
 
 catchDbErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr
@@ -88,16 +89,16 @@ catchDbOutputErr m =
             )
 
 toSecret :: ReqError -> ReqError
-toSecret err = SecretError (show err)
+toSecret e = SecretError (show e)
 
-simpleToSecretLogIn :: ReqError -> ReqError
-simpleToSecretLogIn (SimpleError str) = SecretLogInError str
-simpleToSecretLogIn e = e
+badReqToSecretLogIn :: ReqError -> ReqError
+badReqToSecretLogIn e@(BadReqError _) = SecretLogInError $ show e
+badReqToSecretLogIn e = e
 
-simpleToSecretToken :: ReqError -> ReqError
-simpleToSecretToken (SimpleError str) = SecretTokenError str
-simpleToSecretToken e = e
+badReqToSecretToken :: ReqError -> ReqError
+badReqToSecretToken e@(BadReqError _) = SecretTokenError $ show e
+badReqToSecretToken e = e
 
-fromBadReqToResNotExistError :: ReqError -> ReqError
-fromBadReqToResNotExistError (BadReqError str) = ResourseNotExistError str
-fromBadReqToResNotExistError e = e
+badReqToResNotExistError :: ReqError -> ReqError
+badReqToResNotExistError e@(BadReqError _) = ResourseNotExistError $ show e
+badReqToResNotExistError e = e

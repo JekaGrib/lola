@@ -17,19 +17,19 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Text (pack)
 import Logger
 import qualified Methods (Handle, makeH)
-import Methods (hAdm, hAu, hAuth, hCat, hCom, hDr, hPic, hPost, hTag, hUs)
+import Methods (hAdm, hAu, hCat, hCom, hDr, hPic, hPost, hTag, hUs)
 import Methods.Admin (createAdmin)
 import Methods.Auth (checkUserTokenParam, logIn, tokenAdminAuth, tokenUserAuth)
 import Methods.Author (createAuthor, deleteAuthor, getAuthor, updateAuthor)
 import Methods.Category (createCategory, createSubCategory, deleteCategory, getCategory, updateCategory)
 import Methods.Comment (createComment, deleteComment, getComments, updateComment)
-import Methods.Common (ResponseInfo (..))
+import Methods.Common (ResponseInfo (..),ReqInfo(..))
 import Methods.Draft (createNewDraft, createPostsDraft, deleteDraft, getDraft, getDrafts, publishDraft, updateDraft)
 import Methods.Picture (loadPicture, sendPicture)
 import Methods.Post (deletePost, getPost, getPosts)
 import Methods.Tag (createTag, deleteTag, getTag, updateTag)
 import Methods.User (createUser, deleteUser, getUser)
-import Network.HTTP.Types (status200,status500, status404)
+import Network.HTTP.Types (status200,status400,status401,status403, status404,status413,status414,status500,status501)
 import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, strictRequestBody)
 import Oops (ReqError (..), hideErr, hideLogInErr, logOnErr)
 import ParseQueryStr (ParseQueryStr, parseQueryStr)
@@ -49,35 +49,58 @@ application config handleLog req send = do
   let h = Handle handleLog methH strictRequestBody
   logDebug (hLog h) "Connect to DB"
   respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req
+  logLeftResponse (hLog h) respE
   let resInfo = fromE respE
-  logDebug (hLog h) $ "Output response: " ++ (show . toLazyByteString . resBuilder $ resInfo)
-  send (responseBuilderFromInfo resInfo)
+  logDebug hLog $ "Output response: " ++ show resInfo
+  send (responseFromInfo resInfo)
 
-responseBuilderFromInfo :: ResponseInfo -> Response
-responseBuilderFromInfo (ResponseInfo s h b) = responseBuilder s h b
+
+
+responseFromInfo :: ResponseInfo -> Response
+responseFromInfo (ResponseInfo s h b) = responseBuilder s h b
+
+logLeftResponse :: LogHandle IO -> IO ()
+logLeftResponse logH respE = case respE of
+  Left err -> logWarning hLog $ show err
+  _ -> return ()
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE respE = case respE of
   Right a -> a
-  Left (SimpleError str) ->
+  Left (BadReqError str) ->
     ResponseInfo
-      status200
+      status400
       [("Content-Type", "application/json; charset=utf-8")]
       (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
   Left (SecretLogInError _) ->
     ResponseInfo
-      status200
+      status401
       [("Content-Type", "application/json; charset=utf-8")]
       (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
   Left (SecretTokenError _) ->
     ResponseInfo
-      status200
+      status401
       [("Content-Type", "application/json; charset=utf-8")]
       (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
+  Left (NotImplementedError _) ->
+    ResponseInfo
+      status501
+      [("Content-Type", "application/json; charset=utf-8")]
+      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "Unknown method"})
+  Left (ForbiddenError str) ->
+    ResponseInfo
+      status403
+      [("Content-Type", "application/json; charset=utf-8")]
+      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [] "Request Body Too Large"
+  Left (UriTooLongError _) -> ResponseInfo status414 [] "Request-URI Too Long"
+  Left (ResourseNotExistError _) -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (SecretError _) -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status500 [] "Internal server error"
 
-data ReqInfo = ReqInfo StdMethod [Text] QueryText (Maybe ByteString)
+
+
+
 
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx Handle{..} req = do
@@ -97,56 +120,7 @@ chooseRespEx Handle{..} req = do
     ("drafts":_) -> do
       body <- pullReqBody h req
       workWithDrafts (hDr hMeth) (ReqInfo meth path qStr (Just body))
-    
-    (POST,["drafts"]) -> do
-      lift $ logInfo (hLog h) "Create new draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      body <- getBodyAndCheck h req
-      createNewDraft (hDr methH) usId body
-    (POST,["drafts",draftIdTxt,"posts"]) -> do
-      lift $ logInfo (hLog h) "Publish draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      draftId <- tryReadId "draft_id" draftIdTxt
-      publishDraft (hDr methH) usId
-    (GET,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      draftId <- tryReadId "draft_id" draftIdTxt
-      getDraft (hDr methH) usId draftId
-    (GET,["drafts"]) -> do
-      lift $ logInfo (hLog h) "Get drafts command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      preParseQueryStr h req $ getDrafts (hDr methH) usId
-    (PUT,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      draftId <- tryReadId "draft_id" draftIdTxt
-      body <- getBodyAndCheck h req
-      updateDraft (hDr methH) usIdN draftId body
-    (DELETE,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      draftId <- tryReadId "draft_id" draftIdTxt
-      deleteDraft (hDr methH) usId draftId    
-    (POST,["posts",postIdTxt,"drafts"]) -> do
-      lift $ logInfo (hLog h) "Create post`s draft command"
-      (usId, _) <- tokenUserAuth (hAuth methH) req
-      postId <- tryReadId "post_id" postIdTxt
-      createPostsDraft (hDr methH) usId postId
-    (GET,["posts",postIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get post command"
-      postId <- tryReadId "post_id" postIdTxt
-      getPost (hPost methH) postId
-    (GET,["posts"]) -> do
-      lift $ logInfo (hLog h) "Get posts command"
-      preParseQueryStr h req $ getPosts (hPost methH) 
-    (DELETE,["posts",postIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete post command"
-      tokenAdminAuth (hAuth methH) req
-      postId <- tryReadId "post_id" postIdTxt
-      deletePost (hPost methH) postId
-    
-    
+    ("posts":_) -> workWithPosts (hPost hMeth) reqInfo   
     ("comments":_) -> workWithComms (hCom hMeth) reqInfo
     ("pictures":_) -> workWithPics (hPic hMeth) reqInfo
     xs -> throwE $ ResourseNotExistError $ "Unknown path : " ++ show xs
@@ -190,6 +164,12 @@ checkLengthReqBody req =
     ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"
     _ -> return ()
 
+{-getBodyAndCheck :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m DraftRequest
+getBodyAndCheck h req = do
+  json <- lift $ getBody h req
+  body <- checkDraftReqJson json
+
+
 parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
 parseQueryStrAndLog h req = do
   queStr <- parseQueryStr req
@@ -201,10 +181,6 @@ preParseQueryStr h req foo = do
   queStr <- parseQueryStrAndLog h req
   foo queStr
 
-getBodyAndCheck :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m DraftRequest
-getBodyAndCheck h req = do
-  json <- lift $ getBody h req
-  body <- checkDraftReqJson json
 
 getBodyAndCheckUserToken :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m (UserId, DraftRequest)
 getBodyAndCheckUserToken h req = do
@@ -217,4 +193,4 @@ getBodyAndCheckUserToken h req = do
 checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
 checkReqLength req = case splitAt 20 $ queryString req of
   (_, []) -> return ()
-  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"
+  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"-}

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Picture where
 
@@ -18,17 +18,26 @@ import Data.Text (Text, unpack)
 import Logger
 import Methods.Common
 import qualified Network.HTTP.Simple as HT
-import Network.HTTP.Types (status200)
+import Network.HTTP.Types (status200,StdMethod(..))
+import Database.PostgreSQL.Simple (Binary(..))
 import Oops
-import ParseQueryStr (BrowsePicture (..))
+import Api.Request.QueryStr (LoadPicture (..),checkQStr)
 import Types
+import qualified Methods.Common.Auth (Handle, makeH)
+import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import qualified Methods.Common.Exist (Handle, makeH)
+import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
+import Methods.Common.ToQuery
+import TryRead (tryReadResourseId)
 
 data Handle m = Handle
-  { hConf :: Config,
-    hLog :: LogHandle m,
-    selectPicBS :: PicId -> m [ByteString],
-    insertRetPicBS :: ByteString -> m Id,
-    goToUrl :: HT.Request -> m (HT.Response BSL.ByteString)
+  { hConf :: Config
+  , hLog :: LogHandle m
+  , selectPicBS :: PictureId -> m [ByteString]
+  , insertRetPicBS :: ByteString -> m Id
+  , goToUrl :: HT.Request -> m (HT.Response BSL.ByteString)
+  , hAuth :: Methods.Common.Auth.Handle m
+  , hExist :: Methods.Common.Exist.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -40,11 +49,13 @@ makeH conf logH =
         (selectPicBS' conn)
         (insertRetPicBS' conn)
         HT.httpLBS
+        (Methods.Common.Auth.makeH conf logH)
+        (Methods.Common.Exist.makeH conf)
 
-selectPicBS' conn picId =
+selectPicBS' conn picId = do
   let wh = WherePair "pic_id=?" (Id picId)
   selectBS' conn (Select ["pic"] "pics" wh)
-insertRetPicBS conn sbs =
+insertRetPicBS' conn sbs = do
   let insPair = InsertPair "pic" (BS (Binary sbs))
   insertReturn' conn (InsertRet "pics" [insPair] "pic_id")
 
@@ -53,7 +64,7 @@ workWithPics h@Handle{..} (ReqInfo meth path qStr _) =
   case (meth,path) of
     (POST, ["pictures"]) -> do
       lift $ logInfo hLog "Load picture command"
-      _ <- tokenUserAuth hAuth req
+      _ <- tokenUserAuth hAuth qStr
       checkQStr hExist qStr >>= loadPicture h
     (GET,["pictures",picIdTxt]) -> do
       lift $ logInfo hLog "Get picture command"
@@ -82,15 +93,15 @@ loadPicture h@Handle{..} (LoadPicture picUrlParam) = do
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic Handle{..} url = do
-  res <- lift (goToUrl . fromString . unpack $ url) `catch` (\e -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
+  res <- lift (goToUrl . fromString . unpack $ url) `catch` (\e -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
   let lbs = HT.getResponseBody res
   let sbs = BSL.toStrict lbs
   case decodeImage sbs of
     Right _ -> return lbs
-    Left _ -> throwE $ SimpleError $ "Invalid picture url:" ++ unpack url
+    Left _ -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url
 
-checkPicResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m PictureId
-checkPicResourse Handle{..} picIdTxt =
+checkPicResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m PictureId
+checkPicResourse Handle{..} picIdTxt = do
   iD <- tryReadResourseId "pic_id" picIdTxt
-  isExistResourseE hExist (PicId iD)
+  isExistResourseE hExist (PictureId iD)
   return iD

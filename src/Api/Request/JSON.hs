@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
-module Api.Request where
+module Api.Request.JSON where
 
 import Data.Aeson ((.:), FromJSON (parseJSON), withObject)
 import Types
-import Api.Request (DraftRequest (..))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Aeson (Object, Value (..), decode)
@@ -15,10 +14,11 @@ import Data.HashMap.Strict (toList)
 import Data.Text (Text, unpack)
 import qualified Data.Vector as V
 import Oops (ReqError (..), hideTokenErr)
-import ParseQueryStr (checkLength)
+import Api.Request.QueryStr (checkLength)
 import TryRead (checkBigIntId)
 import Types
 import Data.Scientific (Scientific,floatingOrInteger)
+import Methods.Common.Exist (Handle, CheckExist(..),UncheckedExId(..))
 
 data DraftRequest = DraftRequest
   { draft_name :: Text,
@@ -59,7 +59,7 @@ instance CheckExist DraftRequest where
   checkExist h (DraftRequest _ catId _ picId picsIds tagsIds) = do
     checkExist h (CategoryId catId)
     checkExist h (PictureId  picId)
-    checkExist h (fmap PictureId picId)
+    checkExist h (fmap PictureId picsIds)
     checkExist h (fmap TagId   tagsIds)
 
 
@@ -71,8 +71,8 @@ whyBadDraftReq json =
       mapM_ (checkTxt obj) [ "draft_name", "draft_text"]
       mapM_ (checkId obj) ["draft_category_id", "draft_main_pic_id"]
       mapM_ (checkIdArr obj) ["draft_tags_ids", "draft_pics_ids"]
-      throwE $ SimpleError "Invalid request body"
-    Nothing -> throwE $ SimpleError "Invalid request body"
+      throwE $ BadReqError "Invalid request body"
+    Nothing -> throwE $ BadReqError "Invalid request body"
 
 checkId :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkId obj paramKey = do
@@ -96,32 +96,32 @@ isExistInObj :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m V
 isExistInObj obj paramKey =
   case lookup paramKey . toList $ obj of
     Just val -> return val
-    Nothing -> throwE $ SimpleError $ "Can`t find parameter: " ++ unpack paramKey
+    Nothing -> throwE $ BadReqError $ "Can`t find parameter: " ++ unpack paramKey
 
 
 checkScientific :: (MonadCatch m) => JsonParamKey -> Scientific -> ExceptT ReqError m Integer
 checkScientific paramKey scien =
   case floatingOrInteger scien of
     Right i -> return i
-    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be whole number"
+    _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be whole number"
 
 checkNumVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m Scientific
 checkNumVal paramKey val =
   case val of
     Number scien -> return scien
-    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number"
+    _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number"
 
 checkTxtVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m Text
 checkTxtVal paramKey val =
   case val of
     String txt -> return txt
-    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be text"
+    _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be text"
 
 checkNumArrVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m [Scientific]
 checkNumArrVal paramKey values =
   case values of
     Array arr -> checkNumListVal paramKey (V.toList arr) 
-    _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
+    _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
 
 checkNumListVal ::  (MonadCatch m) => JsonParamKey -> [Value] -> ExceptT ReqError m [Scientific]
 checkNumListVal paramKey xs = case xs of
@@ -129,7 +129,7 @@ checkNumListVal paramKey xs = case xs of
   ((Number scien) : ys) -> do
     scienS <- checkNumListVal paramKey ys
     return $ scien : scienS
-  _ -> throwE $ SimpleError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
+  _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
 
 
 checkTokenLength :: (Monad m) => Int -> Text -> ExceptT ReqError m ()
@@ -139,5 +139,5 @@ checkTokenLength leng txt = case splitAt leng (unpack txt) of
 
 checkNatural :: (Monad m) => QueryParamKey -> Id -> ExceptT ReqError m Id
 checkNatural paramKey num
-  | num <= 0 = throwE $ SimpleError $ "Parameter: " ++ unpack paramKey ++ " . Id should be greater then 0"
+  | num <= 0 = throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ " . Id should be greater then 0"
   | otherwise = return num

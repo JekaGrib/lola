@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Author where
 
@@ -19,8 +19,16 @@ import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.Selecty (Author (..))
 import Oops
-import ParseQueryStr (CreateAuthor (..), DeleteAuthor (..), GetAuthor (..), UpdateAuthor (..))
+import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..),checkQStr)
 import Types
+import qualified Methods.Common.Auth (Handle, makeH)
+import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import qualified Methods.Common.Exist (Handle, makeH)
+import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
+import Methods.Common.ToQuery
+import Network.HTTP.Types (StdMethod(..))
+import TryRead (tryReadResourseId)
+
 
 data Handle m = Handle
   { hConf :: Config
@@ -35,6 +43,8 @@ data Handle m = Handle
   , insertReturnAuthor :: UserId -> AuthorInfo -> m Id
   , withTransactionDB :: forall a. m a -> m a
   , hDelMany :: Methods.Common.DeleteMany.Handle m
+  , hAuth :: Methods.Common.Auth.Handle m
+  , hExist :: Methods.Common.Exist.Handle m
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -46,12 +56,15 @@ makeH conf logH =
         (selectDraftsForAuthor' conn)
         (selectAuthorsForUser' conn)
         (selectAuthors' conn)
-        (updateAuthorForPosts' conn)
-        (deleteAuthor' conn)
+        (updateDbAuthor' conn)
+        (updateDbAuthorForPosts' conn)
+        (deleteDbAuthor' conn)
         (isUserAuthor' conn)
         (insertReturnAuthor' conn)
         (withTransaction conn)
         (Methods.Common.DeleteMany.makeH conf)
+        (Methods.Common.Auth.makeH conf logH)
+        (Methods.Common.Exist.makeH conf)
 
 selectDraftsForAuthor' conn auId = do
   let wh = WherePair "author_id=?" (Id auId)
@@ -84,27 +97,27 @@ insertReturnAuthor' conn usId auInfo = do
   insertReturn' conn (InsertRet "authors" insPairs "author_id")
 
 workWithAuthors :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithAuthors Handle{..} (ReqInfo meth path qStr _) = 
+workWithAuthors h@Handle{..} (ReqInfo meth path qStr _) = 
   case (meth,path) of
     (POST,["authors"]) -> do
-      lift $ logInfo (hLog h) "Create author command"
-      tokenAdminAuth (hAuth methH) req
-      checkQStr hExist qStr >>= createAuthor (hAu methH)
+      lift $ logInfo hLog "Create author command"
+      tokenAdminAuth hAuth  qStr
+      checkQStr hExist qStr >>= createAuthor h
     (GET,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get author command"
-      tokenAdminAuth (hAuth methH) req
-      tagId <- checkAuthorResourse h auIdTxt
-      getAuthor (hAu methH) auId
+      lift $ logInfo hLog "Get author command"
+      tokenAdminAuth hAuth  qStr
+      auId <- checkAuthorResourse h auIdTxt
+      getAuthor h auId
     (PUT,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update author command"
-      tokenAdminAuth (hAuth methH) req
-      tagId <- checkAuthorResourse h auIdTxt
-      preParseQueryStr h req $ updateAuthor (hAu methH) auId
+      lift $ logInfo hLog "Update author command"
+      tokenAdminAuth hAuth qStr
+      auId <- checkAuthorResourse h auIdTxt
+      checkQStr hExist qStr >>= updateAuthor h auId
     (DELETE,["authors",auIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete author command"
-      tokenAdminAuth (hAuth methH) req
-      tagId <- checkAuthorResourse h auIdTxt
-      deleteAuthor (hAu methH) auId
+      lift $ logInfo hLog "Delete author command"
+      tokenAdminAuth hAuth qStr
+      auId <- checkAuthorResourse h auIdTxt
+      deleteAuthor h auId
     (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
 
 
@@ -117,36 +130,36 @@ createAuthor h@Handle{..} (CreateAuthor usIdParam auInfoParam) = do
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
 
 getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
-getAuthor Handle{..} auIdNum = do
-  Author auId auInfo usId <- catchOneSelE hLog $ selectAuthors auIdParam
+getAuthor Handle{..} authId = do
+  Author auId auInfo usId <- catchOneSelE hLog $ selectAuthors authId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
 
 updateAuthor :: (MonadCatch m) => Handle m -> AuthorId -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
-updateAuthor h@Handle{..} auIdNum (UpdateAuthor usIdParam auInfoParam) = do
-  isntUserOtherAuthor h usIdParam auIdParam
-  catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auIdParam
-  lift $ logInfo hLog $ "Author_id: " ++ show auIdParam ++ " updated."
-  okHelper $ AuthorResponse {author_id = auIdParam, auth_user_id = usIdParam, author_info = auInfoParam}
+updateAuthor h@Handle{..} auId (UpdateAuthor usIdParam auInfoParam) = do
+  isntUserOtherAuthor h usIdParam auId
+  catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auId
+  lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " updated."
+  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
-deleteAuthor Handle{..} auId = do
-  let updatePos = updateDbAuthorForPosts (cDefAuthId hConf) auIdParam
-  draftsIds <- catchSelE hLog $ selectDraftsForAuthor auIdParam
+deleteAuthor h@Handle{..} auId = do
+  let updatePos = updateDbAuthorForPosts (cDefAuthId hConf) auId
+  draftsIds <- catchSelE hLog $ selectDraftsForAuthor auId
   let deleteDr = deleteAllAboutDrafts hDelMany draftsIds
-  let deleteAu = deleteDbAuthor auIdParam
+  let deleteAu = deleteDbAuthor auId
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
-  lift $ logInfo hLog $ "Author_id: " ++ show auIdParam ++ " deleted."
+  lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " deleted."
   okHelper $ OkResponse {ok = True}
 
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
-isntUserOtherAuthor Handle{..} usIdParam auIdParam = do
-  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usIdParam
+isntUserOtherAuthor Handle{..} usId auId = do
+  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usId
   case maybeAuId of
-    Just auId ->
-      if auId == auIdParam
+    Just usAuId ->
+      if usAuId == auId
         then return ()
-        else throwE $ BadReqError $ "User_id: " ++ show usIdParam ++ " is already other author"
+        else throwE $ BadReqError $ "User_id: " ++ show usId ++ " is already other author"
     Nothing -> return ()
 
 
@@ -158,8 +171,8 @@ isNotAlreadyAuthor Handle{..} usId = do
       throwE $ BadReqError $ "User is already author. User_id: " ++ show usId
 
 
-checkAuthorResourse :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m AuthorId
-checkAuthorResourse Handle{..} auIdTxt =
+checkAuthorResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m AuthorId
+checkAuthorResourse Handle{..} auIdTxt = do
   iD <- tryReadResourseId "author_id" auIdTxt
   isExistResourseE hExist (AuthorId iD)
   return iD

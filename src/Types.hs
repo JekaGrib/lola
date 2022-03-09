@@ -7,9 +7,10 @@ module Types where
 import Data.Text (Text)
 --import Data.Map as Map
 import Database.PostgreSQL.Simple.ToField (ToField(..))
-import Database.PostgreSQL.Simple.Types (PGArray,In)
+import Database.PostgreSQL.Simple.Types (Binary,PGArray,In)
 import Data.Int (Int64)
 import Data.Time.Calendar ( Day)
+import Data.ByteString (ByteString)
 
 
 type Id = Int64
@@ -79,11 +80,8 @@ type ReturnParam = Param
 
 type CheckParam = Param
 
-type Where = String
 
-type Set = String
-
-type OrderBy = String
+type ResourseId = Text
 
 type Page = Int
 
@@ -107,11 +105,16 @@ type TagName = DbTxtValue
 
 type AuthorInfo = DbTxtValue
 
+type AuthorName = DbTxtValue
+
 type CatName = DbTxtValue
 
 type CommentText = DbTxtValue
 
 type Key = DbTxtValue
+
+type Pwd = DbTxtValue
+
 
 data SortOrd = ASC | DESC
   deriving (Eq,Show)
@@ -153,10 +156,18 @@ instance ToField DbValue where
 
 
 
-type WhereValue = (Where, DbValue)
 
-data AndWhereVal = AndWhereVal WhereValue | AndOrWhere [OrWhereValue]
+data InsertUser =
+  InsertUser Text Text Text PictureId Day AdminBool TokenKey
 
-newtype OrWhereValue = OrWhereValue WhereValue
+data InsertDraft =
+  InsertDraft Text Text CategoryId Text PictureId 
 
---type WhereValueS = WhereValue :| [AndWhereVal]
+data InsertPost =
+  InsertPost Text Text Day CategoryId Text PictureId 
+
+data UpdateDbDraft =
+  UpdateDbDraft Text CategoryId Text PictureId
+
+data UpdateDbPost =
+  UpdateDbPost Text CategoryId Text PictureId
