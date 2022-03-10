@@ -183,7 +183,7 @@ instance ParseQueryStr GetPosts where
       <*> parseQueryStr qStr
 
 instance CheckExist GetPosts where
-  checkExist h (GetPosts _ gpF gpOrd) = do
+  checkExist h (GetPosts _ gpF _) = do
     checkExist h gpF
 
 
@@ -205,9 +205,9 @@ data GetPostsF =
 instance ParseQueryStr GetPostsF where
   parseQueryStr qStr =
     GetPostsF
-      <$> parseMaybeDayParam      qStr "crated_at"
-      <*> parseMaybeDayParam      qStr "crated_at_lt"
-      <*> parseMaybeDayParam      qStr "crated_at_gt"
+      <$> parseMaybeDayParam      qStr "created_at"
+      <*> parseMaybeDayParam      qStr "created_at_lt"
+      <*> parseMaybeDayParam      qStr "created_at_gt"
       <*> parseMaybeIdParam       qStr "tag"
       <*> parseMaybeIdArrayParam  qStr "tags_in"
       <*> parseMaybeIdArrayParam  qStr "tags_all"

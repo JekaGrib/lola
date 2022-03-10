@@ -10,7 +10,7 @@ import Database.PostgreSQL.Simple (Query,In(In))
 import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
 import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack)
+import Data.Text (Text,pack, unpack,cons,snoc)
 
 toQ :: (ToStr a) => a -> Query
 toQ = fromString . toStr
@@ -196,6 +196,7 @@ instance AddJoinTable OrderBy where
     " JOIN categories ON posts.post_category_id=categories.category_id"  
   addJoinTable (ByPostAuthor _)   =  
     " JOIN users AS u ON authors.user_id=u.user_id"
+  addJoinTable (OrderList xs)     =  addJoinTable xs
   addJoinTable _                  =  ""
 
 
@@ -233,27 +234,15 @@ instance ToWhere Filter where
   toWhere (TagF f) = toWhere f
 
 instance AddJoinTable Filter where
-  addJoinTable (AuthorNameF _) = " JOIN users AS us ON authors.user_id=us.user_id"
+  addJoinTable (AuthorNameF _) = " JOIN users AS usrs ON authors.user_id=usrs.user_id"
   addJoinTable (InF f) = addJoinTable f
   addJoinTable _ = ""
 
-
-instance  ToWhere InF where
-  toWhere (PostText txt) = 
-    WherePair " post_text ILIKE %?% " (Txt (escape txt))
-  toWhere (Name txt) = 
-    WherePair " post_name ILIKE %?% " (Txt (escape txt))
-  toWhere (UsersName txt) = 
-    WherePair " usrs.first_name ILIKE %?% " (Txt (escape txt))
-  toWhere (TagName txt) = 
-    let sel = Select ["post_id"] "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" (WherePair " tag_name ILIKE %?% " (Txt (escape txt)))
-    in WhereSelect " posts.post_id IN " sel
-  toWhere (CatName txt) =
-    WherePair " c.category_name ILIKE %?% " (Txt (escape txt))
-  toWhere (EveryWhere xs) = WhereOr (fmap toWhere xs)
+toILike :: Text -> Text
+toILike = cons '%' . (flip snoc) '%'
 
 escape :: Text -> Text
-escape xs = pack $ concatMap escapeChar (unpack xs)
+escape = pack . concatMap escapeChar . unpack 
 
 escapeChar :: Char -> String
 escapeChar '\\' = "\\\\"
@@ -261,10 +250,25 @@ escapeChar '%' = "\\%"
 escapeChar '_' = "\\_"
 escapeChar a = [a]
 
+instance  ToWhere InF where
+  toWhere (PostText txt) = 
+    WherePair " post_text ILIKE ? " (Txt (toILike txt))
+  toWhere (Name txt) = 
+    WherePair " post_name ILIKE ? " (Txt (toILike txt))
+  toWhere (UsersName txt) = 
+    WherePair " us.first_name ILIKE ? " (Txt (toILike txt))
+  toWhere (TagName txt) = 
+    let sel = Select ["post_id"] "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" (WherePair " tag_name ILIKE ? " (Txt (toILike txt)))
+    in WhereSelect " posts.post_id IN " sel
+  toWhere (CatName txt) =
+    WherePair " c.category_name ILIKE ? " (Txt (toILike txt))
+  toWhere (EveryWhere xs) = WhereOr (fmap toWhere xs)
+
 
 instance AddJoinTable InF where
-  addJoinTable (UsersName _) = " JOIN users AS us ON authors.user_id=us.user_id"
-  addJoinTable (CatName _) = " JOIN categories AS c ON c.category_id=posts.post_category_id"
+  addJoinTable (UsersName _) = " JOIN users AS us ON authors.user_id=us.user_id "
+  addJoinTable (CatName _) = " JOIN categories AS c ON c.category_id=posts.post_category_id "
+  addJoinTable (EveryWhere xs) = addJoinTable xs
   addJoinTable _ = ""
 
 instance  ToWhere CreatedF where

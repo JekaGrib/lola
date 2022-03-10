@@ -39,14 +39,14 @@ toCreatedF crAt crLt crGt = case (crAt,crLt,crGt) of
   (Nothing ,Just day,Nothing)  -> return . Just $ CreatedF (AtLt day)
   (Nothing ,Nothing ,Just day) -> return . Just $ CreatedF (AtGt day)
   (Nothing ,Nothing ,Nothing)  -> return Nothing
-  _ -> throwE $ BadReqError "Invalid combination of filter parameters"
+  _ -> throwE $ BadReqError "Invalid combination of created filter parameters"
 
 toTagF tag tagsIn tagsAll = case (tag,tagsIn,tagsAll) of
   (Just iD,Nothing ,Nothing)   -> return . Just $ TagF (TagIdF iD)
   (Nothing ,Just ids,Nothing)  -> return . Just $ TagF (TagsIn ids)
   (Nothing ,Nothing ,Just ids) -> return . Just $ TagF (TagsAll ids)
   (Nothing ,Nothing ,Nothing)  -> return Nothing
-  _ -> throwE $ BadReqError "Invalid combination of filter parameters"
+  _ -> throwE $ BadReqError "Invalid combination of tag filter parameters"
 
 toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
   (Just txt,Nothing ,Nothing)  -> return . Just $ InF (Name txt)
@@ -54,7 +54,7 @@ toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
   (Nothing ,Nothing ,Just txt) -> return . Just $ InF $
     EveryWhere [PostText txt,Name txt,UsersName txt,CatName txt,TagName txt]
   (Nothing ,Nothing ,Nothing)  -> return Nothing
-  _ -> throwE $ BadReqError "Invalid combination of filter parameters"
+  _ -> throwE $ BadReqError "Invalid combination of IN filter parameters"
 
 toCatIdF (Just catId) = Just $ CatIdF catId
 toCatIdF _ = Nothing

@@ -143,7 +143,7 @@ selectPostsForDraft' conn draftId = do
   selectOnly' conn $ 
     Select 
       ["COALESCE (post_id, '0') AS post_id"] 
-      "drats" 
+      "drafts" 
       wh
 selectAuthorsForUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
@@ -181,8 +181,8 @@ insertReturnDraft' conn (InsertDraft (Just postId) auId drName catId drTxt picId
   let insPair3 = InsertPair "draft_category_id" (Id  catId)
   let insPair4 = InsertPair "draft_text"        (Txt drTxt)
   let insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
-  let insPair5 = InsertPair "post_id"           (Id  postId)
-  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5]
+  let insPair6 = InsertPair "post_id"           (Id  postId)
+  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
   insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
 insertManyDraftsPics' conn xs = do
   let insPair = InsertManyPair  ("draft_id", "pic_id") xs
@@ -193,11 +193,11 @@ insertManyDraftsTags' conn xs = do
 insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
   let insPair1 = InsertPair "author_id"        (Id  auId)
   let insPair2 = InsertPair "post_name"        (Txt name)
-  let insPair2 = InsertPair "post_create_date" (Day day)
-  let insPair3 = InsertPair "post_category_id" (Id  catId)
-  let insPair4 = InsertPair "post_text"        (Txt txt)
-  let insPair5 = InsertPair "post_main_pic_id" (Id  picId)
-  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5]
+  let insPair3 = InsertPair "post_create_date" (Day day)
+  let insPair4 = InsertPair "post_category_id" (Id  catId)
+  let insPair5 = InsertPair "post_text"        (Txt txt)
+  let insPair6 = InsertPair "post_main_pic_id" (Id  picId)
+  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
   insertReturn' conn (InsertRet "posts" insPairs "post_id")
 insertManyPostsPics' conn xs = do
   let insPair = InsertManyPair  ("post_id", "pic_id") xs

@@ -64,7 +64,7 @@ tryReadDay paramKey txt = do
 
 tryReadSortOrd :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m SortOrd
 tryReadSortOrd paramKey "" = throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
-tryReadSortOrd paramKey txt = case  T.toUpper . T.take 3 $ txt of
+tryReadSortOrd paramKey txt = case  T.toUpper . T.take 4 $ txt of
   "ASC" -> return ASC
   "DESC" -> return DESC
   _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be <ASC> or <DESC>"

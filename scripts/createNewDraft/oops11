@@ -1,3 +1,2 @@
 #!/bin/bash
-    "token": "blabla",
 curl -H "Content-Type: application/json" -X POST -d @createNewDraft/oops11.json "http://localhost:3000/drafts?token=blabla"

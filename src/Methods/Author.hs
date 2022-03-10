@@ -79,7 +79,7 @@ updateDbAuthor' conn usId auInfo auId = do
   let set1 = SetPair "user_id=?" (Id usId)
   let set2 = SetPair "author_info=?" (Txt auInfo)
   let wh = WherePair "author_id=?" (Id auId)
-  updateInDb' conn (Update "posts" [set1,set2] wh)
+  updateInDb' conn (Update "authors" [set1,set2] wh)
 updateDbAuthorForPosts' conn auIdNew auId = do
   let set = SetPair "author_id=?" (Id auIdNew)
   let wh = WherePair "author_id=?" (Id auId)

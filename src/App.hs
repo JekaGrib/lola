@@ -92,8 +92,8 @@ fromE respE = case respE of
       status403
       [("Content-Type", "application/json; charset=utf-8")]
       (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
-  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [] "Request Body Too Large"
-  Left (UriTooLongError _) -> ResponseInfo status414 [] "Request-URI Too Long"
+  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [] "Status 413 Request Body Too Large"
+  Left (UriTooLongError _) -> ResponseInfo status414 [] "Status 414 Request-URI Too Long"
   Left (ResourseNotExistError _) -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (SecretError _) -> ResponseInfo status404 [] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status500 [] "Internal server error"
