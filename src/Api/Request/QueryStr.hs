@@ -168,7 +168,8 @@ instance ParseQueryStr GetDrafts where
     GetDrafts
       <$> parsePageParam qStr "page"
 
-
+instance CheckExist GetDrafts where
+  checkExist _ _ = return ()
 
 data GetPosts = 
   GetPosts Page GetPostsF GetPostsOrd
@@ -180,6 +181,11 @@ instance ParseQueryStr GetPosts where
       <$> parsePageParam qStr "page"
       <*> parseQueryStr qStr
       <*> parseQueryStr qStr
+
+instance CheckExist GetPosts where
+  checkExist h (GetPosts _ gpF gpOrd) = do
+    checkExist h gpF
+
 
 data GetPostsF = 
   GetPostsF 

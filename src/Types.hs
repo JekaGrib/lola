@@ -161,10 +161,10 @@ data InsertUser =
   InsertUser Text Text Text PictureId Day AdminBool TokenKey
 
 data InsertDraft =
-  InsertDraft Text Text CategoryId Text PictureId 
+  InsertDraft (Maybe PostId) AuthorId Text CategoryId Text PictureId 
 
 data InsertPost =
-  InsertPost Text Text Day CategoryId Text PictureId 
+  InsertPost AuthorId Text Day CategoryId Text PictureId 
 
 data UpdateDbDraft =
   UpdateDbDraft Text CategoryId Text PictureId

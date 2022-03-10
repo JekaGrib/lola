@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/getDraft?draft_id=24&token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"
+curl -X 'GET' "http://localhost:3000/drafts/24?token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"

@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/createSubCategory?super_category_id=2&category_name=dim&token=kit"
+curl -X 'POST' "http://localhost:3000/categories?super_category_id=2&category_name=dim&token=kit"

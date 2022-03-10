@@ -6,7 +6,7 @@
 
 module Methods.Draft where
 
-import Api.Request.JSON (DraftRequest (..))
+import Api.Request.JSON (DraftRequest (..),checkDraftReqJson)
 import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), OkResponse (..), PicIdUrl (pic_idPU), PostIdOrNull (..), PostResponse (..), TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
@@ -41,15 +41,15 @@ data Handle m = Handle
   , hLog :: LogHandle m
   , selectDrafts :: DraftId -> m [Draft]
   , selectUsersForDraft :: DraftId -> m [UserId]
-  , selectUsersForPost :: PostId -> m [UserId]
-  , selectTags :: TagId -> m [Tag]
+  , selectTags :: [TagId] -> m [Tag]
   , selectDaysForPost :: PostId -> m [Day]
   , selectLimDraftsForAuthor :: AuthorId -> OrderBy -> Page -> Limit -> m [Draft]
   , selectPicsForDraft :: PostId -> m [PictureId]
   , selectTagsForDraft :: DraftId -> m [Tag]
+  , selectPostsForDraft :: DraftId -> m [PostId]
   , selectAuthorsForUser :: UserId -> m [Author]
   , updateDbDraft :: DraftId -> UpdateDbDraft -> m ()
-  , updateDbPost :: PostId -> UpdateDbPost -> ToUpdate -> Where -> [DbValue] -> m ()
+  , updateDbPost :: PostId -> UpdateDbPost -> m ()
   , insertReturnDraft :: InsertDraft -> m DraftId
   , insertManyDraftsPics :: [(DraftId, PictureId)] -> m ()
   , insertManyDraftsTags :: [(DraftId, TagId)] -> m ()
@@ -72,7 +72,6 @@ makeH conf logH =
         logH
         (selectDrafts' conn)
         (selectUsersForDraft' conn)
-        (selectUsersForPost' conn)
         (selectTags' conn)
         (selectDaysForPost' conn)
         (selectLimDraftsForAuthor' conn)
@@ -111,13 +110,6 @@ selectUsersForDraft' conn draftId = do
       ["user_id"]
       "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       wh
-selectUsersForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn $
-    Select 
-      ["user_id"]
-      "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      wh
 selectTags' conn tagIds = do
   let toWhPair tagId = WherePair "tag_id=?" (Id tagId)
   let wh = WhereOr $ map toWhPair tagIds
@@ -130,7 +122,7 @@ selectDaysForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   selectOnly' conn (Select ["post_create_date"] "posts" wh)
 selectLimDraftsForAuthor' conn auId orderBy page limit = do
-  let wh = WherePair "author_id=?" (Id postId)
+  let wh = WherePair "author_id=?" (Id auId)
   selectLimit' conn $ 
     SelectLim 
       ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
@@ -175,12 +167,21 @@ updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
   let wh = WherePair "post_id=?"          (Id postId)
   updateInDb' conn (Update "posts" [set1,set2,set3,set4] wh)
 
-insertReturnDraft' conn (InsertDraft auId drName catId drTxt picId) = do
+insertReturnDraft' conn (InsertDraft Nothing auId drName catId drTxt picId) = do
   let insPair1 = InsertPair "author_id"         (Id  auId)
   let insPair2 = InsertPair "draft_name"        (Txt drName)
   let insPair3 = InsertPair "draft_category_id" (Id  catId)
   let insPair4 = InsertPair "draft_text"        (Txt drTxt)
   let insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
+  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5]
+  insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
+insertReturnDraft' conn (InsertDraft (Just postId) auId drName catId drTxt picId) = do
+  let insPair1 = InsertPair "author_id"         (Id  auId)
+  let insPair2 = InsertPair "draft_name"        (Txt drName)
+  let insPair3 = InsertPair "draft_category_id" (Id  catId)
+  let insPair4 = InsertPair "draft_text"        (Txt drTxt)
+  let insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
+  let insPair5 = InsertPair "post_id"           (Id  postId)
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5]
   insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
 insertManyDraftsPics' conn xs = do
@@ -210,35 +211,35 @@ workWithDrafts :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m Re
 workWithDrafts h@Handle{..} (ReqInfo meth path qStr (Just json)) =
   case (meth,path) of
     (POST,["drafts"]) -> do
-      lift $ logInfo (hLog h) "Create new draft command"
+      lift $ logInfo hLog "Create new draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       body <- checkDraftReqJson hExist json
-      createNewDraft (hDr methH) usId body
+      createNewDraft h usId body
     (POST,["drafts",draftIdTxt,"posts"]) -> do
-      lift $ logInfo (hLog h) "Publish draft command"
+      lift $ logInfo hLog "Publish draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
-      publishDraft (hDr methH) usId
+      publishDraft h usId draftId
     (GET,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Get draft command"
+      lift $ logInfo hLog "Get draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
-      getDraft (hDr methH) usId draftId
+      getDraft h usId draftId
     (GET,["drafts"]) -> do
-      lift $ logInfo (hLog h) "Get drafts command"
+      lift $ logInfo hLog "Get drafts command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      checkQStr hExist qStr >>= getDrafts (hDr methH) usId
+      checkQStr hExist qStr >>= getDrafts h usId
     (PUT,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Update draft command"
+      lift $ logInfo hLog  "Update draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
       body <- checkDraftReqJson hExist json
-      updateDraft (hDr methH) usIdN draftId body
+      updateDraft h usId draftId body
     (DELETE,["drafts",draftIdTxt]) -> do
-      lift $ logInfo (hLog h) "Delete draft command"
+      lift $ logInfo hLog "Delete draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       draftId <- checkDraftResourse h draftIdTxt
-      deleteDraft (hDr methH) usId draftId    
+      deleteDraft h usId draftId    
     (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
     
 
@@ -246,11 +247,10 @@ workWithDrafts h@Handle{..} (ReqInfo meth path qStr (Just json)) =
 createNewDraft :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m ResponseInfo
 createNewDraft h@Handle{..} usId drReq@(DraftRequest nameParam catIdParam txtParam picId picsIds tagsIds) = do
   DraftInfo auResp@(AuthorResponse auId _ _) tagResps catResp <- getDraftInfo h usId drReq
-  draftId <- withTransactionDBE h $ do
-    let insDr = InsertDraft auId nameParam catIdParam txtParam picId
-    insertReturnAllDraft h picsIds tagsIds insDr
-  lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " created"
-  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdNull, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl (hConf h) picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
+  let insDr = InsertDraft Nothing auId nameParam catIdParam txtParam picId
+  draftId <- insertReturnAllDraft h picsIds tagsIds insDr    
+  lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created"
+  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdNull, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl hConf picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl hConf) picsIds}
 
 
 
@@ -265,8 +265,8 @@ getDrafts h@Handle{..} usId (GetDrafts pageNum) = do
   Author auId _ _ <- isUserAuthorE h usId
   let orderBy = ByDraftId DESC
   drafts <- catchSelE hLog $ selectLimDraftsForAuthor auId orderBy pageNum (cDraftsLimit hConf)  
-  draftsResps <- mapM makeDraftResp h drafts
-  lift $ logInfo (hLog h) $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response"
+  draftsResps <- mapM (makeDraftResp h usId auId) drafts
+  lift $ logInfo hLog $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response"
   okHelper $
     DraftsResponse
       { page9 = pageNum,
@@ -281,10 +281,10 @@ updateDraft h@Handle{..} usId draftId drReq@(DraftRequest nameParam catIdParam t
   withTransactionDBE h $ do
     deletePicsTagsForDrafts hDelMany [draftId]
     let updDr = UpdateDbDraft nameParam catIdParam txtParam picId 
-    updateDbDraft conn draftId updDr
+    updateDbDraft draftId updDr
     insertManyDraftsPics (zip (repeat draftId) picsIds)
     insertManyDraftsTags (zip (repeat draftId) tagsIds)
-  lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " updated"
+  lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " updated"
   okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = isNULL postId, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl hConf picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl hConf ) picsIds}
 
 deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
@@ -292,32 +292,32 @@ deleteDraft h@Handle{..} usId draftId = do
   isUserAuthorE_ h usId
   isDraftAuthor h draftId usId
   withTransactionDBE h $ deleteAllAboutDrafts hDelMany [draftId]
-  lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " deleted"
+  lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
 publishDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 publishDraft h@Handle{..} usId draftId = do
-  DraftResponse draftId draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftIdParam
+  DraftResponse drId draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
   case draftPostId of
     PostIdNull -> do
-      day <- lift $ getDay h
+      day <- lift $ getDay
       postId <- withTransactionDBE h $ do
         let insPost = InsertPost auId draftName day (fromCatResp catResp) draftTxt mPicId
         postId <- insertReturnPost insPost
         insertManyPostsPics (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertManyPostsTags (zip (repeat postId) (fmap tag_idTR tagResps))
         return postId
-      lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
+      lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
     PostIdExist postId -> do
-      day <- cathOneSelE hLog $ selectDays h "posts" ["post_create_date"] "post_id=?" [Id postId]
+      day <- catchOneSelE hLog $ selectDaysForPost postId
       withTransactionDBE h $ do
-        let updPost = UpdateDbPost draftName (fromCatResp catResp) draftTxt mPicId postId
+        let updPost = UpdateDbPost draftName (fromCatResp catResp) draftTxt mPicId 
         updateDbPost postId updPost
         deletePicsTagsForPost hDelMany  postId
         insertManyPostsPics (zip (repeat postId) (fmap pic_idPU picIdUrls))
         insertManyPostsTags (zip (repeat postId) (fmap tag_idTR tagResps))
-      lift $ logInfo (hLog h) $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
+      lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
 
 selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
@@ -325,14 +325,14 @@ selectDraftAndMakeResp h@Handle{..} usId draftId = do
   Author auId _ _ <- isUserAuthorE h usId
   isDraftAuthor h draftId usId
   draft <- catchOneSelE hLog $ selectDrafts  draftId
-  makeDraftResp h auId draft
+  makeDraftResp h usId auId draft
 
-makeDraftResp :: (MonadCatch m) => Handle m -> AuthorId -> Draft -> ExceptT ReqError m DraftResponse
-makeDraftResp Handle{..} auId (Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId) = do
-  picsIds <- catchSelE hLog $ selectPicsForDraft draftIdParam
-  tagS <- catchSelE hLog $ selectTagsForDraft draftIdParam
+makeDraftResp :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> Draft -> ExceptT ReqError m DraftResponse
+makeDraftResp Handle{..} usId auId (Draft drId auInfo draftPostId draftName draftCatId draftTxt mPicId) = do
+  picsIds <- catchSelE hLog $ selectPicsForDraft drId
+  tagS <- catchSelE hLog $ selectTagsForDraft drId
   catResp <- makeCatResp hCatResp  draftCatId
-  return DraftResponse {draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usIdNum, draft_name2 = draftName, draft_cat2 = catResp, draft_text2 = draftTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl (hConf h) mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl (hConf h)) picsIds}
+  return DraftResponse {draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usId, draft_name2 = draftName, draft_cat2 = catResp, draft_text2 = draftTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl hConf mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl hConf) picsIds}
 
 data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 
@@ -343,7 +343,7 @@ getDraftInfo h@Handle{..} usId (DraftRequest _ catIdParam _ picId picsIds tagsId
   catResp <- makeCatResp hCatResp catIdParam
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp
 
-insertReturnAllDraft :: (MonadCatch m) => Handle m -> [PictureId] -> [TagId] -> [Param] -> [DbValue] -> m DraftId
+insertReturnAllDraft :: (MonadCatch m) => Handle m -> [PictureId] -> [TagId] -> InsertDraft -> ExceptT ReqError m DraftId
 insertReturnAllDraft h@Handle{..} picsIds tagsIds insDr = withTransactionDBE h $ do
   draftId <- insertReturnDraft insDr
   insertManyDraftsPics (zip (repeat draftId) picsIds)
@@ -362,7 +362,7 @@ isDraftAuthor Handle{..} draftId usId = do
 isUserAuthorE :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
 isUserAuthorE Handle{..} usId = do
   lift $ logDebug hLog "Checking in DB is user author"
-  maybeAu <- catchOneSelE hLog $ selectAuthorsForUser  usId
+  maybeAu <- catchMaybeOneSelE hLog $ selectAuthorsForUser  usId
   case maybeAu of
     Nothing -> throwE $ ForbiddenError $ "user_id: " ++ show usId ++ " isn`t author"
     Just author -> return author

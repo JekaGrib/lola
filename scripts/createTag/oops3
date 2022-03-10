@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/createTag?&token=kit"
+curl -X 'POST' "http://localhost:3000/tags?&token=kit"

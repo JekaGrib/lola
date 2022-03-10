@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/deleteDraft?draft_id=21&token=kit"
+curl -X 'DELETE' "http://localhost:3000/drafts/21?token=kit"

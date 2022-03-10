@@ -96,8 +96,8 @@ insertReturnSubCat' conn catName superCatId = do
   let insPair2 = InsertPair "super_category_id" (Id superCatId)
   insertReturn' conn (InsertRet "categories" [insPair1,insPair2] "category_id")
 
-workWithUsers :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithUsers h@Handle{..} (ReqInfo meth path qStr _) = 
+workWithCats :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
+workWithCats h@Handle{..} (ReqInfo meth path qStr _) = 
   case (meth,path) of
     (POST,["categories"]) -> do
       lift $ logInfo hLog "Create category command"

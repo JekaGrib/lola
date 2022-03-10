@@ -168,7 +168,7 @@ isNotAlreadyAuthor Handle{..} usId = do
   lift $ logDebug hLog  $ "Checking is user already in authors in DB"
   isEx <- catchDbErr $ lift $ isUserAuthor usId
   when isEx $
-      throwE $ BadReqError $ "User is already author. User_id: " ++ show usId
+      throwE $ BadReqError $ "User is already author."
 
 
 checkAuthorResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m AuthorId

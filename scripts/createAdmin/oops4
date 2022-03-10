@@ -1,5 +1,5 @@
 #!/bin/bash
-curl "http://localhost:3000/createAdmin?password=54321&first_name=Chris&last_name=Wirt&user_pic_id=1000&create_admin_key=lola"
+curl -X 'POST' "http://localhost:3000/users/admin?password=54321&first_name=Chris&last_name=Wirt&user_pic_id=1000&create_admin_key=lola"
 
 
 

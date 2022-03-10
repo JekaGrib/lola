@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/createTag?tag_nam&token=422.hij.8e8539a9dcc14d1e04cd783bb748856072925562"
+curl -X 'POST' "http://localhost:3000/tags?tag_nam&token=422.hij.8e8539a9dcc14d1e04cd783bb748856072925562"

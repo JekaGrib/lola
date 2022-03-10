@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/updateTag?tag_id=28491849328573925798457984782475878492&tag_name=snow&token=kit"
+curl -X 'PUT' "http://localhost:3000/tags/28491849328573925798457984782475878492?tag_name=snow&token=kit"

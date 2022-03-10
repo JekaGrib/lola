@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/deleteComment?comment_id=25&token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"
+curl -X 'DELETE' "http://localhost:3000/comments/25?token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"

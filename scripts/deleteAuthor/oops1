@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/deleteAuthor?author_id=100"
+curl -X 'DELETE' "http://localhost:3000/authors/100"

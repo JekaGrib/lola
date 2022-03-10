@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/getComments?post_id=1.7&page=1"
+curl -X 'GET' "http://localhost:3000/comments?post_id=1.7&page=1"

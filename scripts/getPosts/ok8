@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/getPosts/1?name_in=do"
+curl -X 'GET' "http://localhost:3000/posts?name_in=do&page=1"

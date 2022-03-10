@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/updateAuthor?author_id=100&user_id=420&author_info=ddd&token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"
+curl -X 'PUT' "http://localhost:3000/authors/100?user_id=420&author_info=ddd&token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"

@@ -6,7 +6,6 @@ module Methods where
 import Conf (Config)
 import Logger (LogHandle)
 import qualified Methods.Admin (Handle, makeH)
-import qualified Methods.Auth (Handle, makeH)
 import qualified Methods.Author (Handle, makeH)
 import qualified Methods.Category (Handle, makeH)
 import qualified Methods.Comment (Handle, makeH)

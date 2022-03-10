@@ -8,7 +8,7 @@ import Data.Aeson ((.:), FromJSON (parseJSON), withObject)
 import Types
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Aeson (Object, Value (..), decode)
+import Data.Aeson (Object, Value (..), decodeStrict)
 import qualified Data.ByteString.Lazy as BSL
 import Data.HashMap.Strict (toList)
 import Data.Text (Text, unpack)
@@ -19,6 +19,7 @@ import TryRead (checkBigIntId)
 import Types
 import Data.Scientific (Scientific,floatingOrInteger)
 import Methods.Common.Exist (Handle, CheckExist(..),UncheckedExId(..))
+import Data.ByteString (ByteString)
 
 data DraftRequest = DraftRequest
   { draft_name :: Text,
@@ -41,9 +42,9 @@ instance FromJSON DraftRequest where
       <*> v .: "draft_tags_ids"
 
 
-checkDraftReqJson :: (MonadCatch m) => Handle m -> BSL.ByteString -> ExceptT ReqError m DraftRequest
+checkDraftReqJson :: (MonadCatch m) => Handle m -> ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson h json =
-  case (decode json :: Maybe DraftRequest) of
+  case (decodeStrict json :: Maybe DraftRequest) of
     Just body@(DraftRequest name catId txt picId picsIds tagsIds) -> do
       _ <- checkLength 50 "draft_name" name
       _ <- checkLength 10000 "draft_text" txt
@@ -64,9 +65,9 @@ instance CheckExist DraftRequest where
 
 
 
-whyBadDraftReq :: (MonadCatch m) => BSL.ByteString -> ExceptT ReqError m a
+whyBadDraftReq :: (MonadCatch m) => ByteString -> ExceptT ReqError m a
 whyBadDraftReq json =
-  case (decode json :: Maybe Object) of
+  case (decodeStrict json :: Maybe Object) of
     Just obj -> do
       mapM_ (checkTxt obj) [ "draft_name", "draft_text"]
       mapM_ (checkId obj) ["draft_category_id", "draft_main_pic_id"]

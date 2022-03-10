@@ -1,2 +1,2 @@
 #!/bin/bash
-curl -H "Content-Type: application/json" -X POST -d @createNewDraft/oops12.json http://localhost:3000/createNewDraft
+curl -H "Content-Type: application/json" -X POST -d @createNewDraft/oops12.json "http://localhost:3000/drafts"

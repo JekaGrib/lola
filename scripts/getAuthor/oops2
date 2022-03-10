@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/getAuthor?author_id=10000&token=123"
+curl -X 'GET' "http://localhost:3000/authors/10000?token=123"

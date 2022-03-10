@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/createCategory?category_name=dim"
+curl -X 'POST' "http://localhost:3000/categories?category_name=dim"

@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
+{-# LANGUAGE RecordWildCards #-}
+--{-# OPTIONS_GHC -Wall #-}
+--{-# OPTIONS_GHC -Werror #-}
 
 module App where
 
-import Api.Request (DraftRequest (..))
 import Api.Response (OkInfoResponse (..))
-import CheckJsonReq (checkDraftReqJson, pullTokenDraftReqJson)
 import Conf (Config (..), reConnectDB)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -14,44 +13,45 @@ import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Aeson (encode)
 import Data.ByteString.Builder (lazyByteString, toLazyByteString)
 import qualified Data.ByteString.Lazy as BSL
-import Data.Text (pack)
+import Data.ByteString (ByteString)
+import Data.Text (pack,unpack,Text)
+import Data.List (genericLength)
 import Logger
 import qualified Methods (Handle, makeH)
 import Methods (hAdm, hAu, hCat, hCom, hDr, hPic, hPost, hTag, hUs)
-import Methods.Admin (createAdmin)
-import Methods.Auth (checkUserTokenParam, logIn, tokenAdminAuth, tokenUserAuth)
-import Methods.Author (createAuthor, deleteAuthor, getAuthor, updateAuthor)
-import Methods.Category (createCategory, createSubCategory, deleteCategory, getCategory, updateCategory)
-import Methods.Comment (createComment, deleteComment, getComments, updateComment)
+import Methods.Admin (workWithAdmin)
+import Methods.Author (workWithAuthors)
+import Methods.Category (workWithCats)
+import Methods.Comment (workWithComms)
 import Methods.Common (ResponseInfo (..),ReqInfo(..))
-import Methods.Draft (createNewDraft, createPostsDraft, deleteDraft, getDraft, getDrafts, publishDraft, updateDraft)
-import Methods.Picture (loadPicture, sendPicture)
-import Methods.Post (deletePost, getPost, getPosts)
-import Methods.Tag (createTag, deleteTag, getTag, updateTag)
-import Methods.User (createUser, deleteUser, getUser)
-import Network.HTTP.Types (status200,status400,status401,status403, status404,status413,status414,status500,status501)
-import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, strictRequestBody)
+import Methods.Draft (workWithDrafts)
+import Methods.Picture (workWithPics)
+import Methods.Post (workWithPosts)
+import Methods.Tag (workWithTags)
+import Methods.User (workWithUsers)
+import Network.HTTP.Types (status200,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
+import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
 import Oops (ReqError (..), hideErr, hideLogInErr, logOnErr)
-import ParseQueryStr (ParseQueryStr, parseQueryStr)
 import TryRead (tryReadId, tryReadPage)
 import Types
+import Control.Monad (when)
 
 data Handle m = Handle
   { hLog :: LogHandle m
   , hMeth :: Methods.Handle m
-  , getBody :: Request -> m BSL.ByteString
+  , getBody :: Request -> m ByteString
   }
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
   newConfig <- reConnectDB config
   let methH = Methods.makeH newConfig handleLog
-  let h = Handle handleLog methH strictRequestBody
+  let h = Handle handleLog methH getRequestBodyChunk
   logDebug (hLog h) "Connect to DB"
   respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req
   logLeftResponse (hLog h) respE
   let resInfo = fromE respE
-  logDebug hLog $ "Output response: " ++ show resInfo
+  logDebug (hLog h) $ "Output response: " ++ show resInfo
   send (responseFromInfo resInfo)
 
 
@@ -59,9 +59,9 @@ application config handleLog req send = do
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
-logLeftResponse :: LogHandle IO -> IO ()
+logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
 logLeftResponse logH respE = case respE of
-  Left err -> logWarning hLog $ show err
+  Left err -> logWarning logH $ show err
   _ -> return ()
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
@@ -103,7 +103,7 @@ fromE respE = case respE of
 
 
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
-chooseRespEx Handle{..} req = do
+chooseRespEx h@Handle{..} req = do
   lift $ logDebug hLog $ "Incoming request: " ++ show req
   meth <- pullMethod req
   let path = pathInfo req
@@ -140,19 +140,19 @@ checkPathLength path =
 checkPathTextLength :: (Monad m) => Text -> ExceptT ReqError m ()
 checkPathTextLength txt = case splitAt 20 (unpack txt) of
   (_, []) -> return ()
-  (x,_) -> throwE $ UriTooLongError $ "Request path part too long: " ++ unpack x ++ "..."
+  (x,_) -> throwE $ UriTooLongError $ "Request path part too long: " ++ show x ++ "..."
 
- 
+checkLengthQStr :: (MonadCatch m) => QueryText -> ExceptT ReqError m ()
 checkLengthQStr qStr = 
   case drop 12 qStr of
-    [] -> when ((sum . map lengthQText $ qStr) > 600) $ throwE $ UriTooLongError "Query string too long"
+    [] -> when ((sum . map lengthQText $ qStr) > 600) $ throwE $ UriTooLongError "Query string too long."
     _ -> throwE $ UriTooLongError "Query string too long"
 
-
+lengthQText :: (Text,Maybe Text) -> Integer
 lengthQText (txtKey,maybeTxt) = 
   case maybeTxt of
-    Just txt -> genericLength txtKey + genericLength txt
-    Nothing  -> genericLength txtKey 
+    Just txt -> genericLength (unpack txtKey) + genericLength (unpack txt)
+    Nothing  -> genericLength (unpack txtKey) 
 
 pullReqBody :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ByteString
 pullReqBody h req = do

@@ -1,2 +1,2 @@
 #!/bin/bash
-curl -H "Content-Type: application/json" -X POST -d @updateDraft/oops1.json http://localhost:3000/updateDraft/136
+curl -H "Content-Type: application/json" -X PUT -d @updateDraft/oops1.json "http://localhost:3000/drafts/136?token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"

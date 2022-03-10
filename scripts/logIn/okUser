@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/logIn?user_id=7&password=12345"
+curl -X 'POST' "http://localhost:3000/users/logIn?user_id=7&password=12345"

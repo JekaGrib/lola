@@ -1,2 +1,2 @@
 #!/bin/bash
-curl "http://localhost:3000/publishDraft?draft_id=52&token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"
+curl -X 'POST' "http://localhost:3000/drafts/52/posts?token=205.stu.919552423dd9a4a96ad81827d3aabc490dded79c"
