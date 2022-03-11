@@ -30,11 +30,12 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
 import qualified Methods.Draft (Handle, makeH)
 import Methods.Draft (insertReturnAllDraft,isUserAuthorE_)
 import Control.Monad (unless)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hConf :: Config
@@ -112,27 +113,28 @@ selectPostInfos' conn postId = do
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh
 
-workWithPosts :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithPosts h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["posts",postIdTxt,"drafts"]) -> do
+workWithPosts :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithPosts h@Handle{..} qStr meth  = 
+  case meth of
+    ToPostId postId -> do
       lift $ logInfo hLog "Create post`s draft command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      postId <- checkPostResourse h postIdTxt
+      isExistResourseE hExist (PostId postId)
       createPostsDraft h usId postId
-    (GET,["posts",postIdTxt]) -> do
+    ToGet postId -> do
       lift $ logInfo hLog "Get post command"
-      postId <- checkPostResourse h postIdTxt
+      isExistResourseE hExist (PostId postId)
       getPost h postId
-    (GET,["posts"]) -> do
+    ToGetAll -> do
       lift $ logInfo hLog "Get posts command"
       checkQStr hExist qStr >>= getPosts h
-    (DELETE,["posts",postIdTxt]) -> do
+    ToDelete postId -> do
       lift $ logInfo hLog "Delete post command"
       tokenAdminAuth hAuth qStr
-      postId <- checkPostResourse h postIdTxt
+      isExistResourseE hExist (PostId postId)
       deletePost h postId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for posts resourse: "  ++ show meth
+
     
 
 getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
@@ -187,11 +189,7 @@ isPostAuthor Handle{..} postId usId = do
     $ ForbiddenError
     $ "user_id: " ++ show usId ++ " is not author of post_id: " ++ show postId
 
-checkPostResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m PostId
-checkPostResourse Handle{..} postIdTxt = do
-  iD <- tryReadResourseId "post_id" postIdTxt
-  isExistResourseE hExist (PostId iD)
-  return iD
+
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

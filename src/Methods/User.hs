@@ -27,8 +27,9 @@ import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hConf :: Config
@@ -120,25 +121,27 @@ insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6,insPair7]
   insertReturn' conn (InsertRet "users" insPairs "user_id")
 
-workWithUsers :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithUsers h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["users","logIn"]) -> hideLogInErr $ do
+workWithLogIn :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
+workWithLogIn h@Handle{..} qStr  = hideLogInErr $ do
       lift $ logInfo hLog "LogIn command"
       checkQStr hExist qStr >>= logIn h
-    (POST,["users"]) -> do
+
+workWithUsers :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithUsers h@Handle{..} qStr meth = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create user command"
       checkQStr hExist qStr >>= createUser h
-    (GET,["users",usIdTxt]) -> do
+    ToGet usId -> do
       lift $ logInfo hLog "Get user command"
-      usId <- checkUserResourse h usIdTxt
+      isExistResourseE hExist (UserId usId)
       getUser h usId
-    (DELETE,["users",usIdTxt]) -> do
+    ToDelete usId -> do
       lift $ logInfo hLog "Delete user command"
       tokenAdminAuth hAuth qStr
-      usId <- checkUserResourse h usIdTxt
+      isExistResourseE hExist (UserId usId)
       deleteUser h usId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for users resourse: "  ++ show meth
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle{..} (LogIn usIdParam pwdParam) = do
@@ -197,11 +200,6 @@ checkPwd pwdParam pwd
   where
     hashPwdParam = txtSha1 pwdParam
 
-checkUserResourse :: (MonadCatch m) =>  Handle m -> ResourseId -> ExceptT ReqError m UserId
-checkUserResourse Handle{..} usIdTxt = do
-  iD <- tryReadResourseId "user_id" usIdTxt
-  isExistResourseE hExist (UserId iD)
-  return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

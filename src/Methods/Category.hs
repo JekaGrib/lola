@@ -26,8 +26,9 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 
 
@@ -96,28 +97,29 @@ insertReturnSubCat' conn catName superCatId = do
   let insPair2 = InsertPair "super_category_id" (Id superCatId)
   insertReturn' conn (InsertRet "categories" [insPair1,insPair2] "category_id")
 
-workWithCats :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithCats h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["categories"]) -> do
+workWithCats :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithCats h@Handle{..} qStr meth  = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create category command"
       tokenAdminAuth hAuth qStr
       checkQStr hExist qStr >>= createCategory h
-    (GET,["categories",catIdTxt]) -> do
+    ToGet catId -> do
       lift $ logInfo hLog "Get category command"
-      catId <- checkCatResourse h catIdTxt
+      isExistResourseE hExist (CategoryId catId)
       getCategory h catId
-    (PUT,["categories",catIdTxt]) -> do
+    ToPut catId -> do
       lift $ logInfo hLog "Update category command"
       tokenAdminAuth hAuth qStr
-      catId <- checkCatResourse h catIdTxt
+      isExistResourseE hExist (CategoryId catId)
       checkQStr hExist qStr >>= updateCategory h catId
-    (DELETE,["categories",catIdTxt]) -> do
+    ToDelete catId -> do
       lift $ logInfo hLog "Delete category command"
       tokenAdminAuth hAuth qStr
-      catId <- checkCatResourse h catIdTxt
+      isExistResourseE hExist (CategoryId catId)
       deleteCategory h catId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for categories resourse: "  ++ show meth
+
     
 
 createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
@@ -183,11 +185,7 @@ fromCatResp :: CatResponse -> CategoryId
 fromCatResp (SubCatResponse a _ _ _) = a
 fromCatResp (CatResponse a _ _) = a
 
-checkCatResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m CategoryId
-checkCatResourse Handle{..} catIdTxt = do
-  iD <- tryReadResourseId "category_id" catIdTxt
-  isExistResourseE hExist (CategoryId iD)
-  return iD
+
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

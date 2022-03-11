@@ -28,13 +28,14 @@ import Methods.Draft (workWithDrafts)
 import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
 import Methods.Tag (workWithTags)
-import Methods.User (workWithUsers)
+import Methods.User (workWithUsers,workWithLogIn)
 import Network.HTTP.Types (status200,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
 import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
 import Oops (ReqError (..), hideErr, hideLogInErr, logOnErr)
 import TryRead (tryReadId, tryReadPage)
 import Types
 import Control.Monad (when)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hLog :: LogHandle m
@@ -49,7 +50,6 @@ application config handleLog req send = do
   let h = Handle handleLog methH getRequestBodyChunk
   logDebug (hLog h) "Connect to DB"
   respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req
-  logLeftResponse (hLog h) respE
   let resInfo = fromE respE
   logDebug (hLog h) $ "Output response: " ++ show resInfo
   send (responseFromInfo resInfo)
@@ -59,10 +59,10 @@ application config handleLog req send = do
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseBuilder s h b
 
-logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
+{-logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
 logLeftResponse logH respE = case respE of
   Left err -> logWarning logH $ show err
-  _ -> return ()
+  _ -> return ()-}
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE respE = case respE of
@@ -104,29 +104,35 @@ fromE respE = case respE of
 
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx h@Handle{..} req = do
-  lift $ logDebug hLog $ "Incoming request: " ++ show req
-  meth <- pullMethod req
+  lift $ logDebug hLog $ "Incoming request"
+  stdMeth <- pullStdMethod req
   let path = pathInfo req
   checkPathLength path
   let qStr = queryToQueryText $ queryString req
   checkLengthQStr qStr
-  let reqInfo = ReqInfo meth path qStr Nothing
-  case path of
-    ["users","admin"] -> workWithAdmin (hAdm hMeth) reqInfo
-    ("users":_) -> workWithUsers (hUs hMeth) reqInfo
-    ("authors":_) -> workWithAuthors (hAu hMeth) reqInfo
-    ("categories":_) -> workWithCats (hCat hMeth) reqInfo
-    ("tags":_) -> workWithTags (hTag hMeth) reqInfo
-    ("drafts":_) -> do
+  lift $ logDebug hLog $ "Request not too long: " ++ show req
+  endPoint <- parseEndPoint stdMeth path
+  case endPoint of
+    AdminEP        -> workWithAdmin   (hAdm hMeth) qStr
+    LogInEP        -> workWithLogIn   (hUs  hMeth) qStr
+    UserEP meth    -> workWithUsers   (hUs  hMeth) qStr meth 
+    AuthorEP meth  -> workWithAuthors (hAu  hMeth) qStr meth 
+    CatEP meth     -> workWithCats    (hCat hMeth) qStr meth 
+    TagEP meth     -> workWithTags    (hTag hMeth) qStr meth 
+    DraftEP ToPost -> do
       body <- pullReqBody h req
-      workWithDrafts (hDr hMeth) (ReqInfo meth path qStr (Just body))
-    ("posts":_) -> workWithPosts (hPost hMeth) reqInfo   
-    ("comments":_) -> workWithComms (hCom hMeth) reqInfo
-    ("pictures":_) -> workWithPics (hPic hMeth) reqInfo
-    xs -> throwE $ ResourseNotExistError $ "Unknown path : " ++ show xs
+      workWithDrafts (hDr hMeth) qStr ToPost body
+    DraftEP (ToPut iD) -> do
+      body <- pullReqBody h req
+      workWithDrafts (hDr hMeth) qStr (ToPut iD) body
+    DraftEP meth   -> workWithDrafts (hDr hMeth) qStr meth ""
+    PostEP meth    -> workWithPosts (hPost hMeth) qStr meth 
+    CommentEP meth -> workWithUsers (hUs hMeth) qStr meth 
+    PictureEP meth -> workWithPics (hPic hMeth) qStr meth 
 
 
-pullMethod req = do
+
+pullStdMethod req = do
   let eithReqMeth = parseMethod . requestMethod $ req
   case eithReqMeth of
     Right meth -> return meth

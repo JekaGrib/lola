@@ -26,8 +26,9 @@ import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hConf                :: Config
@@ -79,28 +80,28 @@ insertReturnTag' conn tagName = do
   let insPair = InsertPair "tag_name" (Txt tagName)
   insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
 
-workWithTags :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithTags h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["tags"]) -> do
+workWithTags :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithTags h@Handle{..} qStr meth = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create tag command"
       tokenAdminAuth hAuth qStr
       checkQStr hExist qStr >>= createTag h
-    (GET,["tags",tagIdTxt]) -> do
+    ToGet tagId -> do
       lift $ logInfo hLog "Get tag command"
-      tagId <- checkTagResourse h tagIdTxt
+      isExistResourseE hExist (TagId tagId)
       getTag h tagId
-    (PUT,["tags",tagIdTxt]) -> do
+    ToPut tagId -> do
       lift $ logInfo hLog  "Update tag command"
       tokenAdminAuth hAuth qStr
-      tagId <- checkTagResourse h tagIdTxt
+      isExistResourseE hExist (TagId tagId)
       checkQStr hExist qStr >>= updateTag h tagId
-    (DELETE,["tags",tagIdTxt]) -> do
+    ToDelete tagId -> do
       lift $ logInfo hLog  "Delete tag command"
       tokenAdminAuth hAuth qStr
-      tagId <- checkTagResourse h tagIdTxt
+      isExistResourseE hExist (TagId tagId)
       deleteTag h tagId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for tags resourse: "  ++ show meth
 
 
 
@@ -131,11 +132,6 @@ deleteTag h@Handle{..} tagId = do
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " deleted"
   okHelper $ OkResponse {ok = True}
 
-checkTagResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m TagId
-checkTagResourse Handle{..} tagIdTxt = do
-  iD <- tryReadResourseId "tag_id" tagIdTxt
-  isExistResourseE hExist (TagId iD)
-  return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

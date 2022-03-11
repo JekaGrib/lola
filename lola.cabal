@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8cd1825f9e7dcd86d8d80c745c3de6cf959d1ca6060610e538cfef4cdb8aa437
+-- hash: d74dcde956a59a029cd4378d313925af7eee9e8a9ec14203e313dd84846173ce
 
 name:           lola
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Api.Request.EndPoint
       Api.Request.JSON
       Api.Request.QueryStr
       Api.Response

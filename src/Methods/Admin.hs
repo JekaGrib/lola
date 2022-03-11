@@ -20,7 +20,8 @@ import Data.Time.Calendar ( Day)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
+import Api.Request.EndPoint
 
 
 data Handle m = Handle
@@ -58,13 +59,10 @@ insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6,insPair7]
   insertReturn' conn (InsertRet "users" insPairs "user_id")
 
-workWithAdmin :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithAdmin h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["users","admin"]) -> hideErr $ do
-      lift $ logInfo hLog "Create admin command"
-      checkQStr hExist qStr >>= createAdmin h
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+workWithAdmin :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
+workWithAdmin h@Handle{..} qStr = hideErr $ do
+  lift $ logInfo hLog "Create admin command"
+  checkQStr hExist qStr >>= createAdmin h
 
 createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
 createAdmin Handle{..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) = do

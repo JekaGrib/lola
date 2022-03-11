@@ -26,8 +26,9 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 
 data Handle m = Handle
@@ -96,29 +97,29 @@ insertReturnAuthor' conn usId auInfo = do
   let insPairs = [insPair1,insPair2]
   insertReturn' conn (InsertRet "authors" insPairs "author_id")
 
-workWithAuthors :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithAuthors h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["authors"]) -> do
+workWithAuthors :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithAuthors h@Handle{..} qStr meth  = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create author command"
       tokenAdminAuth hAuth  qStr
       checkQStr hExist qStr >>= createAuthor h
-    (GET,["authors",auIdTxt]) -> do
+    ToGet auId -> do
       lift $ logInfo hLog "Get author command"
       tokenAdminAuth hAuth  qStr
-      auId <- checkAuthorResourse h auIdTxt
+      isExistResourseE hExist (AuthorId auId)
       getAuthor h auId
-    (PUT,["authors",auIdTxt]) -> do
+    ToPut auId -> do
       lift $ logInfo hLog "Update author command"
       tokenAdminAuth hAuth qStr
-      auId <- checkAuthorResourse h auIdTxt
+      isExistResourseE hExist (AuthorId auId)
       checkQStr hExist qStr >>= updateAuthor h auId
-    (DELETE,["authors",auIdTxt]) -> do
+    ToDelete auId -> do
       lift $ logInfo hLog "Delete author command"
       tokenAdminAuth hAuth qStr
-      auId <- checkAuthorResourse h auIdTxt
+      isExistResourseE hExist (AuthorId auId)
       deleteAuthor h auId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for authors resourse: "  ++ show meth
 
 
 createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
@@ -171,11 +172,6 @@ isNotAlreadyAuthor Handle{..} usId = do
       throwE $ BadReqError $ "User is already author."
 
 
-checkAuthorResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m AuthorId
-checkAuthorResourse Handle{..} auIdTxt = do
-  iD <- tryReadResourseId "author_id" auIdTxt
-  isExistResourseE hExist (AuthorId iD)
-  return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

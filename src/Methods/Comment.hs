@@ -23,8 +23,9 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hConf :: Config
@@ -85,27 +86,27 @@ insertReturnComm' conn commTxt postId usId = do
   let insPairs = [insPair1,insPair2,insPair3]
   insertReturn' conn (InsertRet "comments" insPairs "comment_id")
 
-workWithComms :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithComms h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST,["comments"]) -> do
+workWithComms :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithComms h@Handle{..} qStr meth  = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create comment command"
       (usId, _) <- tokenUserAuth hAuth qStr
       checkQStr hExist qStr >>= createComment h usId
-    (GET,["comments"]) -> do
+    ToGetAll -> do
       lift $ logInfo hLog "Get comments command"
       checkQStr hExist qStr >>= getComments h
-    (PUT,["comments",commIdTxt]) -> do
+    ToPut commId -> do
       lift $ logInfo hLog "Update comment command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      commId <- checkCommResourse h commIdTxt
+      isExistResourseE hExist (CommentId commId)
       checkQStr hExist qStr >>= updateComment h usId commId
-    (DELETE,["comments",commIdTxt]) -> do
+    ToDelete commId -> do
       lift $ logInfo hLog "Delete comment command"
       (usId, accessMode) <- tokenUserAuth hAuth  qStr
-      commId <- checkCommResourse h commIdTxt
+      isExistResourseE hExist (CommentId commId)
       deleteComment h usId accessMode commId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for comments resourse: "  ++ show meth
     
 createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> ExceptT ReqError m ResponseInfo
 createComment Handle{..} usIdNum (CreateComment postIdParam txtParam) = do
@@ -156,11 +157,7 @@ isCommAuthor Handle {..} commId usId = do
     $ ForbiddenError
     $ "user_id: " ++ show usId ++ " is not author of comment_id: " ++ show commId
 
-checkCommResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m CommentId
-checkCommResourse Handle{..} commIdTxt = do
-  iD <- tryReadResourseId "comment_id" commIdTxt
-  isExistResourseE hExist (CommentId iD)
-  return iD
+
 
 deleteDbCommE :: (MonadCatch m) => Handle m -> CommentId -> ExceptT ReqError m ()
 deleteDbCommE Handle {..} commId = do

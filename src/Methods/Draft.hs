@@ -32,8 +32,10 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
-import Network.HTTP.Types (StdMethod(..))
+import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
+import Data.ByteString (ByteString)
 
 
 data Handle m = Handle
@@ -207,40 +209,39 @@ insertManyPostsTags' conn xs = do
   insertMany' conn (InsertMany "poststags" insPair)
 
 
-workWithDrafts :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithDrafts h@Handle{..} (ReqInfo meth path qStr (Just json)) =
-  case (meth,path) of
-    (POST,["drafts"]) -> do
+workWithDrafts :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ByteString -> ExceptT ReqError m ResponseInfo
+workWithDrafts h@Handle{..} qStr meth json =
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Create new draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       body <- checkDraftReqJson hExist json
       createNewDraft h usId body
-    (POST,["drafts",draftIdTxt,"posts"]) -> do
+    ToPostId draftId -> do
       lift $ logInfo hLog "Publish draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      draftId <- checkDraftResourse h draftIdTxt
+      isExistResourseE hExist (DraftId draftId)
       publishDraft h usId draftId
-    (GET,["drafts",draftIdTxt]) -> do
+    ToGet draftId -> do
       lift $ logInfo hLog "Get draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      draftId <- checkDraftResourse h draftIdTxt
+      isExistResourseE hExist (DraftId draftId)
       getDraft h usId draftId
-    (GET,["drafts"]) -> do
+    ToGetAll -> do
       lift $ logInfo hLog "Get drafts command"
       (usId, _) <- tokenUserAuth hAuth  qStr
       checkQStr hExist qStr >>= getDrafts h usId
-    (PUT,["drafts",draftIdTxt]) -> do
+    ToPut draftId -> do
       lift $ logInfo hLog  "Update draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      draftId <- checkDraftResourse h draftIdTxt
+      isExistResourseE hExist (DraftId draftId)
       body <- checkDraftReqJson hExist json
       updateDraft h usId draftId body
-    (DELETE,["drafts",draftIdTxt]) -> do
+    ToDelete draftId -> do
       lift $ logInfo hLog "Delete draft command"
       (usId, _) <- tokenUserAuth hAuth  qStr
-      draftId <- checkDraftResourse h draftIdTxt
+      isExistResourseE hExist (DraftId draftId)
       deleteDraft h usId draftId    
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
     
 
 
@@ -377,11 +378,6 @@ isNULL 0 = PostIdNull
 isNULL postId = PostIdExist postId
 
 
-checkDraftResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m DraftId
-checkDraftResourse Handle{..} draftIdTxt = do
-  iD <- tryReadResourseId "draft_id" draftIdTxt
-  isExistResourseE hExist (DraftId iD)
-  return iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

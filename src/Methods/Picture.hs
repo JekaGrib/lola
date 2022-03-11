@@ -18,7 +18,7 @@ import Data.Text (Text, unpack)
 import Logger
 import Methods.Common
 import qualified Network.HTTP.Simple as HT
-import Network.HTTP.Types (status200,StdMethod(..))
+import Network.HTTP.Types (status200,StdMethod(..),QueryText)
 import Database.PostgreSQL.Simple (Binary(..))
 import Oops
 import Api.Request.QueryStr (LoadPicture (..),checkQStr)
@@ -29,6 +29,7 @@ import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
 import Methods.Common.ToQuery
 import TryRead (tryReadResourseId)
+import Api.Request.EndPoint
 
 data Handle m = Handle
   { hConf :: Config
@@ -59,18 +60,19 @@ insertRetPicBS' conn sbs = do
   let insPair = InsertPair "pic" (BS (Binary sbs))
   insertReturn' conn (InsertRet "pics" [insPair] "pic_id")
 
-workWithPics :: (MonadCatch m) => Handle m -> ReqInfo -> ExceptT ReqError m ResponseInfo
-workWithPics h@Handle{..} (ReqInfo meth path qStr _) = 
-  case (meth,path) of
-    (POST, ["pictures"]) -> do
+workWithPics :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithPics h@Handle{..} qStr meth  = 
+  case meth of
+    ToPost -> do
       lift $ logInfo hLog "Load picture command"
       _ <- tokenUserAuth hAuth qStr
       checkQStr hExist qStr >>= loadPicture h
-    (GET,["pictures",picIdTxt]) -> do
+    ToGet picId -> do
       lift $ logInfo hLog "Get picture command"
-      picId <- checkPicResourse h picIdTxt
+      isExistResourseE hExist (PictureId picId)
       sendPicture h picId
-    (x,y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x,y)
+    _ -> throwE $ ResourseNotExistError $ "Wrong method for pictures resourse: "  ++ show meth
+
     
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture Handle{..} picIdNum = do
@@ -99,9 +101,3 @@ checkPicUrlGetPic Handle{..} url = do
   case decodeImage sbs of
     Right _ -> return lbs
     Left _ -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url
-
-checkPicResourse :: (MonadCatch m) => Handle m -> ResourseId -> ExceptT ReqError m PictureId
-checkPicResourse Handle{..} picIdTxt = do
-  iD <- tryReadResourseId "pic_id" picIdTxt
-  isExistResourseE hExist (PictureId iD)
-  return iD
