@@ -26,10 +26,12 @@ import Types
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
-import Methods.Common.ToQuery
+import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
+import Psql.ToQuery
 import TryRead (tryReadResourseId)
 import Api.Request.EndPoint
+import Psql.Methods.Picture
 
 data Handle m = Handle
   { hConf :: Config
@@ -53,12 +55,6 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-selectPicBS' conn picId = do
-  let wh = WherePair "pic_id=?" (Id picId)
-  selectBS' conn (Select ["pic"] "pics" wh)
-insertRetPicBS' conn sbs = do
-  let insPair = InsertPair "pic" (BS (Binary sbs))
-  insertReturn' conn (InsertRet "pics" [insPair] "pic_id")
 
 workWithPics :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
 workWithPics h@Handle{..} qStr meth  = 

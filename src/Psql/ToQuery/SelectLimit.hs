@@ -2,7 +2,7 @@
 --{-# OPTIONS_GHC -Wall #-}
 --{-# OPTIONS_GHC -Werror #-}
 
-module Methods.Common.ToQuery where
+module Psql.ToQuery.SelectLimit where
 
 import Data.List (intercalate)
 import Data.String (fromString)
@@ -11,32 +11,11 @@ import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
 import Data.Time.Calendar ( Day)
 import Data.Text (Text,pack, unpack,cons,snoc)
+import Psql.ToQuery 
+import Psql.ToQuery.Select
 
-toQ :: (ToStr a) => a -> Query
-toQ = fromString . toStr
 
 
-class ToStr a where
-  toStr :: a -> String
-
-class ToVal a where
-  toVal :: a -> [DbValue]
-
-class AddJoinTable a where
-  addJoinTable :: a -> JoinTable
-
-class ToWhere a where
-  toWhere :: a -> Where
-
-data Select =
-  Select [DbKey] Table Where
-
-instance ToStr Select where
-  toStr (Select keys t wh) = 
-    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t ++ " WHERE " ++ toStr wh
-
-instance ToVal Select where
-  toVal (Select keys t wh) = toVal wh
 
 data SelectLim =
   SelectLim [DbKey] Table Where [Filter] OrderBy Page Limit
@@ -51,122 +30,6 @@ instance ToStr SelectLim where
 instance ToVal SelectLim where
   toVal (SelectLim keys t wh filterArgs ord page limit) = 
     toVal wh ++ [Num ((page - 1) * limit),Num (page * limit)]
-
-data Where =
-  Where Predicate
-  | WherePair Predicate DbValue
-  | WhereSelect Predicate Select
-  | WhereSelectPair Select Predicate DbValue
-  | WhereOr [Where]
-  | WhereAnd [Where]
-
-instance ToStr Where where
-  toStr (Where str) = str
-  toStr (WherePair str _) = str
-  toStr (WhereSelect str sel) = str ++ "(" ++ toStr sel ++ ")"
-  toStr (WhereSelectPair sel str _) = "(" ++ toStr sel ++ ")" ++ str
-  toStr (WhereOr xs) = "(" ++ intercalate " OR " (map toStr xs) ++ ")"
-  toStr (WhereAnd xs) = "(" ++ intercalate " AND " (map toStr xs) ++ ")"
-
-instance ToVal Where where
-  toVal (Where _) = []
-  toVal (WherePair _ val) = [val]
-  toVal (WhereSelect _ sel) = toVal sel 
-  toVal (WhereSelectPair sel _ val) =  toVal sel  ++ [val]
-  toVal (WhereOr xs) = concatMap toVal xs
-  toVal (WhereAnd xs) = concatMap toVal xs
-
-data Update = 
-  Update Table [Set] Where
-
-instance ToStr Update where
-  toStr (Update t sets wh) = 
-    "UPDATE " ++ t ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr wh
-
-instance ToVal Update where
-  toVal (Update t set wh) = toVal set ++ toVal wh
-
-data Set =
-  SetPair Predicate DbValue
-
-instance ToStr Set where
-  toStr (SetPair str _) = str
-
-instance ToStr [Set] where
-  toStr sets = intercalate "," $ fmap toStr sets
-
-instance ToVal Set where
-  toVal (SetPair _ val) = [val]
-
-instance ToVal [Set] where
-  toVal sets = concatMap toVal sets  
-
-data Delete =
-  Delete Table Where
-
-instance ToStr Delete where
-  toStr (Delete t wh) = 
-    "DELETE FROM " ++ t ++ " WHERE " ++ toStr wh
-
-instance ToVal Delete where
-  toVal (Delete t wh)  = toVal wh
-
-data Exists =
-  Exists Table Where
-
-instance ToStr Exists where
-  toStr (Exists t wh) = 
-    "SELECT EXISTS (SELECT 1 FROM " ++ t ++ " WHERE " ++ toStr wh ++ ")"
-
-instance ToVal Exists where
-  toVal (Exists t wh)  = toVal wh
-
-data InsertRet =
-  InsertRet Table [InsertPair] DbReturnKey
-
-instance ToStr InsertRet where
-  toStr (InsertRet t insPairs retKey ) = 
-    "INSERT INTO " ++ t ++ toStr insPairs ++ " RETURNING " ++ retKey
-
-instance ToVal InsertRet where
-  toVal (InsertRet t insPairs retKey)  = toVal insPairs
-
-data InsertPair = 
-  InsertPair {insKey :: DbKey, insVal :: DbValue}
-
-instance ToStr InsertPair where
-  toStr (InsertPair k _) = " ( " ++ k ++ " ) VALUES ( ? )"
-
-instance ToVal InsertPair where
-  toVal (InsertPair _ val) = [val]
-
-instance ToStr [InsertPair] where
-  toStr insPairs = 
-    " ( " ++ intercalate "," (map insKey insPairs)  ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insPairs) ++ " )"
-
-instance ToVal [InsertPair] where
-  toVal insPairs = concatMap toVal insPairs
-
-
-data InsertMany =
-  InsertMany Table InsertManyPair
-
-instance ToStr InsertMany where
-  toStr (InsertMany t insPair) = 
-    "INSERT INTO " ++ t ++ toStr insPair
-
-
-data InsertManyPair = 
-  InsertManyPair {insManyKey :: (DbKey,DbKey) , insManyVal :: [(Id,Id)]}
-
-instance ToStr InsertManyPair where
-  toStr (InsertManyPair (k1,k2) _) = " (" ++ k1 ++ "," ++ k2 ++ ") VALUES (?,?)"
-
-
-
-
-instance (AddJoinTable a) => AddJoinTable [a] where
-  addJoinTable xs = concatMap addJoinTable xs
 
 data OrderBy =
   ByPostPicsNumb SortOrd

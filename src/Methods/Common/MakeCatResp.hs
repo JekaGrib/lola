@@ -12,10 +12,11 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
 import Logger (LogHandle (..))
 import Methods.Common
-import Methods.Common.ToQuery (Select(..),Where(WherePair))
-import Methods.Common.Selecty (Cat (..))
+import Psql.ToQuery.Select (Select(..),Where(WherePair))
+import Psql.Selecty (Cat (..))
 import Oops (ReqError)
 import Types
+import Psql.Methods.Common.MakeCatResp
 
 data Handle m = Handle
   { hConf :: Config
@@ -32,15 +33,6 @@ makeH conf logH =
         logH
         (selectCats' conn)
         (selectSubCats' conn)
-
-selectCats' conn catId = select' conn $
-    Select 
-      ["category_name", "COALESCE (super_category_id, '0') AS super_category_id"] 
-      "categories" 
-      (WherePair "category_id=?" (Id catId))
-selectSubCats' conn catId = do
-  let wh = WherePair "super_category_id=?" (Id catId)
-  selectOnly' conn $ Select ["category_id"] "categories" wh
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h@Handle{..} catId = do

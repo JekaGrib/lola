@@ -18,7 +18,8 @@ import Api.Request.QueryStr (checkLength)
 import TryRead (checkBigIntId)
 import Types
 import Data.Scientific (Scientific,floatingOrInteger)
-import Methods.Common.Exist (Handle, CheckExist(..),UncheckedExId(..))
+import Methods.Common.Exist (Handle, CheckExist(..))
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
 import Data.ByteString (ByteString)
 
 data DraftRequest = DraftRequest

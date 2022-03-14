@@ -11,7 +11,8 @@ import Control.Monad.Catch (MonadCatch)
 import Data.List (intercalate)
 import Methods.Common
 import Types
-import Methods.Common.ToQuery
+import Psql.ToQuery
+import Psql.Methods.Common.DeleteMany
 
 
 data Handle m = Handle
@@ -40,33 +41,7 @@ makeH conf =
         (deleteDbTagsForDrafts' conn)
         (deleteDbDrafts' conn)
 
-selectDraftsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn (Select ["draft_id"] "drafts" wh)
-deleteDbPicsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  deleteFromDb' conn (Delete "postspics" wh)
-deleteDbTagsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  deleteFromDb' conn (Delete "poststags" wh)
-deleteDbCommsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  deleteFromDb' conn (Delete "comments" wh)
-deleteDbPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  deleteFromDb' conn (Delete "posts" wh)
-deleteDbPicsForDrafts' conn draftIds = do
-  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
-  let wh = WhereOr $ map toWhPair draftIds
-  deleteFromDb' conn (Delete "draftspics" wh)
-deleteDbTagsForDrafts' conn draftIds = do
-  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
-  let wh = WhereOr $ map toWhPair draftIds
-  deleteFromDb' conn (Delete "draftstags" wh)
-deleteDbDrafts' conn draftIds = do
-  let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
-  let wh = WhereOr $ map toWhPair draftIds
-  deleteFromDb' conn (Delete "drafts" wh)
+
 
 
 deleteAllAboutPost :: (MonadCatch m) => Handle m -> PostId -> m ()

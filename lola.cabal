@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d74dcde956a59a029cd4378d313925af7eee9e8a9ec14203e313dd84846173ce
+-- hash: eb6f85ca34c3ab6ae3a1bc8967995bcfb99ad55ff45a8836ca4031537689d0b8
 
 name:           lola
 version:        0.1.0.0
@@ -46,9 +46,8 @@ library
       Methods.Common.Auth
       Methods.Common.DeleteMany
       Methods.Common.Exist
+      Methods.Common.Exist.UncheckedExId
       Methods.Common.MakeCatResp
-      Methods.Common.Selecty
-      Methods.Common.ToQuery
       Methods.Draft
       Methods.Picture
       Methods.Post
@@ -56,6 +55,28 @@ library
       Methods.Tag
       Methods.User
       Oops
+      Psql.Methods.Admin
+      Psql.Methods.Author
+      Psql.Methods.Category
+      Psql.Methods.Comment
+      Psql.Methods.Common
+      Psql.Methods.Common.Auth
+      Psql.Methods.Common.DeleteMany
+      Psql.Methods.Common.Exist
+      Psql.Methods.Common.MakeCatResp
+      Psql.Methods.Draft
+      Psql.Methods.Picture
+      Psql.Methods.Post
+      Psql.Methods.Tag
+      Psql.Methods.User
+      Psql.Selecty
+      Psql.ToQuery
+      Psql.ToQuery.Delete
+      Psql.ToQuery.Exists
+      Psql.ToQuery.Insert
+      Psql.ToQuery.Select
+      Psql.ToQuery.SelectLimit
+      Psql.ToQuery.Update
       TryRead
       Types
   other-modules:

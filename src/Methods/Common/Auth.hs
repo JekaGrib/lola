@@ -13,14 +13,15 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
-import Methods.Common.Selecty (Auth (..))
+import Psql.Selecty (Auth (..))
 import Network.Wai (Request)
 import Oops
 import Api.Request.QueryStr (LogIn (..), Token (..), parseQueryStr)
 import TryRead (tryReadId)
 import Types
-import Methods.Common.ToQuery
+import Psql.ToQuery
 import Network.HTTP.Types.URI (QueryText)
+import Psql.Methods.Common.Auth
 
 
 data Handle m = Handle
@@ -36,10 +37,6 @@ makeH conf logH =
         conf
         logH
         (selectTokenKeysForUser' conn)
-
-selectTokenKeysForUser' conn usId = do
-  let wh = WherePair "user_id=?" (Id usId)
-  selectOnly' conn $ Select ["token_key"] "users" wh
 
 type UserAccessMode = (UserId, AccessMode)
 

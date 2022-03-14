@@ -14,7 +14,7 @@ import Network.Wai (Request (..))
 import Oops (ReqError (..))
 import Types
 import Database.PostgreSQL.Simple.Types (PGArray(..),In(..))
-import Methods.Common.ToQuery (Filter(..),InF(..),CreatedF(..),TagF(..),OrderBy(..))
+import Psql.ToQuery.SelectLimit (Filter(..),InF(..),CreatedF(..),TagF(..),OrderBy(..))
 import Api.Request.QueryStr (GetPosts(..),GetPostsF(..),GetPostsOrd(..))
 
 

@@ -24,11 +24,13 @@ import Types
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
-import Methods.Common.ToQuery
+import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
+import Psql.ToQuery
 import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
 import Api.Request.EndPoint
+import Psql.Methods.Tag
 
 data Handle m = Handle
   { hConf                :: Config
@@ -60,25 +62,7 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-selectTagNames' conn tagId = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  selectOnly' conn (Select ["tag_name"] "tags" wh)
-updateDbTag' conn tagName tagId = do
-  let set = SetPair "tag_name=?" (Txt tagName)
-  let wh = WherePair "tag_id=?" (Id tagId)
-  updateInDb' conn (Update "tags" [set] wh)
-deleteDbTag' conn tagId = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  deleteFromDb' conn (Delete "tags" wh)
-deleteDbTagForPosts' conn tagId = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  deleteFromDb' conn (Delete "poststags" wh)
-deleteDbTagForDrafts' conn tagId = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  deleteFromDb' conn (Delete "draftstags" wh)
-insertReturnTag' conn tagName = do
-  let insPair = InsertPair "tag_name" (Txt tagName)
-  insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
+
 
 workWithTags :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
 workWithTags h@Handle{..} qStr meth = 

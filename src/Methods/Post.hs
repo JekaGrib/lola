@@ -19,7 +19,7 @@ import Methods.Common.DeleteMany (deleteAllAboutPost)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Methods.Common.Selecty (Post (..), Tag(..),PostInfo(..))
+import Psql.Selecty (Post (..), Tag(..),PostInfo(..))
 import Methods.Post.LimitArg ( LimitArg (..), chooseArgs, isDateASC)
 import Network.Wai (Request)
 import Oops
@@ -28,14 +28,17 @@ import Types
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
-import Methods.Common.ToQuery
+import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
+import Psql.ToQuery
 import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
 import qualified Methods.Draft (Handle, makeH)
 import Methods.Draft (insertReturnAllDraft,isUserAuthorE_)
 import Control.Monad (unless)
 import Api.Request.EndPoint
+import Psql.Methods.Post
+import Psql.ToQuery.SelectLimit
 
 data Handle m = Handle
   { hConf :: Config
@@ -74,44 +77,6 @@ makeH conf logH =
         (Methods.Common.Exist.makeH conf)
 
 
-selectPosts' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
-      ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-      "posts JOIN authors ON authors.author_id = posts.author_id "
-      wh
-selectLimPosts' conn filterArgs orderBy page limit = do
-  let wh = WhereAnd $ (fmap toWhere filterArgs) ++ [Where "true"]
-  selectLimit' conn $ 
-    SelectLim 
-      ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-      "posts JOIN authors ON authors.author_id = posts.author_id" 
-      wh filterArgs orderBy page limit
-selectPicsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn (Select ["pic_id"] "postspics" wh)
-selectTagsForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
-      ["tags.tag_id", "tag_name"] 
-      "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" 
-      wh
-selectUsersForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn $
-    Select 
-      ["user_id"]
-      "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      wh
-selectPostInfos' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
-      ["a.author_id", "author_info", "post_name", "post_category_id", "post_text", "post_main_pic_id"]
-      "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      wh
 
 workWithPosts :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
 workWithPosts h@Handle{..} qStr meth  = 

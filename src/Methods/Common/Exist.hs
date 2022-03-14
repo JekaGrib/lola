@@ -6,13 +6,15 @@
 module Methods.Common.Exist where
 
 import Methods.Common
-import Methods.Common.ToQuery
+import Psql.ToQuery
 import Control.Monad.Trans.Except (ExceptT,throwE)
 import Oops (ReqError(..))
 import Control.Monad.Catch (MonadCatch)
 import Types
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
+import Psql.Methods.Common.Exist
+import Methods.Common.Exist.UncheckedExId 
 
 data Handle m = Handle
   { hConf :: Config
@@ -25,56 +27,6 @@ makeH conf =
    in Handle
         conf
         (isExist' conn)
-
-data UncheckedExId =
-  AuthorId AuthorId
-  | CategoryId CategoryId
-  | CommentId CommentId
-  | DraftId DraftId
-  | PictureId PictureId
-  | PostId PostId
-  | TagId TagId
-  | UserId UserId
-
-
-class ToPretty a where
-  toPretty :: a -> String
-
-instance ToPretty UncheckedExId where
-  toPretty (AuthorId iD) = "author_id: " ++ show iD
-  toPretty (CategoryId iD) = "category_id: " ++ show iD
-  toPretty (CommentId iD) = "comment_id: " ++ show iD
-  toPretty (DraftId iD) = "draft_id: " ++ show iD
-  toPretty (PictureId iD) = "pic_id: " ++ show iD
-  toPretty (PostId iD) = "post_id: " ++ show iD
-  toPretty (TagId iD) = "tag_id: " ++ show iD
-  toPretty (UserId iD) = "user_id: " ++ show iD
-
-
-isExist' conn (AuthorId auId) = do
-  let wh = WherePair "author_id=?" (Id auId)
-  isExistInDb' conn (Exists "authors" wh)
-isExist' conn (CategoryId catId) = do
-  let wh = WherePair "category_id=?" (Id catId)
-  isExistInDb' conn (Exists "categories" wh)
-isExist' conn (CommentId commId) = do
-  let wh = WherePair "comment_id=?" (Id commId)
-  isExistInDb' conn (Exists "comments" wh)
-isExist' conn (DraftId drId) = do
-  let wh = WherePair "draft_id=?" (Id drId)
-  isExistInDb' conn (Exists "drafts" wh)
-isExist' conn (PictureId picId) = do
-  let wh = WherePair "pic_id=?" (Id picId)
-  isExistInDb' conn (Exists "pics" wh)
-isExist' conn (PostId postId) = do
-  let wh = WherePair "post_id=?" (Id postId)
-  isExistInDb' conn (Exists "posts" wh)
-isExist' conn (TagId tagId) = do
-  let wh = WherePair "tag_id=?" (Id tagId)
-  isExistInDb' conn (Exists "tags" wh)
-isExist' conn (UserId usId) = do
-  let wh = WherePair "user_id=?" (Id usId)
-  isExistInDb' conn (Exists "users" wh)
 
 
 isExistResourseE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()

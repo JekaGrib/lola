@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Methods.Common.Selecty where
+module Psql.Selecty where
 
 import Data.Text (Text)
 import Data.Time.Calendar (Day)

@@ -22,13 +22,12 @@ import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
-import Methods.Common.Selecty (Comment (..), Selecty, Tag (..))
-import Methods.Common.ToQuery
+import Psql.Selecty (Comment (..), Selecty, Tag (..))
 import Network.HTTP.Types (ResponseHeaders, Status, status200,QueryText)
 import Oops
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
-import Methods.Common.ToQuery
+import Psql.ToQuery
 import Network.HTTP.Types (StdMethod(..))
 
 
@@ -39,7 +38,6 @@ data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHea
 instance Show  ResponseInfo where
   show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". Builder: " ++ (show $ toLazyByteString b)
 
-data ReqInfo = ReqInfo StdMethod [Text] QueryText (Maybe ByteString)
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")] (lazyByteString . encode $ toJ)
@@ -63,17 +61,6 @@ checkMaybeOneE xs = case xs of
   [x] -> return (Just x)
   _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-{-checkOneIfExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
-checkOneIfExistE (k,v) xs = case xs of
-  [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
-  [x] -> return x
-  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
-
-checkOneIfResExistE :: (MonadCatch m, Show a) => LogPair -> [a] -> ExceptT ReqError m a
-checkOneIfResExistE (k,v) xs = case xs of
-  [] -> throwE $ SimpleError $ k ++ ": " ++ v ++ " doesn`t exist"
-  [x] -> return x
-  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs-}
 
 catchOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
 catchOneSelE logH m = 
@@ -83,17 +70,6 @@ catchMaybeOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT Re
 catchMaybeOneSelE logH m = 
   catchSelE logH m >>= checkMaybeOneE
 
-{-catchOneSelIfExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
-catchOneSelIfExistsE (k,v) logH m = 
-  catchSelE logH m >>= checkOneIfExistE (k,v)
-
-catchOneSelIfResExistsE :: (MonadCatch m,Show a) => LogHandle m -> LogPair -> m [a] -> ExceptT ReqError m a
-catchOneSelIfResExistsE logH m = 
-  catchSelE logH m >>= checkOneIfExistE (k,v)-}
-
-
-
-
 catchDbErrE :: (MonadCatch m) => m a -> ExceptT ReqError m a
 catchDbErrE = catchDbErr . lift
 
@@ -102,41 +78,6 @@ catchUpdE logH m = do
   lift $ logDebug logH "Update data in DB."
   catchDbErrE m
   lift $ logInfo logH "Data updated in DB"
-
-{-
-catchExistE ::
-  (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> m Bool -> ExceptT ReqError m ()
-catchExistE logH (k,v) m = do
-  lift $ logDebug logH $ "Checking existence " ++ k ++ ": " ++ show v ++ " in the DB"
-  isExist <- catchDbErrE m 
-  checkExistE (k,v) isExist
-
-checkExistE :: 
-  (MonadCatch m,Show a) => LogHandle m -> (LogKey,a) -> Bool -> ExceptT ReqError m ()
-checkExistE (k,v) isExist = 
-  if isExist
-    then lift $ logInfo logH $ "Entity (" ++ k ++ ": " ++ show v ++ ") exist"
-    else
-      throwE
-        $ SimpleError
-        $ k ++ ": " ++ show v
-          ++ " doesn`t exist."
-
-checkResE logH path
-
-catchResExistE ::
-  (MonadCatch m,Show a) => LogHandle m -> (UncheckedExId -> m Bool) -> UncheckedExId -> ExceptT ReqError m ()
-catchResExistE logH func id = do
-  lift $ logDebug logH $ "Checking existence request entity in the DB"
-  isEx <- catchDbErrE $ func id
-  checkResExistE isEx id
-
-checkResExistE :: 
-  (MonadCatch m,Show a) => LogHandle m -> Bool -> UncheckedExId -> ExceptT ReqError m ()
-checkResExistE isEx id = 
-  unless isEx . throwE $ ResourseEntityNotExistError id
--}
-
 
 catchInsRetE ::
   (MonadCatch m) =>
@@ -155,12 +96,6 @@ catchTransactE logH m = do
   lift $ logInfo logH "Transaction closed. Several actions in DB finished."
   return a
 
-checkOneM :: (MonadCatch m) => [a] -> m a
-checkOneM xs = case xs of
-  [] -> throwM UnexpectedEmptyDbOutPutException
-  [x] -> return x
-  _ -> throwM UnexpectedMultipleDbOutPutException
-
 
 -- common IO handle functions:
 
@@ -170,56 +105,6 @@ getDay' = do
   let day = localDay . zonedTimeToLocalTime $ time
   return day
 
-select' :: (Selecty a) => Connection -> Select -> IO [a]
-select' conn sel =
-  query conn (toQ sel) (toVal sel)
-
-selectOnly' :: (FromField a) => Connection -> Select -> IO [a]
-selectOnly' conn sel = do
-  xs <- query conn (toQ sel) (toVal sel)
-  return $ fmap fromOnly xs
-
-selectBS' :: Connection -> Select -> IO [ByteString]
-selectBS' conn sel = do
-  xs <- query conn (toQ sel) (toVal sel)
-  return $ fmap (fromBinary . fromOnly) xs
-
-selectLimit' :: (Selecty a) => Connection -> SelectLim -> IO [a]
-selectLimit' conn sel = 
-  query conn (toQ sel) (toVal sel)
-
-updateInDb' :: Connection -> Update -> IO ()
-updateInDb' conn upd = do
-  _ <- execute conn (toQ upd) (toVal upd)
-  return ()
-
-deleteFromDb' :: Connection -> Delete -> IO ()
-deleteFromDb' conn del = do
-  _ <- execute conn (toQ del) (toVal del)
-  return ()
-
-isExistInDb' :: Connection -> Exists -> IO Bool
-isExistInDb' conn exi = do
-  onlyChecks <- query conn (toQ exi) (toVal exi)
-  Only isExist <- checkOneM onlyChecks
-  return isExist
-
-insertReturn' :: Connection -> InsertRet -> IO Id
-insertReturn' conn insRet = do
-  onlyXs <- query conn (toQ insRet) (toVal insRet)
-  Only num <- checkOneM onlyXs
-  return num
-
---insertByteaInDb' :: Connection -> InsertRet -> IO Id
---insertByteaInDb' conn table returnName insNames bs = do
-  --onlyXs <- query conn (toInsRetQ table returnName insNames) [Binary bs]
-  --Only num <- checkOneM onlyXs
-  --return num
-
-insertMany' :: Connection -> InsertMany -> IO ()
-insertMany' conn insMany@(InsertMany t pair) = do
-  _ <- executeMany conn (toQ insMany) (insManyVal pair)
-  return ()
 
 getTokenKey' :: IO TokenKey
 getTokenKey' = do

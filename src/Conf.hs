@@ -16,7 +16,9 @@ import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
 import Logger
-import Methods.Common.ToQuery 
+import Psql.ToQuery 
+import Psql.ToQuery.Select 
+import Psql.ToQuery.Exists
 import Network.Wai.Handler.Warp (Settings, defaultSettings, setHost, setPort)
 import Types
 

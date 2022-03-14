@@ -17,18 +17,20 @@ import Logger
 import Methods.Common
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
-import Methods.Common.Selecty (Author (..))
+import Psql.Selecty (Author (..))
 import Oops
 import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE,UncheckedExId(..))
-import Methods.Common.ToQuery
+import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
+import Psql.ToQuery
 import Network.HTTP.Types (StdMethod(..),QueryText)
 import TryRead (tryReadResourseId)
 import Api.Request.EndPoint
+import Psql.Methods.Author
 
 
 data Handle m = Handle
@@ -67,35 +69,7 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-selectDraftsForAuthor' conn auId = do
-  let wh = WherePair "author_id=?" (Id auId)
-  selectOnly' conn (Select ["draft_id"] "drafts" wh)
-selectAuthorsForUser' conn usId = do
-  let wh = WherePair "user_id=?" (Id usId)
-  selectOnly' conn (Select ["author_id"] "authors" wh)
-selectAuthors' conn auId = do
-  let wh = WherePair "author_id=?" (Id auId)
-  select' conn (Select ["author_id", "author_info", "user_id"] "authors" wh)
-updateDbAuthor' conn usId auInfo auId = do
-  let set1 = SetPair "user_id=?" (Id usId)
-  let set2 = SetPair "author_info=?" (Txt auInfo)
-  let wh = WherePair "author_id=?" (Id auId)
-  updateInDb' conn (Update "authors" [set1,set2] wh)
-updateDbAuthorForPosts' conn auIdNew auId = do
-  let set = SetPair "author_id=?" (Id auIdNew)
-  let wh = WherePair "author_id=?" (Id auId)
-  updateInDb' conn (Update "posts" [set] wh)
-deleteDbAuthor' conn auId = do
-  let wh = WherePair "author_id=?" (Id auId)
-  deleteFromDb' conn (Delete "authors" wh)
-isUserAuthor' conn usId = do
-  let wh = WherePair "user_id=?" (Id usId)
-  isExistInDb' conn (Exists "authors" wh)
-insertReturnAuthor' conn usId auInfo = do
-  let insPair1 = InsertPair "user_id"     (Id  usId)
-  let insPair2 = InsertPair "author_info" (Txt  auInfo)
-  let insPairs = [insPair1,insPair2]
-  insertReturn' conn (InsertRet "authors" insPairs "author_id")
+
 
 workWithAuthors :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
 workWithAuthors h@Handle{..} qStr meth  = 
