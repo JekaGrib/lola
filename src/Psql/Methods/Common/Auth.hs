@@ -28,8 +28,9 @@ import Psql.ToQuery.Insert
 import Psql.ToQuery.SelectLimit
 import Psql.ToQuery.Select
 import Psql.ToQuery.Update
+import Database.PostgreSQL.Simple (Connection)
 
-
+selectTokenKeysForUser' :: Connection -> UserId -> IO [TokenKey]
 selectTokenKeysForUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   selectOnly' conn $ Select ["token_key"] "users" wh

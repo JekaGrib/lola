@@ -24,7 +24,8 @@ data UncheckedExId =
   | PostId PostId
   | TagId TagId
   | UserId UserId
-
+  deriving (Eq, Show)
+     
 
 class ToPretty a where
   toPretty :: a -> String
