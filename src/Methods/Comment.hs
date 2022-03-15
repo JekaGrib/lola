@@ -113,7 +113,7 @@ deleteComment h@Handle{..} usId accessMode commId = do
       isCommOrPostAuthor h commId postId usId
   deleteDbCommE h commId
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " deleted"
-  okHelper $ OkResponse {ok = True}    
+  ok204Helper    
 
 isCommOrPostAuthor :: (MonadCatch m) => Handle m -> CommentId -> PostId -> UserId -> ExceptT ReqError m ()
 isCommOrPostAuthor Handle{..} commId postId usId = do

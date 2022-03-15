@@ -114,7 +114,7 @@ deleteTag h@Handle{..} tagId = do
   let deleteTg = deleteDbTag tagId
   withTransactionDBE h (deleteTgDr >> deleteTgPos >> deleteTg)
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " deleted"
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a

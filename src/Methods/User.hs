@@ -148,7 +148,7 @@ deleteUser h@Handle{..} usId = do
     Nothing ->
       withTransactionDBE h (updateCom >> deleteUs)
   lift $ logInfo hLog $ "User_id: " ++ show usId ++ " deleted"
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 checkPwd :: (MonadCatch m) => Pwd -> Pwd -> ExceptT ReqError m ()
 checkPwd pwdParam pwd

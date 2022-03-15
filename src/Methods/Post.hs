@@ -137,7 +137,7 @@ deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m Respons
 deletePost h@Handle{..} postId = do
   withTransactionDBE h $ deleteAllAboutPost hDelMany postId
   lift $ logInfo hLog $ "Post_id: " ++ show postId ++ " deleted"
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 makePostResponse :: (MonadCatch m) => Handle m -> Post -> ExceptT ReqError m PostResponse
 makePostResponse Handle{..} (Post pId auId auInfo usId pName pDate pCatId pText picId) = do

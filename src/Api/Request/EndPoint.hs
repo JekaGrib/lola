@@ -5,7 +5,6 @@
 
 module Api.Request.EndPoint where
 
---(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.List (delete,elemIndex)

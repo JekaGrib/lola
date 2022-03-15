@@ -125,7 +125,7 @@ deleteAuthor h@Handle{..} auId = do
   let deleteAu = deleteDbAuthor auId
   withTransactionDBE h (updatePos >> deleteDr >> deleteAu)
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " deleted."
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
 isntUserOtherAuthor Handle{..} usId auId = do

@@ -133,7 +133,7 @@ deleteCategory h@Handle{..} catId = do
   let deleteCat = deleteDbCats allCats
   withTransactionDBE h (updatePos >> updateDr >> deleteCat)
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " deleted."
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 checkRelationCats :: (MonadCatch m) => Handle m -> CategoryId -> CategoryId -> ExceptT ReqError m ()
 checkRelationCats h catId superCatId

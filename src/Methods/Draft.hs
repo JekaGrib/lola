@@ -188,7 +188,7 @@ deleteDraft h@Handle{..} usId draftId = do
   isDraftAuthor h draftId usId
   withTransactionDBE h $ deleteAllAboutDrafts hDelMany [draftId]
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " deleted"
-  okHelper $ OkResponse {ok = True}
+  ok204Helper
 
 publishDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 publishDraft h@Handle{..} usId draftId = do

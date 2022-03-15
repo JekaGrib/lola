@@ -23,7 +23,7 @@ import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, 
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
 import Psql.Selecty (Comment (..), Selecty, Tag (..))
-import Network.HTTP.Types (ResponseHeaders, Status, status200,QueryText)
+import Network.HTTP.Types (ResponseHeaders, Status, status200,status204,QueryText)
 import Oops
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
@@ -41,6 +41,9 @@ instance Show  ResponseInfo where
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")] (lazyByteString . encode $ toJ)
+
+ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo
+ok204Helper = return $ ResponseInfo status204 [] "Status 204 No data"
 
 catchSelE :: (MonadCatch m) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
 catchSelE logH m = do
