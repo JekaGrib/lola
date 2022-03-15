@@ -21,9 +21,10 @@ import Psql.ToQuery.Insert
 import Psql.ToQuery.SelectLimit
 import Psql.ToQuery.Select
 import Psql.ToQuery.Update
+import Database.PostgreSQL.Simple (Connection)
 
 
-
+isExist' :: Connection -> UncheckedExId -> IO Bool
 isExist' conn (AuthorId auId) = do
   let wh = WherePair "author_id=?" (Id auId)
   isExistInDb' conn (Exists "authors" wh)

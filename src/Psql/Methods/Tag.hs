@@ -15,7 +15,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT,throwE)
 import Data.Text (Text)
-import Database.PostgreSQL.Simple (withTransaction,Connection)
+import Database.PostgreSQL.Simple (Connection)
 import Logger
 import Methods.Common
 import Oops

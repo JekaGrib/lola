@@ -19,7 +19,7 @@ import Logger
 import Methods.Common
 import qualified Network.HTTP.Simple as HT
 import Network.HTTP.Types (status200,StdMethod(..),QueryText)
-import Database.PostgreSQL.Simple (Binary(..))
+import Database.PostgreSQL.Simple (Binary(..),Connection)
 import Oops
 import Api.Request.QueryStr (LoadPicture (..),checkQStr)
 import Types
@@ -37,9 +37,12 @@ import Psql.ToQuery.Select
 import Psql.ToQuery.Update
 import Psql.Methods.Common
 
+selectPicBS' :: Connection -> PictureId -> IO [ByteString]
 selectPicBS' conn picId = do
   let wh = WherePair "pic_id=?" (Id picId)
   selectBS' conn (Select ["pic"] "pics" wh)
+
+insertRetPicBS' :: Connection -> ByteString -> IO PictureId
 insertRetPicBS' conn sbs = do
   let insPair = InsertPair "pic" (BS (Binary sbs))
   insertReturn' conn (InsertRet "pics" [insPair] "pic_id")

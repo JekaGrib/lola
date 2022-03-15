@@ -31,6 +31,7 @@ import Database.PostgreSQL.Simple (Connection)
 selectKeys' :: Connection -> IO [Key]
 selectKeys' conn = 
   selectOnly' conn $ Select ["create_admin_key"] "key" (Where "true")
+
 insertReturnUser' :: Connection -> InsertUser -> IO UserId
 insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   let insPair1 = InsertPair "password"         (Txt  pwd)

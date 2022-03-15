@@ -12,7 +12,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT,throwE)
 import Data.Text (pack)
-import Database.PostgreSQL.Simple (withTransaction)
+import Database.PostgreSQL.Simple (Connection)
 import Logger
 import Methods.Common
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
@@ -37,6 +37,7 @@ import Psql.ToQuery.Select
 import Psql.ToQuery.Update
 import Psql.Methods.Common
 
+selectUsers' :: Connection -> UserId -> IO [User]
 selectUsers' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   select' conn $
@@ -44,33 +45,51 @@ selectUsers' conn usId = do
       ["first_name", "last_name", "user_pic_id", "user_create_date"]
       "users" 
       wh
+
+selectAuthsForUser' :: Connection -> UserId -> IO [Auth]
 selectAuthsForUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   select' conn $ Select ["password", "admin"] "users" wh
+
+selectAuthorsForUser' :: Connection -> UserId -> IO [AuthorId]
 selectAuthorsForUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   selectOnly' conn $ Select ["author_id"] "authors" wh
+
+selectDraftsForAuthor' :: Connection -> AuthorId -> IO [DraftId]
 selectDraftsForAuthor' conn auId = do
   let wh = WherePair "author_id=?" (Id auId)
   selectOnly' conn $ Select ["draft_id"] "drafts" wh
+
+updateDbUserForComms' :: Connection -> UserId -> UserId -> IO ()
 updateDbUserForComms' conn newUsId usId = do
   let set = SetPair "user_id=?" (Id newUsId)
   let wh = WherePair "user_id=?" (Id usId)
   updateInDb' conn (Update "comments" [set] wh)
+
+updateDbAuthorForPosts' :: Connection -> AuthorId -> AuthorId -> IO ()
 updateDbAuthorForPosts' conn newAuId auId = do
   let set = SetPair "author_id=?" (Id newAuId)
   let wh = WherePair "author_id=?" (Id auId)
   updateInDb' conn (Update "posts" [set] wh)
+
+updateDbTokenKeyForUser' :: Connection -> TokenKey -> UserId -> IO ()
 updateDbTokenKeyForUser' conn tokenKey usId = do
   let set = SetPair "token_key=?" (Str tokenKey)
   let wh = WherePair "user_id=?" (Id usId)
   updateInDb' conn (Update "users" [set] wh)
+
+deleteDbUser' :: Connection -> UserId -> IO ()
 deleteDbUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   deleteFromDb' conn (Delete "users" wh)
+
+deleteDbAuthor' :: Connection -> AuthorId -> IO ()
 deleteDbAuthor' conn auId = do
   let wh = WherePair "author_id=?" (Id auId)
   deleteFromDb' conn (Delete "authors" wh)
+
+insertReturnUser' :: Connection -> InsertUser -> IO UserId
 insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
   let insPair1 = InsertPair "password"         (Txt  pwd)
   let insPair2 = InsertPair "first_name"       (Txt  fName)

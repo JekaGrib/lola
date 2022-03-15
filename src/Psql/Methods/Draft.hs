@@ -14,7 +14,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.List (intercalate, zip4)
-import Database.PostgreSQL.Simple (withTransaction)
+import Database.PostgreSQL.Simple (Connection)
 import Logger
 import Methods.Category (fromCatResp)
 import Methods.Common
@@ -46,7 +46,7 @@ import Psql.Methods.Common
 
 
 
-
+selectDrafts' :: Connection -> DraftId -> IO [Draft]
 selectDrafts' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   select' conn $
@@ -54,6 +54,8 @@ selectDrafts' conn draftId = do
       ["d.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
       "drafts AS d JOIN authors AS a ON d.author_id=a.author_id" 
       wh
+
+selectUsersForDraft' :: Connection -> DraftId -> IO [UserId]
 selectUsersForDraft' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   selectOnly' conn $
@@ -61,6 +63,8 @@ selectUsersForDraft' conn draftId = do
       ["user_id"]
       "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       wh
+
+selectTags' :: Connection -> [TagId] -> IO [Tag]
 selectTags' conn tagIds = do
   let toWhPair tagId = WherePair "tag_id=?" (Id tagId)
   let wh = WhereOr $ map toWhPair tagIds
@@ -69,9 +73,13 @@ selectTags' conn tagIds = do
       ["tag_id", "tag_name"]
       "tags"
       wh
+
+selectDaysForPost' :: Connection -> PostId -> IO [Day]
 selectDaysForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   selectOnly' conn (Select ["post_create_date"] "posts" wh)
+
+selectLimDraftsForAuthor' :: Connection -> AuthorId -> OrderBy -> Page -> Limit ->  IO [Draft]
 selectLimDraftsForAuthor' conn auId orderBy page limit = do
   let wh = WherePair "author_id=?" (Id auId)
   selectLimit' conn $ 
@@ -79,9 +87,13 @@ selectLimDraftsForAuthor' conn auId orderBy page limit = do
       ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
       "drafts JOIN authors ON authors.author_id = drafts.author_id" 
       wh [] orderBy  page limit
+
+selectPicsForDraft' :: Connection -> DraftId -> IO [PictureId]
 selectPicsForDraft' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   selectOnly' conn (Select ["pic_id"] "draftspics" wh)
+
+selectTagsForDraft' :: Connection -> DraftId -> IO [Tag]
 selectTagsForDraft' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   select' conn $ 
@@ -89,6 +101,8 @@ selectTagsForDraft' conn draftId = do
       ["tags.tag_id", "tag_name"] 
       "draftstags AS dt JOIN tags ON dt.tag_id=tags.tag_id" 
       wh
+
+selectPostsForDraft' :: Connection -> DraftId -> IO [PostId]
 selectPostsForDraft' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   selectOnly' conn $ 
@@ -96,6 +110,8 @@ selectPostsForDraft' conn draftId = do
       ["COALESCE (post_id, '0') AS post_id"] 
       "drafts" 
       wh
+
+selectAuthorsForUser' :: Connection -> UserId -> IO [Author]
 selectAuthorsForUser' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   select' conn $ 
@@ -103,6 +119,8 @@ selectAuthorsForUser' conn usId = do
     ["author_id", "author_info", "user_id"] 
     "authors" 
     wh
+
+updateDbDraft' :: Connection -> DraftId -> UpdateDbDraft -> IO ()
 updateDbDraft' conn drId (UpdateDbDraft name catId txt picId) = do
   let set1 = SetPair "draft_name=?"        (Txt name)
   let set2 = SetPair "draft_category_id=?" (Id catId)
@@ -110,6 +128,8 @@ updateDbDraft' conn drId (UpdateDbDraft name catId txt picId) = do
   let set4 = SetPair "draft_main_pic_id=?" (Id picId)
   let wh = WherePair "draft_id=?"          (Id drId)
   updateInDb' conn (Update "drafts" [set1,set2,set3,set4] wh)
+
+updateDbPost' :: Connection -> PostId -> UpdateDbPost -> IO ()
 updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
   let set1 = SetPair "post_name=?"        (Txt name)
   let set2 = SetPair "post_category_id=?" (Id catId)
@@ -118,6 +138,7 @@ updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
   let wh = WherePair "post_id=?"          (Id postId)
   updateInDb' conn (Update "posts" [set1,set2,set3,set4] wh)
 
+insertReturnDraft' ::  Connection -> InsertDraft -> IO DraftId
 insertReturnDraft' conn (InsertDraft Nothing auId drName catId drTxt picId) = do
   let insPair1 = InsertPair "author_id"         (Id  auId)
   let insPair2 = InsertPair "draft_name"        (Txt drName)
@@ -135,12 +156,18 @@ insertReturnDraft' conn (InsertDraft (Just postId) auId drName catId drTxt picId
   let insPair6 = InsertPair "post_id"           (Id  postId)
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
   insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
+
+insertManyDraftsPics' :: Connection -> [(DraftId,PictureId)] -> IO ()
 insertManyDraftsPics' conn xs = do
   let insPair = InsertManyPair  ("draft_id", "pic_id") xs
   insertMany' conn (InsertMany "draftspics" insPair)
+
+insertManyDraftsTags' :: Connection -> [(DraftId,TagId)] -> IO ()
 insertManyDraftsTags' conn xs = do
   let insPair = InsertManyPair  ("draft_id", "tag_id") xs
   insertMany' conn (InsertMany "draftstags" insPair)
+
+insertReturnPost' ::  Connection -> InsertPost -> IO PostId
 insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
   let insPair1 = InsertPair "author_id"        (Id  auId)
   let insPair2 = InsertPair "post_name"        (Txt name)
@@ -150,9 +177,13 @@ insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
   let insPair6 = InsertPair "post_main_pic_id" (Id  picId)
   let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
   insertReturn' conn (InsertRet "posts" insPairs "post_id")
+
+insertManyPostsPics' :: Connection -> [(PostId,PictureId)] -> IO ()
 insertManyPostsPics' conn xs = do
   let insPair = InsertManyPair  ("post_id", "pic_id") xs
   insertMany' conn (InsertMany "postspics" insPair)
+
+insertManyPostsTags' :: Connection -> [(PostId,TagId)] -> IO ()
 insertManyPostsTags' conn xs = do
   let insPair = InsertManyPair  ("post_id", "tag_id") xs
   insertMany' conn (InsertMany "poststags" insPair)
