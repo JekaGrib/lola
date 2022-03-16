@@ -4,7 +4,6 @@
 
 module Psql.Methods.Common where
 
-import Api.Response (CommentIdTextUserResponse (..), PicIdUrl (..), TagResponse (..))
 import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch, throwM)
 import Control.Monad.Trans (lift)

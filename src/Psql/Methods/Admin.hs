@@ -5,7 +5,6 @@
 
 module Psql.Methods.Admin where
 
-import Api.Response (UserTokenResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

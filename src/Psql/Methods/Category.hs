@@ -6,7 +6,6 @@
 
 module Psql.Methods.Category where
 
-import Api.Response (CatResponse (..), OkResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)

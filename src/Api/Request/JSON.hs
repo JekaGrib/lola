@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Api.Request.JSON where
 
@@ -9,15 +9,12 @@ import Types
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Aeson (Object, Value (..), decodeStrict)
-import qualified Data.ByteString.Lazy as BSL
 import Data.HashMap.Strict (toList)
 import Data.Text (Text, unpack)
 import qualified Data.Vector as V
-import Oops (ReqError (..), hideTokenErr)
+import Oops (ReqError (..))
 import Api.Request.QueryStr (checkLength)
-import TryRead (checkBigIntId)
-import Types
-import Data.Scientific (Scientific,floatingOrInteger)
+import Data.Scientific (Scientific,toBoundedInteger)
 import Methods.Common.Exist (Handle, CheckExist(..))
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
 import Data.ByteString (ByteString)
@@ -79,13 +76,13 @@ whyBadDraftReq json =
 checkId :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkId obj paramKey = do
   val <- isExistInObj obj paramKey 
-  checkNumVal paramKey val >>= checkScientific paramKey >>= checkBigIntId paramKey
+  _ <- checkNumVal paramKey val >>= checkScientific paramKey >>= checkNatural paramKey
   return ()
 
 checkIdArr :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkIdArr obj paramKey = do
   val <- isExistInObj obj paramKey
-  checkNumArrVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM (checkBigIntId paramKey)
+  _ <- checkNumArrVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM (checkNatural paramKey)
   return ()
 
 
@@ -101,11 +98,12 @@ isExistInObj obj paramKey =
     Nothing -> throwE $ BadReqError $ "Can`t find parameter: " ++ unpack paramKey
 
 
-checkScientific :: (MonadCatch m) => JsonParamKey -> Scientific -> ExceptT ReqError m Integer
-checkScientific paramKey scien =
-  case floatingOrInteger scien of
-    Right i -> return i
+checkScientific :: (MonadCatch m) => JsonParamKey -> Scientific -> ExceptT ReqError m Id
+checkScientific paramKey scien = 
+  case toBoundedInteger scien of
+    Just i -> return i
     _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be whole number"
+
 
 checkNumVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m Scientific
 checkNumVal paramKey val =

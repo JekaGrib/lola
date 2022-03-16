@@ -116,6 +116,7 @@ type Key = DbTxtValue
 
 type Pwd = DbTxtValue
 
+type SortPriority = Int
 
 data SortOrd = ASC | DESC
   deriving (Eq,Show)

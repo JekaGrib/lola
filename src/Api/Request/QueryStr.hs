@@ -1,24 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Api.Request.QueryStr where
 
---(ParseQueryStr(..),LogIn(..),Token(..),CreateUser(..),DeleteUser(..),CreateAdmin(..),CreateAuthor(..),GetAuthor(..),UpdateAuthor(..),DeleteAuthor(..),CreateCategory(..),CreateSubCategory(..))
 
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.List (delete,elemIndex)
 import Data.Text (Text, unpack)
-import Network.HTTP.Types.URI (queryToQueryText,QueryText)
-import Network.Wai (Request (..))
+import Network.HTTP.Types.URI (QueryText)
 import Oops (ReqError (..))
 import TryRead (tryReadId, tryReadPage,tryReadSortOrd,tryReadDay,tryReadIdArray)
 import Types
 import Methods.Common.Exist (Handle, CheckExist(..))
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
 import Data.Time.Calendar ( Day)
-import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadCatch)
 
 checkQStr :: (MonadCatch m,ParseQueryStr a,CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
@@ -223,7 +220,7 @@ instance CheckExist GetPostsF where
     checkExist h $ fmap TagId maybTag
     checkExist h $ (fmap . fmap) TagId maybTagsIn
     checkExist h $ (fmap . fmap) TagId maybTagsAll
-    checkExist h $ fmap CategoryId maybTag
+    checkExist h $ fmap CategoryId maybCat
 
 data GetPostsOrd = 
   GetPostsOrd 
@@ -340,7 +337,7 @@ parseMaybeDayParam qStr paramKey = do
       return (Just day)
     Nothing -> return Nothing
 
-parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,Int))
+parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,SortPriority))
 parseMaybeSortOrdParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of

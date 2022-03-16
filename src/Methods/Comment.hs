@@ -5,7 +5,7 @@
 
 module Methods.Comment where
 
-import Api.Response (CommentResponse (..), CommentsResponse (..), OkResponse (..))
+import Api.Response (CommentResponse (..), CommentsResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)

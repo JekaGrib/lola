@@ -51,13 +51,7 @@ instance ToJSON TokenResponse where
   toEncoding (TokenResponse a) =
     pairs ("token" .= a)
 
-newtype OkResponse = OkResponse {ok :: Bool} deriving (Eq, Show)
 
-instance ToJSON OkResponse where
-  toJSON (OkResponse a) =
-    object ["ok" .= a]
-  toEncoding (OkResponse a) =
-    pairs ("ok" .= a)
 
 data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text} deriving (Eq, Show)
 

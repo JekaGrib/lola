@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.Auth where
 
-import Api.Response (TokenResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -13,13 +12,10 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
-import Psql.Selecty (Auth (..))
-import Network.Wai (Request)
-import Oops
-import Api.Request.QueryStr (LogIn (..), Token (..), parseQueryStr)
+import Oops (ReqError(..),hideTokenErr,hideErr)
+import Api.Request.QueryStr ( Token (..), parseQueryStr)
 import TryRead (tryReadId)
 import Types
-import Psql.ToQuery
 import Network.HTTP.Types.URI (QueryText)
 import Psql.Methods.Common.Auth
 

@@ -6,7 +6,6 @@
 
 module Psql.Methods.Author where
 
-import Api.Response (AuthorResponse (..), OkResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)

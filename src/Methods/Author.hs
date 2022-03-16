@@ -6,7 +6,7 @@
 
 module Methods.Author where
 
-import Api.Response (AuthorResponse (..), OkResponse (..))
+import Api.Response (AuthorResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)

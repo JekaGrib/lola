@@ -1,17 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.DeleteMany where
 
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
-import Data.List (intercalate)
-import Methods.Common
 import Types
-import Psql.ToQuery
 import Psql.Methods.Common.DeleteMany
 
 

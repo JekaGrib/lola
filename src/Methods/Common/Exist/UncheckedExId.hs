@@ -1,18 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.Exist.UncheckedExId  where
 
-import Methods.Common
-import Psql.ToQuery
-import Control.Monad.Trans.Except (ExceptT,throwE)
-import Oops (ReqError(..))
-import Control.Monad.Catch (MonadCatch)
 import Types
-import Conf (Config (..), extractConn)
-import Control.Monad (unless)
 
 
 data UncheckedExId =

@@ -1,30 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Post.LimitArg (LimitArg (..),chooseArgs, isDateASC) where
 
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Foldable (toList)
 import Data.Function (on)
-import Data.List (elemIndex, sortBy)
-import Data.Text (Text, concat, pack, toUpper, unpack)
-import Network.HTTP.Types.URI (queryToQueryText)
-import Network.Wai (Request (..))
+import Data.List (sortBy)
+import Data.Text (Text)
 import Oops (ReqError (..))
 import Types
-import Database.PostgreSQL.Simple.Types (PGArray(..),In(..))
 import Psql.ToQuery.SelectLimit (Filter(..),InF(..),CreatedF(..),TagF(..),OrderBy(..))
 import Api.Request.QueryStr (GetPosts(..),GetPostsF(..),GetPostsOrd(..))
+import Control.Monad.Catch (MonadCatch)
+import Data.Time.Calendar ( Day)
 
 
 data LimitArg = LimitArg [Filter] [OrderBy]
 
+chooseArgs :: (MonadCatch m) => GetPosts -> ExceptT ReqError m LimitArg
 chooseArgs (GetPosts _ gPF gPOrd) = do
   filterArgs <- chooseFilterArgs gPF
   let sortArgs = chooseSortArgs gPOrd
   return $ LimitArg filterArgs sortArgs
 
+chooseFilterArgs :: (MonadCatch m) => GetPostsF -> ExceptT ReqError m [Filter]
 chooseFilterArgs (GetPostsF crAt crLt crGt tag tagsIn tagsAll nameIn textIn evIn auName catId) = do
   filt1 <- toCreatedF crAt crLt crGt
   filt2 <- toTagF tag tagsIn tagsAll
@@ -34,6 +35,7 @@ chooseFilterArgs (GetPostsF crAt crLt crGt tag tagsIn tagsAll nameIn textIn evIn
   let filterArgs = concatMap toList [filt1,filt2,filt3,filt4,filt5]
   return filterArgs
 
+toCreatedF :: (MonadCatch m) => Maybe Day -> Maybe Day -> Maybe Day -> ExceptT ReqError m (Maybe Filter)
 toCreatedF crAt crLt crGt = case (crAt,crLt,crGt) of
   (Just day,Nothing ,Nothing)  -> return . Just $ CreatedF (At day)
   (Nothing ,Just day,Nothing)  -> return . Just $ CreatedF (AtLt day)
@@ -41,6 +43,7 @@ toCreatedF crAt crLt crGt = case (crAt,crLt,crGt) of
   (Nothing ,Nothing ,Nothing)  -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of created filter parameters"
 
+toTagF :: (MonadCatch m) => Maybe TagId -> Maybe [TagId] -> Maybe [TagId] -> ExceptT ReqError m (Maybe Filter)
 toTagF tag tagsIn tagsAll = case (tag,tagsIn,tagsAll) of
   (Just iD,Nothing ,Nothing)   -> return . Just $ TagF (TagIdF iD)
   (Nothing ,Just ids,Nothing)  -> return . Just $ TagF (TagsIn ids)
@@ -48,6 +51,7 @@ toTagF tag tagsIn tagsAll = case (tag,tagsIn,tagsAll) of
   (Nothing ,Nothing ,Nothing)  -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of tag filter parameters"
 
+toInF :: (MonadCatch m) => Maybe Text -> Maybe Text -> Maybe Text -> ExceptT ReqError m (Maybe Filter)
 toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
   (Just txt,Nothing ,Nothing)  -> return . Just $ InF (Name txt)
   (Nothing ,Just txt,Nothing)  -> return . Just $ InF (PostText txt)
@@ -56,11 +60,11 @@ toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
   (Nothing ,Nothing ,Nothing)  -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of IN filter parameters"
 
-toCatIdF (Just catId) = Just $ CatIdF catId
-toCatIdF _ = Nothing
+toCatIdF :: Maybe CategoryId -> Maybe Filter
+toCatIdF maybeCatId = fmap CatIdF maybeCatId
 
-toAuNameF (Just auN) = Just $ AuthorNameF auN
-toAuNameF _ = Nothing 
+toAuNameF :: Maybe AuthorName -> Maybe Filter
+toAuNameF maybeAuN = fmap AuthorNameF maybeAuN
 
 chooseSortArgs :: GetPostsOrd -> [OrderBy]
 chooseSortArgs (GetPostsOrd byPicN byCat byAu byDate) = 
@@ -71,22 +75,30 @@ chooseSortArgs (GetPostsOrd byPicN byCat byAu byDate) =
       sortArgs = sortArgsInOrder . concatMap toList $ [sort1,sort2,sort3,sort4]
   in sortArgs
 
-sortArgsInOrder :: [(OrderBy,Int)] -> [OrderBy]
+sortArgsInOrder :: [(OrderBy,SortPriority)] -> [OrderBy]
 sortArgsInOrder = fmap fst . sortBy (compare `on` snd)
 
+toPicNOrd :: (SortOrd,Int) -> (OrderBy,SortPriority)
 toPicNOrd (sortOrd,n) = (ByPostPicsNumb sortOrd,n)
+
+toCatOrd :: (SortOrd,Int) -> (OrderBy,SortPriority)
 toCatOrd (sortOrd,n) = (ByPostCat sortOrd,n)
+
+toAuthorOrd :: (SortOrd,Int) -> (OrderBy,SortPriority)
 toAuthorOrd (sortOrd,n) = (ByPostAuthor sortOrd,n)
+
+toDateOrd :: (SortOrd,Int) -> (OrderBy,SortPriority)
 toDateOrd (sortOrd,n) = (ByPostDate sortOrd,n)
+
+
+
+isDateASC :: [OrderBy] -> Bool
+isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ASC) || cont) False
 
 {-type SortPriority = Int
 
 defDateSort :: SortDate
 defDateSort = DateDESC-}
-
-isDateASC :: [OrderBy] -> Bool
-isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ASC) || cont) False
-
 
 
 {-checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()

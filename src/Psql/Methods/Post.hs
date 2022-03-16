@@ -6,7 +6,6 @@
 
 module Psql.Methods.Post where
 
-import Api.Response (AuthorResponse (..), OkResponse (..), PostResponse (..), PostsResponse (..),DraftResponse(..),PostIdOrNull(..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

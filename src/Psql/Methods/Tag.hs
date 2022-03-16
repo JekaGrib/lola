@@ -9,7 +9,6 @@
 
 module Psql.Methods.Tag where
 
-import Api.Response (OkResponse (..), TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

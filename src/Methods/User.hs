@@ -6,7 +6,7 @@
 
 module Methods.User where
 
-import Api.Response (OkResponse (..), UserResponse (..), UserTokenResponse (..),TokenResponse(..))
+import Api.Response ( UserResponse (..), UserTokenResponse (..),TokenResponse(..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

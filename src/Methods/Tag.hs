@@ -9,7 +9,7 @@
 
 module Methods.Tag where
 
-import Api.Response (OkResponse (..), TagResponse (..))
+import Api.Response (TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

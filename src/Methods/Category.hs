@@ -6,7 +6,7 @@
 
 module Methods.Category where
 
-import Api.Response (CatResponse (..), OkResponse (..))
+import Api.Response (CatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)

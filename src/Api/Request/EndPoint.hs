@@ -1,31 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Api.Request.EndPoint where
 
 
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.List (delete,elemIndex)
-import Data.Text (Text, unpack,append)
-import Network.HTTP.Types.URI (queryToQueryText,QueryText)
-import Network.Wai (Request (..))
+import Data.Text (Text,append)
 import Oops (ReqError (..))
 import TryRead (tryReadResourseId,getTxtstart)
 import Types
-import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Methods.Common.Exist (Handle(..), CheckExist(..))
-import Data.Time.Calendar ( Day)
-import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadCatch)
 import Network.HTTP.Types (StdMethod(..))
 
-{-checkEndPoint :: (MonadCatch m) =>  Handle m -> StdMethod -> [Text] -> ExceptT ReqError m EndPoint
-checkEndPoint h stdMeth path = do
-  resourses <- parsePath path
-  checkExist h resourses
-  toEP (stdMeth,resourses)-}
 
 parseEndPoint :: (MonadCatch m) =>  StdMethod -> [Text] -> ExceptT ReqError m EndPoint
 parseEndPoint stdMeth path = do

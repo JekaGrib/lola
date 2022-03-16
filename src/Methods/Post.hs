@@ -6,7 +6,7 @@
 
 module Methods.Post where
 
-import Api.Response (AuthorResponse (..), OkResponse (..), PostResponse (..), PostsResponse (..),DraftResponse(..),PostIdOrNull(..))
+import Api.Response (AuthorResponse (..), PostResponse (..), PostsResponse (..),DraftResponse(..),PostIdOrNull(..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
