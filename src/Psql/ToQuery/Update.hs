@@ -1,18 +1,13 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery.Update where
 
 import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
-import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
-import Psql.ToQuery 
-import Psql.ToQuery.Select
+import Psql.ToQuery (ToVal(..),ToStr(..))
+import Psql.ToQuery.Select (Where(..))
 
 
 
@@ -24,7 +19,7 @@ instance ToStr Update where
     "UPDATE " ++ t ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr wh
 
 instance ToVal Update where
-  toVal (Update t set wh) = toVal set ++ toVal wh
+  toVal (Update _ set wh) = toVal set ++ toVal wh
 
 data Set =
   SetPair Predicate DbValue

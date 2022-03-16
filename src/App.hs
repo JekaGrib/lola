@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module App where
 
@@ -11,8 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Aeson (encode)
-import Data.ByteString.Builder (lazyByteString, toLazyByteString)
-import qualified Data.ByteString.Lazy as BSL
+import Data.ByteString.Builder (lazyByteString)
 import Data.ByteString (ByteString)
 import Data.Text (pack,unpack,Text)
 import Data.List (genericLength)
@@ -29,13 +28,11 @@ import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
 import Methods.Tag (workWithTags)
 import Methods.User (workWithUsers,workWithLogIn)
-import Network.HTTP.Types (status200,status204,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
+import Network.HTTP.Types (StdMethod,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
 import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
-import Oops (ReqError (..), hideErr, hideLogInErr, logOnErr)
-import TryRead (tryReadId, tryReadPage)
-import Types
+import Oops (ReqError (..), logOnErr)
 import Control.Monad (when)
-import Api.Request.EndPoint
+import Api.Request.EndPoint (EndPoint(..),parseEndPoint,AppMethod(..))
 
 data Handle m = Handle
   { hLog :: LogHandle m
@@ -118,6 +115,7 @@ chooseRespEx h@Handle{..} req = do
     UserEP meth    -> workWithUsers   (hUs  hMeth) qStr meth 
     AuthorEP meth  -> workWithAuthors (hAu  hMeth) qStr meth 
     CatEP meth     -> workWithCats    (hCat hMeth) qStr meth 
+    CommentEP meth -> workWithComms (hCom hMeth) qStr meth 
     TagEP meth     -> workWithTags    (hTag hMeth) qStr meth 
     DraftEP ToPost -> do
       body <- pullReqBody h req
@@ -127,17 +125,17 @@ chooseRespEx h@Handle{..} req = do
       workWithDrafts (hDr hMeth) qStr (ToPut iD) body
     DraftEP meth   -> workWithDrafts (hDr hMeth) qStr meth ""
     PostEP meth    -> workWithPosts (hPost hMeth) qStr meth 
-    CommentEP meth -> workWithUsers (hUs hMeth) qStr meth 
     PictureEP meth -> workWithPics (hPic hMeth) qStr meth 
 
 
-
+pullStdMethod :: (MonadCatch m) => Request -> ExceptT ReqError m StdMethod
 pullStdMethod req = do
   let eithReqMeth = parseMethod . requestMethod $ req
   case eithReqMeth of
     Right meth -> return meth
     Left x -> throwE $ NotImplementedError $ "Wrong method: " ++ show x
 
+checkPathLength :: (MonadCatch m) => [Text] -> ExceptT ReqError m ()
 checkPathLength path =
   case drop 3 path of
     [] -> mapM_ checkPathTextLength path
@@ -165,6 +163,7 @@ pullReqBody h req = do
   checkLengthReqBody req
   lift $ getBody h req
 
+checkLengthReqBody :: (MonadCatch m) => Request -> ExceptT ReqError m ()
 checkLengthReqBody req =
   case requestBodyLength req of
     ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"

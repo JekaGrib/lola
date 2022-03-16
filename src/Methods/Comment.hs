@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Comment where
 
@@ -15,20 +15,18 @@ import Logger
 import Methods.Common.Auth (AccessMode (..))
 import Methods.Common
 import Psql.Selecty (Comment (comment_idC))
-import Oops
+import Oops (ReqError(..))
 import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import Methods.Common.Auth (tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
+import Network.HTTP.Types (QueryText)
+import Api.Request.EndPoint (AppMethod(..))
 import Psql.Methods.Comment
-import Psql.ToQuery.SelectLimit
+import Psql.ToQuery.SelectLimit (OrderBy(..))
 
 data Handle m = Handle
   { hConf :: Config

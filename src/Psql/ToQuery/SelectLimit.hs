@@ -1,18 +1,18 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery.SelectLimit where
 
 import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
+import Psql.ToQuery (ToVal(..),ToStr(..),AddJoinTable(..))
+import Psql.ToQuery.Select (Select(..),Where(..),ToWhere(..))
+import Data.Text (Text,cons,snoc,pack,unpack)
+import Database.PostgreSQL.Simple (In(In))
+import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
-import Psql.ToQuery 
-import Psql.ToQuery.Select
+
 
 
 
@@ -21,14 +21,14 @@ data SelectLim =
   SelectLim [DbKey] Table Where [Filter] OrderBy Page Limit
 
 instance ToStr SelectLim where
-  toStr (SelectLim keys t wh filterArgs ord page limit) = 
+  toStr (SelectLim keys t wh filterArgs ord _ _) = 
     let table = t ++ addJoinTable ord ++ addJoinTable filterArgs
     in "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table 
        ++ " WHERE " ++ toStr wh ++ " ORDER BY " ++ toStr ord 
        ++ " OFFSET ? LIMIT ?" 
 
 instance ToVal SelectLim where
-  toVal (SelectLim keys t wh filterArgs ord page limit) = 
+  toVal (SelectLim _ _ wh _ _ page limit) = 
     toVal wh ++ [Num ((page - 1) * limit),Num (page * limit)]
 
 data OrderBy =

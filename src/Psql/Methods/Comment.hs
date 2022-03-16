@@ -1,36 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Comment where
 
-import Conf (Config (..), extractConn)
-import Control.Monad (unless)
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT, throwE)
-import Logger
-import Methods.Common.Auth (AccessMode (..))
-import Methods.Common
-import Psql.Selecty (Comment (comment_idC))
-import Oops
-import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..),checkQStr)
+import Psql.Selecty (Comment (..))
 import Types
-import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
-import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.SelectLimit
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
+import Psql.ToQuery.Delete (Delete(..))
+import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
+import Psql.ToQuery.SelectLimit (SelectLim(..),OrderBy)
+import Psql.ToQuery.Select (Select(..),Where(..))
+import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
 import Database.PostgreSQL.Simple (Connection)
 

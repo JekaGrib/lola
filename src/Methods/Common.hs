@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common where
 
 import Api.Response (CommentIdTextUserResponse (..), PicIdUrl (..), TagResponse (..))
 import Conf (Config (..))
-import Control.Monad.Catch (MonadCatch, throwM)
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except
 import Crypto.Hash (Digest, hash)
@@ -14,21 +14,16 @@ import Crypto.Hash.Algorithms (SHA1)
 import Data.Aeson (ToJSON, encode)
 import Data.ByteString (ByteString)
 import Data.ByteString.Builder (Builder, lazyByteString,toLazyByteString)
-import Data.List ((\\), intercalate)
 import Data.String (fromString)
 import Data.Text (Text, pack, unpack)
 import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
-import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
-import Database.PostgreSQL.Simple.FromField (FromField)
 import Logger
-import Psql.Selecty (Comment (..), Selecty, Tag (..))
-import Network.HTTP.Types (ResponseHeaders, Status, status200,status204,QueryText)
-import Oops
+import Psql.Selecty (Comment (..), Tag (..))
+import Network.HTTP.Types (ResponseHeaders, Status, status200,status204)
+import Oops (ReqError(..),catchDbErr)
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..))
 
 
 -- common logic functions:

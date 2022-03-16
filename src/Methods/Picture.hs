@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Picture where
 
@@ -18,19 +18,16 @@ import Data.Text (Text, unpack)
 import Logger
 import Methods.Common
 import qualified Network.HTTP.Simple as HT
-import Network.HTTP.Types (status200,StdMethod(..),QueryText)
-import Database.PostgreSQL.Simple (Binary(..))
-import Oops
+import Network.HTTP.Types (status200,QueryText)
+import Oops (ReqError(..))
 import Api.Request.QueryStr (LoadPicture (..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import Methods.Common.Auth (tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
+import Api.Request.EndPoint (AppMethod(..))
 import Psql.Methods.Picture
 
 data Handle m = Handle

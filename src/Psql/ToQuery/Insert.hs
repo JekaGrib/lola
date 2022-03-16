@@ -1,19 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery.Insert where
 
-import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
-import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
-import Psql.ToQuery 
-import Psql.ToQuery.Select
-
+import Psql.ToQuery (ToVal(..),ToStr(..))
+import Data.List (intercalate)
 
 
 data InsertRet =
@@ -24,7 +17,7 @@ instance ToStr InsertRet where
     "INSERT INTO " ++ t ++ toStr insPairs ++ " RETURNING " ++ retKey
 
 instance ToVal InsertRet where
-  toVal (InsertRet t insPairs retKey)  = toVal insPairs
+  toVal (InsertRet _ insPairs _)  = toVal insPairs
 
 data InsertPair = 
   InsertPair {insKey :: DbKey, insVal :: DbValue}

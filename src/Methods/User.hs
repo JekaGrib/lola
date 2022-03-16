@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.User where
 
@@ -27,10 +27,8 @@ import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
+import Network.HTTP.Types (QueryText)
+import Api.Request.EndPoint (AppMethod(..))
 import Psql.Methods.User
 
 data Handle m = Handle

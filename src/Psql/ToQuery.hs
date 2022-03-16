@@ -1,16 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery where
 
-import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
-import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
+import Database.PostgreSQL.Simple (Query)
+import Data.String (fromString)
 
 
 toQ :: (ToStr a) => a -> Query

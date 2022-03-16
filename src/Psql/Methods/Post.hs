@@ -1,47 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Post where
 
-import Conf (Config (..), extractConn)
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT,throwE)
-import Data.List (zip4)
 import Database.PostgreSQL.Simple (Connection)
-import Logger
-import Methods.Common
-import Methods.Common.DeleteMany (deleteAllAboutPost)
-import qualified Methods.Common.DeleteMany (Handle, makeH)
-import Methods.Common.MakeCatResp (makeCatResp)
-import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Psql.Selecty (Post (..), Tag(..),PostInfo(..))
-import Methods.Post.LimitArg ( LimitArg (..), chooseArgs, isDateASC)
-import Network.Wai (Request)
-import Oops
-import Api.Request.QueryStr (GetPosts(..),checkQStr)
-import Types
-import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
-import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import qualified Methods.Draft (Handle, makeH)
-import Methods.Draft (insertReturnAllDraft,isUserAuthorE_)
-import Control.Monad (unless)
-import Api.Request.EndPoint
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.SelectLimit
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
 import Psql.Methods.Common
+import Psql.Selecty (Post (..), Tag(..),PostInfo(..))
+import Types
+import Psql.ToQuery.SelectLimit (SelectLim(..),OrderBy,Filter)
+import Psql.ToQuery.Select (Select(..),Where(..),toWhere)
 
 
 selectPosts' :: Connection -> PostId -> IO [Post]

@@ -1,24 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Common.DeleteMany where
 
-import Conf (Config (..), extractConn)
-import Control.Monad.Catch (MonadCatch)
-import Data.List (intercalate)
-import Methods.Common
 import Types
-import Psql.ToQuery
 import Psql.Methods.Common
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.SelectLimit
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
+import Psql.ToQuery.Delete (Delete(..))
+import Psql.ToQuery.Select (Select(..),Where(..))
 import Database.PostgreSQL.Simple (Connection)
 
 selectDraftsForPost' :: Connection -> PostId -> IO [DraftId]

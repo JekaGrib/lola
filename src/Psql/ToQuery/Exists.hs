@@ -1,18 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery.Exists where
 
-import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
-import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
-import Psql.ToQuery 
-import Psql.ToQuery.Select
+import Psql.ToQuery (ToVal(..),ToStr(..))
+import Psql.ToQuery.Select (Where)
 
 
 data Exists =
@@ -23,5 +17,5 @@ instance ToStr Exists where
     "SELECT EXISTS (SELECT 1 FROM " ++ t ++ " WHERE " ++ toStr wh ++ ")"
 
 instance ToVal Exists where
-  toVal (Exists t wh)  = toVal wh
+  toVal (Exists _ wh)  = toVal wh
 

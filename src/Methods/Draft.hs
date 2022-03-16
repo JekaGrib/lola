@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Draft where
 
@@ -13,7 +13,6 @@ import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.List (intercalate, zip4)
 import Database.PostgreSQL.Simple (withTransaction)
 import Logger
 import Methods.Category (fromCatResp)
@@ -22,23 +21,21 @@ import Methods.Common.DeleteMany (deleteAllAboutDrafts, deletePicsTagsForDrafts,
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Psql.Selecty (Author (..), Draft (..), PostInfo (..), Tag (..))
-import Oops
+import Psql.Selecty (Author (..), Draft (..), Tag (..))
+import Oops (ReqError(..))
 import Api.Request.QueryStr ( GetDrafts (..),checkQStr)
 import Types
 import Data.Time.Calendar ( Day)
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import Methods.Common.Auth (tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
+import Network.HTTP.Types (QueryText)
+import Api.Request.EndPoint (AppMethod(..))
 import Data.ByteString (ByteString)
 import Psql.Methods.Draft
-import Psql.ToQuery.SelectLimit
+import Psql.ToQuery.SelectLimit (OrderBy(..))
 
 
 data Handle m = Handle
@@ -192,7 +189,7 @@ deleteDraft h@Handle{..} usId draftId = do
 
 publishDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 publishDraft h@Handle{..} usId draftId = do
-  DraftResponse drId draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
+  DraftResponse _ draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
   case draftPostId of
     PostIdNull -> do
       day <- lift $ getDay
@@ -232,8 +229,8 @@ makeDraftResp Handle{..} usId auId (Draft drId auInfo draftPostId draftName draf
 data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 
 getDraftInfo :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m DraftInfo
-getDraftInfo h@Handle{..} usId (DraftRequest _ catIdParam _ picId picsIds tagsIds) = do
-  Author auId auInfo usId <- isUserAuthorE h usId
+getDraftInfo h@Handle{..} usId (DraftRequest _ catIdParam _ _ _ tagsIds) = do
+  Author auId auInfo _ <- isUserAuthorE h usId
   tagS <- catchSelE hLog  $ selectTags tagsIds
   catResp <- makeCatResp hCatResp catIdParam
   return $ DraftInfo (AuthorResponse auId auInfo usId) (fmap inTagResp tagS) catResp

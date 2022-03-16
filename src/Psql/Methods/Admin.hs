@@ -1,28 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Admin where
 
-import Conf (Config (..), extractConn)
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Text (Text, pack, unpack)
-import Logger
-import Methods.Common
-import Oops
-import Api.Request.QueryStr (CreateAdmin (..),checkQStr)
 import Types
-import Data.Time.Calendar ( Day)
-import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import Api.Request.EndPoint
-import Psql.ToQuery.Select
-import Psql.ToQuery.Insert
+import Psql.ToQuery.Select (Select(..),Where(..))
+import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
 import Psql.Methods.Common
 import Database.PostgreSQL.Simple (Connection)
 

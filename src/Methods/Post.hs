@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Post where
 
@@ -11,7 +11,6 @@ import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT,throwE)
-import Data.List (zip4)
 import Database.PostgreSQL.Simple (withTransaction)
 import Logger
 import Methods.Common
@@ -21,8 +20,7 @@ import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Psql.Selecty (Post (..), Tag(..),PostInfo(..))
 import Methods.Post.LimitArg ( LimitArg (..), chooseArgs, isDateASC)
-import Network.Wai (Request)
-import Oops
+import Oops (ReqError(..))
 import Api.Request.QueryStr (GetPosts(..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -30,15 +28,13 @@ import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
+import Network.HTTP.Types (QueryText)
 import qualified Methods.Draft (Handle, makeH)
 import Methods.Draft (insertReturnAllDraft,isUserAuthorE_)
 import Control.Monad (unless)
-import Api.Request.EndPoint
+import Api.Request.EndPoint (AppMethod(..))
 import Psql.Methods.Post
-import Psql.ToQuery.SelectLimit
+import Psql.ToQuery.SelectLimit (OrderBy(..),Filter)
 
 data Handle m = Handle
   { hConf :: Config

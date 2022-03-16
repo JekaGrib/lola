@@ -1,38 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Author where
 
-import Conf (Config (..), extractConn)
-import Control.Monad (when)
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT, throwE)
-import Database.PostgreSQL.Simple (withTransaction,Connection)
-import Logger
-import Methods.Common
-import Methods.Common.DeleteMany (deleteAllAboutDrafts)
-import qualified Methods.Common.DeleteMany (Handle, makeH)
+import Database.PostgreSQL.Simple (Connection)
 import Psql.Selecty (Author (..))
-import Oops
-import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..),checkQStr)
 import Types
-import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
-import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
+import Psql.ToQuery.Delete (Delete(..))
+import Psql.ToQuery.Exists (Exists(..))
+import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
+import Psql.ToQuery.Select (Select(..),Where(..))
+import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
 
 selectDraftsForAuthor' :: Connection -> AuthorId -> IO [DraftId]

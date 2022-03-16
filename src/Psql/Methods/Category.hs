@@ -1,38 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Category where
 
-import Conf (Config (..), extractConn)
-import Control.Monad (when)
-import Control.Monad.Catch (MonadCatch)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.List (intercalate)
 import Database.PostgreSQL.Simple (Connection)
-import Logger
-import Methods.Common
-import Methods.Common.MakeCatResp (findOneLevelSubCats, makeCatResp)
-import qualified Methods.Common.MakeCatResp (Handle, makeH)
-import Oops
-import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..),checkQStr)
 import Types
-import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
-import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
+import Psql.ToQuery.Delete (Delete(..))
+import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
+import Psql.ToQuery.Select (Where(..))
+import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
 
 

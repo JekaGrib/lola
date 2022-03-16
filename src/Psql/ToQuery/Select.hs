@@ -1,17 +1,13 @@
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.ToQuery.Select where
 
-import Data.List (intercalate)
-import Data.String (fromString)
-import Database.PostgreSQL.Simple (Query,In(In))
-import Database.PostgreSQL.Simple.Types (PGArray(PGArray))
 import Types
-import Data.Time.Calendar ( Day)
-import Data.Text (Text,pack, unpack,cons,snoc)
-import Psql.ToQuery 
+import Data.List (intercalate)
+import Psql.ToQuery (ToVal(..),ToStr(..))
+
 
 
 
@@ -23,7 +19,7 @@ instance ToStr Select where
     "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t ++ " WHERE " ++ toStr wh
 
 instance ToVal Select where
-  toVal (Select keys t wh) = toVal wh
+  toVal (Select _ _ wh) = toVal wh
 
 class ToWhere a where
   toWhere :: a -> Where

@@ -1,26 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Common.Exist where
 
-import Methods.Common
-import Psql.ToQuery
-import Control.Monad.Trans.Except (ExceptT,throwE)
-import Oops (ReqError(..))
-import Control.Monad.Catch (MonadCatch)
 import Types
-import Conf (Config (..), extractConn)
-import Control.Monad (unless)
 import Psql.Methods.Common
-import Methods.Common.Exist.UncheckedExId 
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.SelectLimit
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
+import Psql.ToQuery.Exists (Exists(..))
+import Psql.ToQuery.Select (Where(..))
 import Database.PostgreSQL.Simple (Connection)
 
 

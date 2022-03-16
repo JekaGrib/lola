@@ -1,39 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Common where
 
-import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch, throwM)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Except
-import Crypto.Hash (Digest, hash)
-import Crypto.Hash.Algorithms (SHA1)
-import Data.Aeson (ToJSON, encode)
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, lazyByteString,toLazyByteString)
-import Data.List ((\\), intercalate)
-import Data.String (fromString)
-import Data.Text (Text, pack, unpack)
-import Data.Time.Calendar (Day)
-import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
 import Database.PostgreSQL.Simple.FromField (FromField)
-import Logger
-import Network.HTTP.Types (ResponseHeaders, Status, status200,QueryText)
-import Oops
-import System.Random (getStdGen, newStdGen, randomRs)
+import Oops (UnexpectedDbOutPutException(..))
 import Types
-import Network.HTTP.Types (StdMethod(..))
-import Psql.ToQuery 
-import Psql.ToQuery.Delete
-import Psql.ToQuery.Exists
-import Psql.ToQuery.Insert
-import Psql.ToQuery.SelectLimit
-import Psql.ToQuery.Select
-import Psql.ToQuery.Update
-import Psql.Selecty (Comment (..), Selecty, Tag (..))
+import Psql.ToQuery (toQ,toVal)
+import Psql.ToQuery.Delete (Delete)
+import Psql.ToQuery.Exists (Exists)
+import Psql.ToQuery.Insert (InsertRet,InsertMany(..),insManyVal)
+import Psql.ToQuery.SelectLimit (SelectLim)
+import Psql.ToQuery.Select (Select)
+import Psql.ToQuery.Update (Update)
+import Psql.Selecty (Selecty)
 
 
 
@@ -79,7 +63,7 @@ insertReturn' conn insRet = do
 
 
 insertMany' :: Connection -> InsertMany -> IO ()
-insertMany' conn insMany@(InsertMany t pair) = do
+insertMany' conn insMany@(InsertMany _ pair) = do
   _ <- executeMany conn (toQ insMany) (insManyVal pair)
   return ()
 

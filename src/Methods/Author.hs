@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Author where
 
@@ -18,18 +18,16 @@ import Methods.Common
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import Psql.Selecty (Author (..))
-import Oops
+import Oops (ReqError(..),catchDbErr)
 import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth,tokenUserAuth)
+import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import TryRead (tryReadResourseId)
-import Api.Request.EndPoint
+import Network.HTTP.Types (QueryText)
+import Api.Request.EndPoint (AppMethod(..))
 import Psql.Methods.Author
 
 

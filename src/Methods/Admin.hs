@@ -13,16 +13,12 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
-import Oops
+import Oops (ReqError(..),hideErr)
 import Api.Request.QueryStr (CreateAdmin (..),checkQStr)
 import Types
 import Data.Time.Calendar ( Day)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
-import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery
-import Network.HTTP.Types (StdMethod(..),QueryText)
-import Api.Request.EndPoint
+import Network.HTTP.Types (QueryText)
 import Psql.Methods.Admin
 
 
