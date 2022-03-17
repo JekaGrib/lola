@@ -102,7 +102,7 @@ instance AddJoinTable Filter where
   addJoinTable _ = ""
 
 toILike :: Text -> Text
-toILike = cons '%' . (flip snoc) '%'
+toILike = cons '%' . flip snoc '%'
 
 escape :: Text -> Text
 escape = pack . concatMap escapeChar . unpack 

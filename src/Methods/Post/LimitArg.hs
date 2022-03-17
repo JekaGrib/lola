@@ -61,10 +61,10 @@ toInF nameIn textIn evIn = case (nameIn,textIn,evIn) of
   _ -> throwE $ BadReqError "Invalid combination of IN filter parameters"
 
 toCatIdF :: Maybe CategoryId -> Maybe Filter
-toCatIdF maybeCatId = fmap CatIdF maybeCatId
+toCatIdF  = fmap CatIdF 
 
 toAuNameF :: Maybe AuthorName -> Maybe Filter
-toAuNameF maybeAuN = fmap AuthorNameF maybeAuN
+toAuNameF  = fmap AuthorNameF 
 
 chooseSortArgs :: GetPostsOrd -> [OrderBy]
 chooseSortArgs (GetPostsOrd byPicN byCat byAu byDate) = 

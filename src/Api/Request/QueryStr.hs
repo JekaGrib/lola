@@ -147,7 +147,7 @@ instance ParseQueryStr CreateTag where
 instance CheckExist CreateTag where
   checkExist _ _ = return ()
 
-data UpdateTag = UpdateTag Text
+newtype UpdateTag = UpdateTag Text
   deriving (Show)
 
 instance ParseQueryStr UpdateTag where
@@ -181,7 +181,7 @@ instance ParseQueryStr GetPosts where
       <*> parseQueryStr qStr
 
 instance CheckExist GetPosts where
-  checkExist h (GetPosts _ gpF _) = do
+  checkExist h (GetPosts _ gpF _) = 
     checkExist h gpF
 
 
@@ -264,7 +264,7 @@ instance CheckExist GetComments where
   checkExist h (GetComments pId _) =
     checkExist h (PostId pId)
 
-data UpdateComment = UpdateComment Text
+newtype UpdateComment = UpdateComment Text
   deriving (Show)
 
 instance ParseQueryStr UpdateComment where
@@ -348,14 +348,14 @@ parseMaybeSortOrdParam qStr paramKey = do
     Nothing -> return Nothing
 
 checkParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Text
-checkParam qStr paramKey = case lookup paramKey $ qStr of
+checkParam qStr paramKey = case lookup paramKey qStr of
   Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
   Just (Just txt) -> checkSingleParam qStr paramKey txt
   Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
   Nothing -> throwE $ BadReqError $ "Can't find parameter:" ++ unpack paramKey
 
 checkMaybeParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
-checkMaybeParam qStr paramKey = case lookup paramKey $ qStr of
+checkMaybeParam qStr paramKey = case lookup paramKey qStr of
   Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
   Just (Just txt) -> do
     txt1 <- checkSingleParam qStr paramKey txt

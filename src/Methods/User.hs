@@ -102,7 +102,7 @@ logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle{..} (LogIn usIdParam pwdParam) = do
   Auth pwd admBool <- catchOneSelE hLog $ selectAuthsForUser usIdParam
   checkPwd pwdParam pwd
-  tokenKey <- lift $ getTokenKey 
+  tokenKey <- lift getTokenKey 
   catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
   if admBool
     then do
@@ -116,8 +116,8 @@ logIn Handle{..} (LogIn usIdParam pwdParam) = do
 
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
 createUser Handle{..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
-  day <- lift $ getDay 
-  tokenKey <- lift $ getTokenKey 
+  day <- lift getDay 
+  tokenKey <- lift getTokenKey 
   let hashPwdParam = txtSha1 pwdParam
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day False tokenKey
   usId <- catchInsRetE hLog $ insertReturnUser insUser

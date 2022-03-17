@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
@@ -43,8 +42,8 @@ data EndPoint =
 
 toEP :: (MonadCatch m) =>  (StdMethod,[Resourse]) -> ExceptT ReqError m EndPoint
 toEP (stdMeth,resourses) = case (stdMeth,resourses) of
-  (POST   ,[AdminR])            -> return $ AdminEP 
-  (POST   ,[LogInR])            -> return $ LogInEP
+  (POST   ,[AdminR])            -> return  AdminEP 
+  (POST   ,[LogInR])            -> return  LogInEP
   (POST   ,[AuthorR])           -> return $ AuthorEP ToPost
   (GET    ,[AuthorIdR iD])      -> return $ AuthorEP (ToGet iD)
   (PUT    ,[AuthorIdR iD])      -> return $ AuthorEP (ToPut iD)
@@ -134,8 +133,7 @@ toResourseId "users"      idTxt = UserIdR    <$> parseResourseId "user"     idTx
 toResourseId txt          _     = throwE $ ResourseNotExistError $ getTxtstart txt
 
 parseResourseId :: (MonadCatch m) => ResourseName -> ResourseIdText -> ExceptT ReqError m Id
-parseResourseId resName resIdTxt = do
-  tryReadResourseId (append resName "_id") resIdTxt
+parseResourseId resName = tryReadResourseId (append resName "_id") 
 
 {-instance CheckExist Resourse where
   checkExist h (AuthorIdR  iD) = isExistResourseE h (AuthorId   iD)

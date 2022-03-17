@@ -4,11 +4,10 @@
 
 module Api.Request.JSON where
 
-import Data.Aeson ((.:), FromJSON (parseJSON), withObject)
+import Data.Aeson (Object, Value (..), decodeStrict,(.:), FromJSON (parseJSON), withObject)
 import Types
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Aeson (Object, Value (..), decodeStrict)
 import Data.HashMap.Strict (toList)
 import Data.Text (Text, unpack)
 import qualified Data.Vector as V
@@ -82,8 +81,7 @@ checkId obj paramKey = do
 checkIdArr :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
 checkIdArr obj paramKey = do
   val <- isExistInObj obj paramKey
-  _ <- checkNumArrVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM (checkNatural paramKey)
-  return ()
+  checkNumArrVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM_ (checkNatural paramKey)
 
 
 checkTxt :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m Text
@@ -126,7 +124,7 @@ checkNumArrVal paramKey values =
 checkNumListVal ::  (MonadCatch m) => JsonParamKey -> [Value] -> ExceptT ReqError m [Scientific]
 checkNumListVal paramKey xs = case xs of
   [] -> return []
-  ((Number scien) : ys) -> do
+  (Number scien : ys) -> do
     scienS <- checkNumListVal paramKey ys
     return $ scien : scienS
   _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"

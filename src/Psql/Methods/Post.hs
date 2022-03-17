@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -25,7 +24,7 @@ selectPosts' conn postId = do
 
 selectLimPosts' :: Connection -> [Filter] -> OrderBy -> Page -> Limit -> IO [Post]
 selectLimPosts' conn filterArgs orderBy page limit = do
-  let wh = WhereAnd $ (fmap toWhere filterArgs) ++ [Where "true"]
+  let wh = WhereAnd $ fmap toWhere filterArgs ++ [Where "true"]
   selectLimit' conn $ 
     SelectLim 
       ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]

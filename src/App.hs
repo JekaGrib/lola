@@ -101,7 +101,7 @@ fromE respE = case respE of
 
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 chooseRespEx h@Handle{..} req = do
-  lift $ logDebug hLog $ "Incoming request"
+  lift $ logDebug hLog "Incoming request"
   stdMeth <- pullStdMethod req
   let path = pathInfo req
   checkPathLength path

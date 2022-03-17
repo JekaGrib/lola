@@ -31,7 +31,7 @@ import Types
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
 
 instance Show  ResponseInfo where
-  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". Builder: " ++ (show $ toLazyByteString b)
+  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". Builder: " ++ show ( toLazyByteString b)
 
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
@@ -83,7 +83,7 @@ catchInsRetE ::
   ExceptT ReqError m Id
 catchInsRetE logH m = do
   lift $ logDebug logH "Insert data in the DB"
-  i <- catchDbErrE $ m
+  i <- catchDbErrE m
   lift $ logInfo logH $ "DB return id: " ++ show i
   return i
 

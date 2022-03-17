@@ -55,9 +55,9 @@ createAdmin Handle{..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picI
   keys <- catchSelE hLog selectKeys 
   key <- getLastKey keys
   checkKeyE keyParam key
-  day <- lift $ getDay 
+  day <- lift getDay 
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
-  tokenKey <- lift $ getTokenKey 
+  tokenKey <- lift getTokenKey 
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day True tokenKey
   admId <- catchInsRetE hLog $ insertReturnUser insUser
   let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)

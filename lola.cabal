@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d21eccf717e9fce8442b472348aa0deabd0d5f198cd7758fce2e682d79b35e16
+-- hash: 32da3469b80cf4e9d884f971b2c059300b997e033dd09afbf6414d3921105db5
 
 name:           lola
 version:        0.1.0.0
@@ -160,7 +160,6 @@ test-suite lola-test
       Spec.Tag
       Spec.Tag.Handlers
       Spec.Tag.Types
-      Spec.TestDB
       Spec.Types
       SpecOld
       Paths_lola

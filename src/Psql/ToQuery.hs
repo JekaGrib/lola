@@ -24,6 +24,6 @@ class AddJoinTable a where
 
 
 instance (AddJoinTable a) => AddJoinTable [a] where
-  addJoinTable xs = concatMap addJoinTable xs
+  addJoinTable = concatMap addJoinTable 
 
 

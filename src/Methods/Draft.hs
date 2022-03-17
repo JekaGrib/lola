@@ -192,7 +192,7 @@ publishDraft h@Handle{..} usId draftId = do
   DraftResponse _ draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
   case draftPostId of
     PostIdNull -> do
-      day <- lift $ getDay
+      day <- lift getDay
       postId <- withTransactionDBE h $ do
         let insPost = InsertPost auId draftName day (fromCatResp catResp) draftTxt mPicId
         postId <- insertReturnPost insPost

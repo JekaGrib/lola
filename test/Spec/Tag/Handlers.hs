@@ -1,23 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Tag.Handlers where
 
 import Spec.Conf (defConf)
 import Control.Monad.Catch (SomeException, catch, throwM)
-import Control.Monad.State (StateT (..), withStateT,modify)
-import Data.Text (Text, unpack)
 import Spec.Log (handLogDebug)
 import Methods.Tag
-import Spec.Oops (UnexpectedArgsException (..))
-import Spec.TestDB
 import Types
 import Spec.Types (MockAction (..))
 import qualified Spec.Auth.Handlers (handle)
 import qualified Spec.Exist.Handlers (handle)
 import Spec.Tag.Types
+import Control.Monad.State (StateT (..), modify)
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -43,31 +40,39 @@ withTransactionDBTest m = do
   return a
 
 catchTransactionE :: StateT [MockAction] IO a -> StateT [MockAction] IO a
-catchTransactionE m = do
+catchTransactionE m = 
   m `catch` (\(e :: SomeException) -> do
     modify (TRANSACTIONunROLL :)
     throwM e)
 
 selectTagNamesTest :: TagId -> StateT [MockAction] IO [TagName]
-selectTagNamesTest tagId = StateT $ \acts ->
-  return (["cats"],TagMock (SelectTagNames tagId):acts)
+selectTagNamesTest tagId = do
+  modify (TagMock (SelectTagNames tagId) :)
+  return ["cats"]
 
 updateDbTagTest :: TagName -> TagId  -> StateT [MockAction] IO ()
-updateDbTagTest tagName tagId = StateT $  \acts ->
-   return ((), TagMock (UpdateDbTag tagName tagId) : acts)
+updateDbTagTest tagName tagId = 
+  modify (TagMock (UpdateDbTag tagName tagId) :)
+
 
 deleteDbTagTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagTest tagId = StateT $ \acts ->
-  return $ ((), TagMock (DeleteDbTag tagId) : acts)
+deleteDbTagTest tagId = 
+  modify (TagMock (DeleteDbTag tagId) :)
+
 
 deleteDbTagForDraftsTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagForDraftsTest tagId = StateT $ \acts ->
-  return $ ((), TagMock (DeleteDbTagForDrafts tagId) : acts)
+deleteDbTagForDraftsTest tagId = 
+  modify (TagMock (DeleteDbTagForDrafts tagId) :)
+  
+  
 
 deleteDbTagForPostsTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagForPostsTest tagId = StateT $ \acts ->
-  return $ ((), TagMock (DeleteDbTagForPosts tagId) : acts)
+deleteDbTagForPostsTest tagId = 
+  modify (TagMock (DeleteDbTagForPosts tagId) :)
+  
 
 insertReturnTagTest :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTest tagName = StateT $ \acts ->
-  return $ (14,TagMock (InsertReturnTag tagName) : acts)
+insertReturnTagTest tagName = do
+  modify (TagMock (InsertReturnTag tagName) :)
+  return 14
+  

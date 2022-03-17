@@ -34,5 +34,5 @@ instance ToVal Set where
   toVal (SetPair _ val) = [val]
 
 instance ToVal [Set] where
-  toVal sets = concatMap toVal sets  
+  toVal = concatMap toVal 
 

@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
@@ -111,23 +110,23 @@ updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
   updateInDb' conn (Update "posts" [set1,set2,set3,set4] wh)
 
 insertReturnDraft' ::  Connection -> InsertDraft -> IO DraftId
-insertReturnDraft' conn (InsertDraft Nothing auId drName catId drTxt picId) = do
-  let insPair1 = InsertPair "author_id"         (Id  auId)
-  let insPair2 = InsertPair "draft_name"        (Txt drName)
-  let insPair3 = InsertPair "draft_category_id" (Id  catId)
-  let insPair4 = InsertPair "draft_text"        (Txt drTxt)
-  let insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
-  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5]
+insertReturnDraft' conn insDraft = do
+  let insPairs = insDraftToInsPairs insDraft
   insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
-insertReturnDraft' conn (InsertDraft (Just postId) auId drName catId drTxt picId) = do
+
+insDraftToInsPairs :: InsertDraft -> [InsertPair]
+insDraftToInsPairs (InsertDraft maybePostId auId drName catId drTxt picId) =
   let insPair1 = InsertPair "author_id"         (Id  auId)
-  let insPair2 = InsertPair "draft_name"        (Txt drName)
-  let insPair3 = InsertPair "draft_category_id" (Id  catId)
-  let insPair4 = InsertPair "draft_text"        (Txt drTxt)
-  let insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
-  let insPair6 = InsertPair "post_id"           (Id  postId)
-  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
-  insertReturn' conn (InsertRet "drafts" insPairs "draft_id")
+      insPair2 = InsertPair "draft_name"        (Txt drName)
+      insPair3 = InsertPair "draft_category_id" (Id  catId)
+      insPair4 = InsertPair "draft_text"        (Txt drTxt)
+      insPair5 = InsertPair "draft_main_pic_id" (Id  picId)
+  in case maybePostId of
+    Nothing     -> [insPair1,insPair2,insPair3,insPair4,insPair5]
+    Just postId -> [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6]
+      where 
+        insPair6 = InsertPair "post_id"         (Id  postId)
+
 
 insertManyDraftsPics' :: Connection -> [(DraftId,PictureId)] -> IO ()
 insertManyDraftsPics' conn xs = do

@@ -33,7 +33,7 @@ instance ToStr [InsertPair] where
     " ( " ++ intercalate "," (map insKey insPairs)  ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insPairs) ++ " )"
 
 instance ToVal [InsertPair] where
-  toVal insPairs = concatMap toVal insPairs
+  toVal = concatMap toVal
 
 
 data InsertMany =

@@ -2,7 +2,6 @@
 
 
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}

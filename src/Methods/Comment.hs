@@ -12,14 +12,13 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Logger
-import Methods.Common.Auth (AccessMode (..))
 import Methods.Common
 import Psql.Selecty (Comment (comment_idC))
 import Oops (ReqError(..))
 import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..),checkQStr)
 import Types
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenUserAuth)
+import Methods.Common.Auth (tokenUserAuth,AccessMode (..))
 import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))

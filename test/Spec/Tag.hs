@@ -18,19 +18,17 @@ import Methods.Tag
 import Spec.Oops (UnexpectedArgsException (..))
 import Api.Request.QueryStr (CreateTag (..),  UpdateTag (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
-import Spec.TestDB
 import Types
 import Spec.Types (MockAction (..))
 import Spec.Tag.Handlers
 import Spec.Tag.Types
 
 testTag :: IO ()
-testTag = hspec
-  $ describe "createTag"
-  $ do
+testTag = hspec $ 
+  describe "createTag" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createTag handle (CreateTag "cats")) []
-      (reverse state)
+      reverse state
         `shouldBe` 
         [LOG DEBUG,TagMock (InsertReturnTag "cats"),LOG INFO,LOG INFO]
     {-  respE <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) (testDB1, [])

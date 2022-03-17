@@ -115,7 +115,7 @@ updateCategory h@Handle{..} catId (UpdateCategory catNameParam maybeSuperCatIdPa
     Just superCatIdParam -> do
       checkRelationCats h catId superCatIdParam
       catchUpdE hLog $ updateDbSubCat catNameParam superCatIdParam catId
-    Nothing -> do
+    Nothing -> 
       catchUpdE hLog $ updateDbCat catNameParam catId
   catResp <- makeCatResp hCatResp catId
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " updated."

@@ -220,9 +220,8 @@ inputIdOr valueName action = do
   case map toUpper input of
     "NEW" -> action
     _ -> case reads input  of
-      [(a , "")] -> do
-        iD <- checkBigIntOr a . inputIdOr valueName $ action
-        return iD
+      [(a , "")] -> 
+        checkBigIntOr a . inputIdOr valueName $ action
       _ -> inputIdOr valueName action
 
 inputOrCreateDefCatId,inputOrCreateDefPicId :: Connection -> IO Id
