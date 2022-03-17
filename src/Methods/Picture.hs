@@ -11,7 +11,6 @@ import Control.Monad.Catch (MonadCatch, catch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (lazyByteString)
 import qualified Data.ByteString.Lazy as BSL
 import Data.String (fromString)
 import Data.Text (Text, unpack)
@@ -76,7 +75,7 @@ sendPicture Handle{..} picIdNum = do
     ResponseInfo
       status200
       [("Content-Type", "image/jpeg")]
-      (lazyByteString lbs)
+      lbs
 
 loadPicture :: (MonadCatch m) => Handle m -> LoadPicture -> ExceptT ReqError m ResponseInfo
 loadPicture h@Handle{..} (LoadPicture picUrlParam) = do

@@ -13,14 +13,14 @@ import Crypto.Hash (Digest, hash)
 import Crypto.Hash.Algorithms (SHA1)
 import Data.Aeson (ToJSON, encode)
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder, lazyByteString,toLazyByteString)
+import qualified Data.ByteString.Lazy as BSL
 import Data.String (fromString)
 import Data.Text (Text, pack, unpack)
 import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Logger
 import Psql.Selecty (Comment (..), Tag (..))
-import Network.HTTP.Types (ResponseHeaders, Status, status200,status204)
+import Network.HTTP.Types (ResponseHeaders, Status, status200,status204,Header)
 import Oops (ReqError(..),catchDbErr)
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
@@ -28,14 +28,18 @@ import Types
 
 -- common logic functions:
 
-data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBuilder :: Builder}
+data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBS :: BSL.ByteString}
+  deriving Eq
 
 instance Show  ResponseInfo where
-  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". Builder: " ++ show ( toLazyByteString b)
+  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". ByteString: " ++ show b
 
+
+jsonHeaders :: [Header]
+jsonHeaders = [("Content-Type", "application/json; charset=utf-8")]
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
-okHelper toJ = return $ ResponseInfo status200 [("Content-Type", "application/json; charset=utf-8")] (lazyByteString . encode $ toJ)
+okHelper toJ = return $ ResponseInfo status200 jsonHeaders (encode $ toJ)
 
 ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo
 ok204Helper = return $ ResponseInfo status204 [] "Status 204 No data"

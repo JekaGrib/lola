@@ -9,11 +9,11 @@ import Spec.Conf (defConf)
 import Control.Monad.Catch (SomeException, catch, throwM)
 import Control.Monad.State (StateT (..), evalStateT, execStateT, withStateT)
 import Control.Monad.Trans.Except (runExceptT)
-import Data.ByteString.Builder (toLazyByteString)
+import Data.ByteString.Builder (toLazyByteString,lazyByteString)
 import Data.Text (Text, unpack)
 import Logger (Priority (..))
 import Spec.Log (handLogDebug)
-import Methods.Common (resBuilder)
+import Methods.Common (resBuilder,jsonHeaders,ResponseInfo(..))
 import Methods.Tag
 import Spec.Oops (UnexpectedArgsException (..))
 import Api.Request.QueryStr (CreateTag (..),  UpdateTag (..))
@@ -22,15 +22,22 @@ import Types
 import Spec.Types (MockAction (..))
 import Spec.Tag.Handlers
 import Spec.Tag.Types
+import Data.Aeson (encode)
+import Api.Response (TagResponse(..))
+import Network.HTTP.Types (status200)
 
 testTag :: IO ()
 testTag = hspec $ 
-  describe "createTag" $ 
+  describe "createTag" $
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createTag handle (CreateTag "cats")) []
       reverse state
         `shouldBe` 
         [LOG DEBUG,TagMock (InsertReturnTag "cats"),LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status200 jsonHeaders (lazyByteString . encode $ TagResponse 14 "cats"))
     {-  respE <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) (testDB1, [])
       let respBuildE = fmap (toLazyByteString . resBuilder) respE
       respBuildE

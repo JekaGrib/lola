@@ -11,7 +11,6 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Aeson (encode)
-import Data.ByteString.Builder (lazyByteString)
 import Data.ByteString (ByteString)
 import Data.Text (pack,unpack,Text)
 import Data.List (genericLength)
@@ -22,14 +21,14 @@ import Methods.Admin (workWithAdmin)
 import Methods.Author (workWithAuthors)
 import Methods.Category (workWithCats)
 import Methods.Comment (workWithComms)
-import Methods.Common (ResponseInfo (..))
+import Methods.Common (ResponseInfo (..),jsonHeaders)
 import Methods.Draft (workWithDrafts)
 import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
 import Methods.Tag (workWithTags)
 import Methods.User (workWithUsers,workWithLogIn)
 import Network.HTTP.Types (StdMethod,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
-import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseBuilder, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
+import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseLBS, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
 import Oops (ReqError (..), logOnErr)
 import Control.Monad (when)
 import Api.Request.EndPoint (EndPoint(..),parseEndPoint,AppMethod(..))
@@ -54,7 +53,7 @@ application config handleLog req send = do
 
 
 responseFromInfo :: ResponseInfo -> Response
-responseFromInfo (ResponseInfo s h b) = responseBuilder s h b
+responseFromInfo (ResponseInfo s h b) = responseLBS s h b
 
 {-logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
 logLeftResponse logH respE = case respE of
@@ -67,28 +66,28 @@ fromE respE = case respE of
   Left (BadReqError str) ->
     ResponseInfo
       status400
-      [("Content-Type", "application/json; charset=utf-8")]
-      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+      jsonHeaders
+      (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
   Left (SecretLogInError _) ->
     ResponseInfo
       status401
-      [("Content-Type", "application/json; charset=utf-8")]
-      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
+      jsonHeaders
+      (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
   Left (SecretTokenError _) ->
     ResponseInfo
       status401
-      [("Content-Type", "application/json; charset=utf-8")]
-      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
+      jsonHeaders
+      (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
   Left (NotImplementedError _) ->
     ResponseInfo
       status501
-      [("Content-Type", "application/json; charset=utf-8")]
-      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = "Unknown method"})
+      jsonHeaders
+      (encode $ OkInfoResponse {ok7 = False, info7 = "Unknown method"})
   Left (ForbiddenError str) ->
     ResponseInfo
       status403
-      [("Content-Type", "application/json; charset=utf-8")]
-      (lazyByteString . encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+      jsonHeaders
+      (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
   Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [] "Status 413 Request Body Too Large"
   Left (UriTooLongError _) -> ResponseInfo status414 [] "Status 414 Request-URI Too Long"
   Left (ResourseNotExistError _) -> ResponseInfo status404 [] "Status 404 Not Found"
