@@ -13,7 +13,7 @@ import Data.ByteString.Builder (toLazyByteString,lazyByteString)
 import Data.Text (Text, unpack)
 import Logger (Priority (..))
 import Spec.Log (handLogDebug)
-import Methods.Common (resBuilder,jsonHeaders,ResponseInfo(..))
+import Methods.Common (jsonHeaders,ResponseInfo(..))
 import Methods.Tag
 import Spec.Oops (UnexpectedArgsException (..))
 import Api.Request.QueryStr (CreateTag (..),  UpdateTag (..))
@@ -24,10 +24,10 @@ import Spec.Tag.Handlers
 import Spec.Tag.Types
 import Data.Aeson (encode)
 import Api.Response (TagResponse(..))
-import Network.HTTP.Types (status200)
+import Network.HTTP.Types (status200,status204)
 
 testTag :: IO ()
-testTag = hspec $ 
+testTag = hspec $ do
   describe "createTag" $
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createTag handle (CreateTag "cats")) []
@@ -37,32 +37,34 @@ testTag = hspec $
       eitherResp <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) []
       eitherResp
         `shouldBe` 
-          (Right $ ResponseInfo status200 jsonHeaders (lazyByteString . encode $ TagResponse 14 "cats"))
-    {-  respE <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) (testDB1, [])
-      let respBuildE = fmap (toLazyByteString . resBuilder) respE
-      respBuildE
-        `shouldBe` Right "{\"tag_id\":16,\"tag_name\":\"cats\"}"
-    it "work" $ do
-      state <- execStateT (runExceptT $ getTag handle 4) (testDB1, [])
-      (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, LOG INFO, LOG INFO]
-      respE <- evalStateT (runExceptT $ getTag handle 4) (testDB1, [])
-      let respBuildE = fmap (toLazyByteString . resBuilder) respE
-      respBuildE
-        `shouldBe` Right "{\"tag_id\":4,\"tag_name\":\"Love\"}"
-    it "work" $ do
-      state <- execStateT (runExceptT $ updateTag handle (UpdateTag 2 "Salad")) (testDB1, [])
-      (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, LOG INFO, LOG DEBUG, LOG INFO, LOG INFO]
-      respE <- evalStateT (runExceptT $ updateTag handle (UpdateTag 2 "Salad")) (testDB1, [])
-      let respBuildE = fmap (toLazyByteString . resBuilder) respE
-      respBuildE
-        `shouldBe` Right "{\"tag_id\":2,\"tag_name\":\"Salad\"}"
-    it "work" $ do
-      state <- execStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1, [])
-      (reverse . snd $ state)
-        `shouldBe` [LOG DEBUG, LOG INFO, LOG DEBUG, TRANSACTIONOPEN,  TRANSACTIONCLOSE, LOG INFO, LOG INFO]
-      respE <- evalStateT (runExceptT $ deleteTag handle (DeleteTag 3)) (testDB1, [])
-      let respBuildE = fmap (toLazyByteString . resBuilder) respE
-      respBuildE
-        `shouldBe` Right "{\"ok\":true}"-}
+          (Right $ ResponseInfo status200 jsonHeaders (encode $ TagResponse 14 "cats"))
+  describe "getTag" $
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ getTag handle 3) []
+      reverse state
+        `shouldBe` 
+        [LOG DEBUG,TagMock (SelectTagNames 3),LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ getTag handle 3) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status200 jsonHeaders (encode $ TagResponse 3 "cats"))
+  describe "updateTag" $
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ updateTag handle 7 (UpdateTag "food")) []
+      reverse state
+        `shouldBe` 
+        [LOG DEBUG,TagMock (UpdateDbTag "food" 7),LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ updateTag handle 7 (UpdateTag "food")) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status200 jsonHeaders (encode $ TagResponse 7 "food"))
+  describe "deleteTag" $
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ deleteTag handle 7 ) []
+      reverse state
+        `shouldBe` 
+        [LOG DEBUG,TRANSACTIONOPEN,TagMock (DeleteDbTagForDrafts 7),TagMock (DeleteDbTagForPosts 7),TagMock (DeleteDbTag 7),TRANSACTIONCLOSE,LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ deleteTag handle 7 ) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status204 [] "Status 204 No data")
