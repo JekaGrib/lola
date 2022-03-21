@@ -198,18 +198,18 @@ instance ToJSON TagResponse where
     pairs ("tag_id" .= a <> "tag_name" .= b)
 
 data CommentResponse = CommentResponse
-  { comment_id :: CommentId,
-    comment_text :: Text,
-    post_id6 :: PostId,
-    user_id6 :: UserId
+  { comment_idCR :: CommentId,
+    comment_textCR :: Text,
+    user_idCR :: UserId,
+    post_idCR :: PostId
   }
   deriving (Eq, Show)
 
 instance ToJSON CommentResponse where
   toJSON (CommentResponse a b c d) =
-    object ["comment_id" .= a, "comment_text" .= b, "post_id" .= c, "user_id" .= d]
+    object ["comment_id" .= a, "comment_text" .= b, "user_id" .= c, "post_id" .= d]
   toEncoding (CommentResponse a b c d) =
-    pairs ("comment_id" .= a <> "comment_text" .= b <> "post_id" .= c <> "user_id" .= d)
+    pairs ("comment_id" .= a <> "comment_text" .= b <> "user_id" .= c <> "post_id" .= d)
 
 data CommentIdTextUserResponse = CommentIdTextUserResponse
   { comment_id8 :: CommentId,

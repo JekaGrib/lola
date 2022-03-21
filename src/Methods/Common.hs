@@ -20,7 +20,7 @@ import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
 import Logger
 import Psql.Selecty (Comment (..), Tag (..))
-import Network.HTTP.Types (ResponseHeaders, Status, status200,status204,Header)
+import Network.HTTP.Types (ResponseHeaders, Status, status200, status201,status204,Header,hLocation)
 import Oops (ReqError(..),catchDbErr)
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
@@ -35,14 +35,25 @@ instance Show  ResponseInfo where
   show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". ByteString: " ++ show b
 
 
-jsonHeaders :: [Header]
-jsonHeaders = [("Content-Type", "application/json; charset=utf-8")]
+jsonHeader :: Header
+jsonHeader = ("Content-Type", "application/json; charset=utf-8")
+
+textHeader :: Header
+textHeader = ("Content-Type", "text/html")
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
-okHelper toJ = return $ ResponseInfo status200 jsonHeaders (encode $ toJ)
+okHelper toJ = return $ ResponseInfo status200 [jsonHeader] (encode $ toJ)
+
+ok201Helper :: (MonadCatch m) => Config -> String -> ExceptT ReqError m ResponseInfo
+ok201Helper conf str = return $ ResponseInfo status201 [textHeader,(hLocation,url)] "Status 201 Created"
+  where url = makeMyUrl conf str
+
+ok201JsonHelper :: (MonadCatch m, ToJSON a) => Config -> String -> a -> ExceptT ReqError m ResponseInfo
+ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader,(hLocation,url)] (encode $ toJ)
+  where url = makeMyUrl conf str
 
 ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo
-ok204Helper = return $ ResponseInfo status204 [] "Status 204 No data"
+ok204Helper = return $ ResponseInfo status204 [textHeader] "Status 204 No data"
 
 catchSelE :: (MonadCatch m) => LogHandle m -> m [a] -> ExceptT ReqError m [a]
 catchSelE logH m = do
@@ -126,7 +137,7 @@ txtSha1 :: Text -> Text
 txtSha1 = pack . strSha1 . unpack
 
 inCommResp :: Comment -> CommentIdTextUserResponse
-inCommResp (Comment idCom usId txt) = CommentIdTextUserResponse idCom txt usId
+inCommResp (Comment idCom usId txt _) = CommentIdTextUserResponse idCom txt usId
 
 inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
@@ -139,3 +150,6 @@ inPicIdUrl conf picId = PicIdUrl picId (makeMyPicUrl conf picId)
 
 numToTxt :: Id -> Text
 numToTxt = pack . show
+
+makeMyUrl :: Config -> String -> ByteString
+makeMyUrl conf str = fromString $ "http://" ++ cServHost conf ++ ":" ++ show (cServPort conf) ++ "/" ++ str

@@ -98,9 +98,8 @@ createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m
 createAuthor h@Handle{..} (CreateAuthor usIdParam auInfoParam) = do
   isNotAlreadyAuthor h usIdParam
   auId <- catchInsRetE hLog $ insertReturnAuthor usIdParam auInfoParam
-  lift $ logDebug hLog $ "DB return author_id" ++ show auId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
+  ok201Helper hConf $ "authors/" ++ show auId
 
 getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 getAuthor Handle{..} authId = do

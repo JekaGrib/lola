@@ -13,7 +13,7 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Logger
 import Methods.Common
-import Psql.Selecty (Comment (comment_idC))
+import Psql.Selecty (Comment (..))
 import Oops (ReqError(..))
 import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..),checkQStr)
 import Types
@@ -30,6 +30,7 @@ import Psql.ToQuery.SelectLimit (OrderBy(..))
 data Handle m = Handle
   { hConf :: Config
   , hLog :: LogHandle m
+  , selectComm :: CommentId -> m [Comment]
   , selectUsersForPost :: PostId -> m [UserId]
   , selectUsersForComm :: CommentId -> m [UserId]
   , selectPostsForComm :: CommentId -> m [PostId]
@@ -47,6 +48,7 @@ makeH conf logH =
    in Handle
         conf
         logH
+        (selectComm' conn)
         (selectUsersForPost' conn)
         (selectUsersForComm' conn)
         (selectPostsForComm' conn)
@@ -68,6 +70,9 @@ workWithComms h@Handle{..} qStr meth  =
     ToGetAll -> do
       lift $ logInfo hLog "Get comments command"
       checkQStr hExist qStr >>= getComments h
+    ToGet commId -> do
+      lift $ logInfo hLog "Get comment command"
+      getComment h commId
     ToPut commId -> do
       lift $ logInfo hLog "Update comment command"
       (usId, _) <- tokenUserAuth hAuth  qStr
@@ -84,7 +89,13 @@ createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> Except
 createComment Handle{..} usIdNum (CreateComment postIdParam txtParam) = do
   commId <- catchInsRetE hLog $ insertReturnComm txtParam postIdParam usIdNum
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " created"
-  okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postIdParam, user_id6 = usIdNum}
+  ok201Helper hConf $ "comments/" ++ show commId
+
+getComment :: (MonadCatch m) => Handle m -> CommentId -> ExceptT ReqError m ResponseInfo
+getComment Handle{..} commId = do
+  Comment _ usId txt postId <- catchOneSelE hLog $ selectComm commId  
+  lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " sending in response"
+  okHelper $ CommentResponse {comment_idCR = commId, comment_textCR = txt, user_idCR = usId, post_idCR = postId}
 
 getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m ResponseInfo
 getComments Handle{..} (GetComments postIdParam pageNum) = do
@@ -99,7 +110,7 @@ updateComment h@Handle{..} usId commId (UpdateComment txtParam) = do
   catchUpdE hLog $ updateDbComm txtParam commId
   postId <- catchOneSelE hLog $ selectPostsForComm commId
   lift $ logInfo hLog  $ "Comment_id: " ++ show commId ++ " updated"
-  okHelper $ CommentResponse {comment_id = commId, comment_text = txtParam, post_id6 = postId, user_id6 = usId}
+  okHelper $ CommentResponse {comment_idCR = commId, comment_textCR = txtParam, post_idCR = postId, user_idCR = usId}
 
 deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> CommentId -> ExceptT ReqError m ResponseInfo
 deleteComment h@Handle{..} usId accessMode commId = do

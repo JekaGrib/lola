@@ -47,12 +47,12 @@ instance FromRow Author where
 
 instance Selecty Author
 
-data Comment = Comment {comment_idC :: CommentId, user_idC :: UserId, comment_textC :: Text}
+data Comment = Comment {comment_idC :: CommentId, user_idC :: UserId, comment_textC :: Text, post_id :: PostId}
   deriving (Eq, Show)
 
 instance FromRow Comment where
   fromRow =
-    Comment <$> field <*> field <*> field
+    Comment <$> field <*> field <*> field <*> field
 
 instance Selecty Comment
 

@@ -90,7 +90,7 @@ createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqErro
 createTag Handle{..} (CreateTag tagNameParam) = do
   tagId <- catchInsRetE hLog $ insertReturnTag tagNameParam
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " created"
-  okHelper $ TagResponse tagId tagNameParam
+  ok201Helper hConf $ "tags/" ++ show tagId
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag Handle{..} tagId = do

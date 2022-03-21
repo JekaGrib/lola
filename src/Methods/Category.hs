@@ -96,12 +96,11 @@ createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqErr
 createCategory Handle{..} (CreateCategory catNameParam Nothing) = do
   catId <- catchInsRetE hLog $ insertReturnCat catNameParam
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
-  okHelper $ CatResponse {cat_id = catId, cat_name = catNameParam, one_level_sub_cats = []}
+  ok201Helper hConf $ "categories/" ++ show catId
 createCategory Handle{..} (CreateCategory catNameParam (Just superCatIdParam)) = do
   catId <- catchInsRetE hLog $ insertReturnSubCat catNameParam superCatIdParam
-  catResp <- makeCatResp hCatResp catId
   lift $ logInfo hLog $ "Sub_Category_id: " ++ show catId ++ " created"
-  okHelper catResp
+  ok201Helper hConf $ "categories/" ++ show catId
 
 getCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
 getCategory Handle{..} catId = do

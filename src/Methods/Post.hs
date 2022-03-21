@@ -6,7 +6,7 @@
 
 module Methods.Post where
 
-import Api.Response (AuthorResponse (..), PostResponse (..), PostsResponse (..),DraftResponse(..),PostIdOrNull(..))
+import Api.Response (AuthorResponse (..), PostResponse (..), PostsResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -118,16 +118,15 @@ getPosts h@Handle{..} gP@(GetPosts page _ _) = do
 createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> PostId -> ExceptT ReqError m ResponseInfo
 createPostsDraft h@Handle{..} usId postId = do
   isUserAuthorE_ hDr usId
-  PostInfo auId auInfo postName postCatId postTxt mPicId <- catchOneSelE hLog $ selectPostInfos postId
+  PostInfo auId _ postName postCatId postTxt mPicId <- catchOneSelE hLog $ selectPostInfos postId
   isPostAuthor h postId usId
   picsIds <- catchSelE hLog $ selectPicsForPost postId
   tagS <- catchSelE hLog $ selectTagsForPost postId
   let tagsIds = fmap tag_idT tagS
-  catResp <- makeCatResp hCatResp postCatId
   let insDr = InsertDraft (Just postId) auId postName postCatId postTxt mPicId
   draftId <- insertReturnAllDraft hDr picsIds tagsIds insDr 
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postId
-  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdExist postId, author2 = AuthorResponse auId auInfo usId, draft_name2 = postName, draft_cat2 = catResp, draft_text2 = postTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl hConf mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl hConf ) picsIds}
+  ok201Helper hConf $ "drafts/" ++ show draftId
 
 deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
 deletePost h@Handle{..} postId = do

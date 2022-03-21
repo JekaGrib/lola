@@ -137,12 +137,12 @@ workWithDrafts h@Handle{..} qStr meth json =
 
 
 createNewDraft :: (MonadCatch m) => Handle m -> UserId -> DraftRequest -> ExceptT ReqError m ResponseInfo
-createNewDraft h@Handle{..} usId drReq@(DraftRequest nameParam catIdParam txtParam picId picsIds tagsIds) = do
-  DraftInfo auResp@(AuthorResponse auId _ _) tagResps catResp <- getDraftInfo h usId drReq
+createNewDraft h@Handle{..} usId (DraftRequest nameParam catIdParam txtParam picId picsIds tagsIds) = do
+  Author auId _ _ <- isUserAuthorE h usId
   let insDr = InsertDraft Nothing auId nameParam catIdParam txtParam picId
   draftId <- insertReturnAllDraft h picsIds tagsIds insDr    
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created"
-  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = PostIdNull, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl hConf picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl hConf) picsIds}
+  ok201Helper hConf $ "drafts/" ++ show draftId
 
 
 
@@ -200,7 +200,7 @@ publishDraft h@Handle{..} usId draftId = do
         insertManyPostsTags (zip (repeat postId) (fmap tag_idTR tagResps))
         return postId
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
+      ok201Helper hConf $ "posts/" ++ show postId
     PostIdExist postId -> do
       day <- catchOneSelE hLog $ selectDaysForPost postId
       withTransactionDBE h $ do

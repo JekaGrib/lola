@@ -83,7 +83,7 @@ loadPicture h@Handle{..} (LoadPicture picUrlParam) = do
   let sbs = BSL.toStrict lbs
   picId <- catchInsRetE hLog $ insertRetPicBS sbs
   lift $ logInfo hLog $ "Picture_id: " ++ show picId ++ " uploaded"
-  okHelper $ inPicIdUrl hConf picId
+  ok201Helper hConf $ "pictures/" ++ show picId
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic Handle{..} url = do

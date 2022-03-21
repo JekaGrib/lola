@@ -6,7 +6,7 @@
 
 module Methods.User where
 
-import Api.Response ( UserResponse (..), UserTokenResponse (..),TokenResponse(..))
+import Api.Response ( UserResponse (..), TokenResponse (..),TokenResponse(..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -123,8 +123,8 @@ createUser Handle{..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = d
   usId <- catchInsRetE hLog $ insertReturnUser insUser
   lift $ logDebug hLog $ "DB return user_id:" ++ show usId ++ "and token key"
   lift $ logInfo hLog $ "User_id: " ++ show usId ++ " created"
-  let usToken = pack $ show usId ++ "." ++ strSha1 tokenKey ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = usId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdParam, user_pic_urlUTR = makeMyPicUrl hConf picIdParam, user_create_dateUTR = day}
+  let usToken = pack $ show usId ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
+  ok201JsonHelper hConf ("users/" ++ show usId) $ TokenResponse {tokenTR = usToken}
 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 getUser Handle{..} usId = do

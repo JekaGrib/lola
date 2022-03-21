@@ -21,7 +21,7 @@ import Methods.Admin (workWithAdmin)
 import Methods.Author (workWithAuthors)
 import Methods.Category (workWithCats)
 import Methods.Comment (workWithComms)
-import Methods.Common (ResponseInfo (..),jsonHeaders)
+import Methods.Common (ResponseInfo (..),jsonHeader,textHeader)
 import Methods.Draft (workWithDrafts)
 import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
@@ -66,33 +66,33 @@ fromE respE = case respE of
   Left (BadReqError str) ->
     ResponseInfo
       status400
-      jsonHeaders
+      [jsonHeader]
       (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
   Left (SecretLogInError _) ->
     ResponseInfo
       status401
-      jsonHeaders
+      [jsonHeader]
       (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
   Left (SecretTokenError _) ->
     ResponseInfo
       status401
-      jsonHeaders
+      [jsonHeader]
       (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
   Left (NotImplementedError _) ->
     ResponseInfo
       status501
-      jsonHeaders
+      [jsonHeader]
       (encode $ OkInfoResponse {ok7 = False, info7 = "Unknown method"})
   Left (ForbiddenError str) ->
     ResponseInfo
       status403
-      jsonHeaders
+      [jsonHeader]
       (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
-  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [] "Status 413 Request Body Too Large"
-  Left (UriTooLongError _) -> ResponseInfo status414 [] "Status 414 Request-URI Too Long"
-  Left (ResourseNotExistError _) -> ResponseInfo status404 [] "Status 404 Not Found"
-  Left (SecretError _) -> ResponseInfo status404 [] "Status 404 Not Found"
-  Left (DatabaseError _) -> ResponseInfo status500 [] "Internal server error"
+  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [textHeader] "Status 413 Request Body Too Large"
+  Left (UriTooLongError _) -> ResponseInfo status414 [textHeader] "Status 414 Request-URI Too Long"
+  Left (ResourseNotExistError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
+  Left (SecretError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
+  Left (DatabaseError _) -> ResponseInfo status500 [textHeader] "Internal server error"
 
 
 

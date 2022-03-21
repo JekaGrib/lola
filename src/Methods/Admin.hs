@@ -5,7 +5,7 @@
 
 module Methods.Admin where
 
-import Api.Response (UserTokenResponse (..))
+import Api.Response (TokenResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -60,9 +60,9 @@ createAdmin Handle{..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picI
   tokenKey <- lift getTokenKey 
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day True tokenKey
   admId <- catchInsRetE hLog $ insertReturnUser insUser
-  let usToken = pack $ show admId ++ "." ++ strSha1 tokenKey ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
+  let usToken = pack $ show admId ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
   lift $ logInfo hLog $ "User_id: " ++ show admId ++ " created as admin"
-  okHelper $ UserTokenResponse {tokenUTR = usToken, user_idUTR = admId, first_nameUTR = fNameParam, last_nameUTR = lNameParam, user_pic_idUTR = picIdParam, user_pic_urlUTR = makeMyPicUrl hConf picIdParam, user_create_dateUTR = day}
+  ok201JsonHelper hConf ("users/" ++ show admId) $ TokenResponse {tokenTR = usToken}
 
 checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
 checkKeyE keyParam key

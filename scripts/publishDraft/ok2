@@ -1,0 +1,2 @@
+#!/bin/bash
+curl -X 'POST' "http://localhost:3000/drafts/44/posts?token=50.hij.369c07b3257be985bab3489a2569886a82c31a20"

@@ -14,6 +14,12 @@ import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
 import Database.PostgreSQL.Simple (Connection)
 
+
+selectComm' :: Connection -> CommentId -> IO [Comment]
+selectComm' conn commId = do
+  let wh = WherePair "comment_id=?" (Id commId)
+  select' conn (Select ["comment_id","user_id","comment_text","post_id"] "comments" wh)
+
 selectUsersForPost' :: Connection -> PostId -> IO [UserId]
 selectUsersForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
@@ -34,7 +40,7 @@ selectLimCommsForPost' conn postId orderBy page limit = do
   let wh = WherePair "post_id=?" (Id postId)
   selectLimit' conn $ 
     SelectLim 
-      ["comment_id","user_id","comment_text"]
+      ["comment_id","user_id","comment_text","post_id"]
       "comments" wh [] orderBy page limit
 
 updateDbComm' :: Connection -> CommentText -> CommentId -> IO ()

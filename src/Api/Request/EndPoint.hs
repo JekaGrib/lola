@@ -54,6 +54,7 @@ toEP (stdMeth,resourses) = case (stdMeth,resourses) of
   (DELETE ,[CatIdR iD])         -> return $ CatEP (ToDelete iD)
   (POST   ,[CommentR])          -> return $ CommentEP ToPost
   (GET    ,[CommentR])          -> return $ CommentEP ToGetAll
+  (GET    ,[CommentIdR iD])     -> return $ CommentEP (ToGet iD)
   (PUT    ,[CommentIdR iD])     -> return $ CommentEP (ToPut iD)
   (DELETE ,[CommentIdR iD])     -> return $ CommentEP (ToDelete iD)
   (POST   ,[DraftR])            -> return $ DraftEP ToPost
