@@ -64,6 +64,13 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getTag handle2 3) []
       eitherResp
         `shouldBe` Left (DatabaseError "Empty output")
+    it "throw DBError to fatal Sql error" $ do
+      state <- execStateT (runExceptT $ deleteTag handle3 7) []
+      reverse state
+        `shouldBe` [LOG DEBUG]
+      eitherResp <- evalStateT (runExceptT $ deleteTag handle3 7) []
+      eitherResp
+        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
   describe "updateTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateTag handle 7 (UpdateTag "food")) []

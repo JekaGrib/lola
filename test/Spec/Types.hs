@@ -5,8 +5,9 @@ module Spec.Types where
 
 import Logger
 import Spec.Auth.Types
-import Spec.Exist.Types
-import Spec.Tag.Types
+import Spec.Exist.Types (ExistMock)
+import Spec.Tag.Types (TagMock)
+import Spec.Picture.Types (PicMock)
 
 data MockAction
   = LOG Priority
@@ -15,6 +16,7 @@ data MockAction
   | TRANSACTIONunROLL
   | AuthMock AuthMock
   | ExistMock ExistMock
+  | PicMock PicMock
   | TagMock TagMock
   deriving (Eq, Show)
 

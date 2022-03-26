@@ -44,9 +44,10 @@ handle2 = handle {selectTagNames = selectTagNamesTest []}
 handle3 :: Handle (StateT [MockAction] IO)
 handle3 =
   handle
-    { insertReturnTag = insertReturnTagTestEx,
-      updateDbTag = updateDbTagTestEx,
-      deleteDbTag = deleteDbTagTestEx
+    { selectTagNames = selectTagNamesTestEx
+    , insertReturnTag = insertReturnTagTestEx
+    , updateDbTag = updateDbTagTestEx
+    , deleteDbTag = deleteDbTagTestEx
     }
 
 handle4 :: Handle (StateT [MockAction] IO)
@@ -87,6 +88,9 @@ insertReturnTagTest :: TagName -> StateT [MockAction] IO TagId
 insertReturnTagTest tagName = do
   modify (TagMock (InsertReturnTag tagName) :)
   return 14
+
+selectTagNamesTestEx :: TagId -> StateT [MockAction] IO [TagName]
+selectTagNamesTestEx _ = throwSqlEx
 
 deleteDbTagTestEx :: TagId -> StateT [MockAction] IO ()
 deleteDbTagTestEx _ = throwSqlEx

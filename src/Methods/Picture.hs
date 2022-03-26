@@ -33,8 +33,8 @@ data Handle m = Handle
   { hConf :: Config,
     hLog :: LogHandle m,
     selectPicBS :: PictureId -> m [ByteString],
-    insertRetPicBS :: ByteString -> m Id,
-    goToUrl :: HT.Request -> m (HT.Response BSL.ByteString),
+    insertRetPicBS :: ByteString -> m PictureId,
+    goToUrl :: Text -> m BSL.ByteString,
     hAuth :: Methods.Common.Auth.Handle m,
     hExist :: Methods.Common.Exist.Handle m
   }
@@ -47,7 +47,7 @@ makeH conf logH =
         logH
         (selectPicBS' conn)
         (insertRetPicBS' conn)
-        HT.httpLBS
+        goToUrl'
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
@@ -85,9 +85,13 @@ loadPicture h@Handle {..} (LoadPicture picUrlParam) = do
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic Handle {..} url = do
-  res <- lift (goToUrl . fromString . unpack $ url) `catch` (\e -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
-  let lbs = HT.getResponseBody res
+  lbs <- lift (goToUrl url) `catch` (\e -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
   let sbs = BSL.toStrict lbs
   case decodeImage sbs of
     Right _ -> return lbs
     Left _ -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url
+
+goToUrl' :: Text -> IO BSL.ByteString
+goToUrl' url = do
+  res <- HT.httpLBS . fromString . unpack $ url 
+  return (HT.getResponseBody res)
