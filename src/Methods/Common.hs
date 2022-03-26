@@ -42,14 +42,14 @@ textHeader :: Header
 textHeader = ("Content-Type", "text/html")
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
-okHelper toJ = return $ ResponseInfo status200 [jsonHeader] (encode $ toJ)
+okHelper toJ = return $ ResponseInfo status200 [jsonHeader] $ encode toJ
 
 ok201Helper :: (MonadCatch m) => Config -> String -> ExceptT ReqError m ResponseInfo
 ok201Helper conf str = return $ ResponseInfo status201 [textHeader,(hLocation,url)] "Status 201 Created"
   where url = makeMyUrl conf str
 
 ok201JsonHelper :: (MonadCatch m, ToJSON a) => Config -> String -> a -> ExceptT ReqError m ResponseInfo
-ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader,(hLocation,url)] (encode $ toJ)
+ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader,(hLocation,url)] $ encode toJ
   where url = makeMyUrl conf str
 
 ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo

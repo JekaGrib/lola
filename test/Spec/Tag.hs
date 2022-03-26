@@ -52,7 +52,7 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createTag handle3 (CreateTag "cats")) []
       eitherResp
         `shouldBe` 
-          (Left (DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}"))
+          (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
   describe "getTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getTag handle 3) []
@@ -99,7 +99,7 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ updateTag handle3 7 (UpdateTag "food")) []
       eitherResp
         `shouldBe` 
-          (Left (DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}"))
+          (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
   describe "deleteTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteTag handle 7 ) []
@@ -118,7 +118,7 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deleteTag handle3 7 ) []
       eitherResp
         `shouldBe` 
-          (Left (DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}"))
+          (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ deleteTag handle4 7 ) []
       reverse state
@@ -127,7 +127,7 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deleteTag handle4 7 ) []
       eitherResp
         `shouldBe` 
-          (Left (DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}"))
+          (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
   describe "workWithTags (ToPost)" $ do
     it "work with valid token" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 ToPost ) []
@@ -213,3 +213,12 @@ testTag = hspec $ do
       eitherResp
         `shouldBe` 
           (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+  describe "workWithTags (ToPostId)" $ 
+    it "throw 404 Error " $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToPostId 4) ) []
+      reverse state
+        `shouldBe` []
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToPostId 4) ) []
+      eitherResp
+        `shouldBe` 
+         Left (ResourseNotExistError "Wrong method for tags resourse: ToPostId 4")

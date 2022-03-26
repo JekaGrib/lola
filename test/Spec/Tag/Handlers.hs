@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Tag.Handlers where
 
 import Spec.Conf (defConf)
-import Control.Monad.Catch (SomeException, catchAll, catch, throwM,bracket_,mask_,mask,onError,onException,bracketOnError)
+import Control.Monad.Catch (throwM)
 import Spec.Log (handLogDebug)
 import Methods.Tag
 import Types
@@ -58,35 +58,9 @@ handle4 =
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do
   modify (TRANSACTIONOPEN :)
-  a <- catchTransactionE m
+  a <- m
   modify (TRANSACTIONCLOSE :)
   return a
-
-withTransactionDBTest9 :: StateT [MockAction] IO a -> StateT [MockAction] IO a
-withTransactionDBTest9 m = maskMy m
-
-maskMy :: StateT [MockAction] IO a ->  StateT [MockAction] IO a
-maskMy m = mask $ \restore -> do
-  modify (TRANSACTIONOPEN :)
-  a <- restore m  `onException`  (modify (TRANSACTIONunROLL :))
-  modify (TRANSACTIONCLOSE :)
-  return a
-
-
-withTransactionDBTest1 :: StateT [MockAction] IO a -> StateT [MockAction] IO a
-withTransactionDBTest1 m = do
-  a <- bracketOnError 
-    (modify (TRANSACTIONOPEN :))
-    (\_ -> (modify (TRANSACTIONunROLL :)))
-    (\_ -> m ) 
-  modify (TRANSACTIONCLOSE :)
-  return a
-
-catchTransactionE :: StateT [MockAction] IO a -> StateT [MockAction] IO a
-catchTransactionE m = 
-  m `catchAll` (\e -> do
-    modify (TRANSACTIONunROLL :)
-    throwM e)
 
 selectTagNamesTest :: [TagName] -> TagId -> StateT [MockAction] IO [TagName]
 selectTagNamesTest xs tagId = do
@@ -106,7 +80,6 @@ deleteDbTagTest tagId =
 deleteDbTagForDraftsTest :: TagId  -> StateT [MockAction] IO ()
 deleteDbTagForDraftsTest tagId = 
   modify (TagMock (DeleteDbTagForDrafts tagId) :)
-  
   
 
 deleteDbTagForPostsTest :: TagId  -> StateT [MockAction] IO ()
