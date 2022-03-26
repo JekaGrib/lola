@@ -1,15 +1,14 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Methods.Common.Exist.UncheckedExId  where
+module Methods.Common.Exist.UncheckedExId where
 
 import Types
 
-
-data UncheckedExId =
-  AuthorId AuthorId
+data UncheckedExId
+  = AuthorId AuthorId
   | CategoryId CategoryId
   | CommentId CommentId
   | DraftId DraftId
@@ -18,7 +17,6 @@ data UncheckedExId =
   | TagId TagId
   | UserId UserId
   deriving (Eq, Show)
-     
 
 class ToPretty a where
   toPretty :: a -> String
@@ -32,7 +30,3 @@ instance ToPretty UncheckedExId where
   toPretty (PostId iD) = "post_id: " ++ show iD
   toPretty (TagId iD) = "tag_id: " ++ show iD
   toPretty (UserId iD) = "user_id: " ++ show iD
-
-
-
-

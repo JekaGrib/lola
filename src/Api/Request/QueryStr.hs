@@ -5,20 +5,19 @@
 
 module Api.Request.QueryStr where
 
-
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.List (delete,elemIndex)
+import Data.List (delete, elemIndex)
 import Data.Text (Text, unpack)
+import Data.Time.Calendar (Day)
+import Methods.Common.Exist (CheckExist (..), Handle)
+import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types.URI (QueryText)
 import Oops (ReqError (..))
-import TryRead (tryReadId, tryReadPage,tryReadSortOrd,tryReadDay,tryReadIdArray)
+import TryRead (tryReadDay, tryReadId, tryReadIdArray, tryReadPage, tryReadSortOrd)
 import Types
-import Methods.Common.Exist (Handle, CheckExist(..))
-import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Data.Time.Calendar ( Day)
-import Control.Monad.Catch (MonadCatch)
 
-checkQStr :: (MonadCatch m,ParseQueryStr a,CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
+checkQStr :: (MonadCatch m, ParseQueryStr a, CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
 checkQStr h qStr = do
   a <- parseQueryStr qStr
   checkExist h a
@@ -63,7 +62,6 @@ instance CheckExist CreateUser where
   checkExist h (CreateUser _ _ _ picId) =
     checkExist h (PictureId picId)
 
-
 data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId}
   deriving (Show)
 
@@ -93,8 +91,7 @@ instance CheckExist CreateAuthor where
   checkExist h (CreateAuthor usId _) =
     checkExist h (UserId usId)
 
-
-data UpdateAuthor = UpdateAuthor { user_idUA :: Id, author_infoUA :: Text}
+data UpdateAuthor = UpdateAuthor {user_idUA :: Id, author_infoUA :: Text}
   deriving (Show)
 
 instance ParseQueryStr UpdateAuthor where
@@ -107,12 +104,12 @@ instance CheckExist UpdateAuthor where
   checkExist h (UpdateAuthor usId _) =
     checkExist h (UserId usId)
 
-data CreateCategory = 
-  CreateCategory Text (Maybe Id)
+data CreateCategory
+  = CreateCategory Text (Maybe Id)
   deriving (Show)
 
 instance ParseQueryStr CreateCategory where
-  parseQueryStr qStr = 
+  parseQueryStr qStr =
     CreateCategory
       <$> parseTxtParam qStr 50 "category_name"
       <*> parseMaybeIdParam qStr "super_category_id"
@@ -169,10 +166,10 @@ instance ParseQueryStr GetDrafts where
 instance CheckExist GetDrafts where
   checkExist _ _ = return ()
 
-data GetPosts = 
-  GetPosts Page GetPostsF GetPostsOrd
+data GetPosts
+  = GetPosts Page GetPostsF GetPostsOrd
   deriving (Show)
-   
+
 instance ParseQueryStr GetPosts where
   parseQueryStr qStr =
     GetPosts
@@ -181,39 +178,38 @@ instance ParseQueryStr GetPosts where
       <*> parseQueryStr qStr
 
 instance CheckExist GetPosts where
-  checkExist h (GetPosts _ gpF _) = 
+  checkExist h (GetPosts _ gpF _) =
     checkExist h gpF
 
-
-data GetPostsF = 
-  GetPostsF 
-    (Maybe Day) 
-    (Maybe Day) 
-    (Maybe Day) 
-    (Maybe TagId)
-    (Maybe [TagId])
-    (Maybe [TagId])
-    (Maybe Text)
-    (Maybe Text)
-    (Maybe Text)
-    (Maybe AuthorName)
-    (Maybe CategoryId)
+data GetPostsF
+  = GetPostsF
+      (Maybe Day)
+      (Maybe Day)
+      (Maybe Day)
+      (Maybe TagId)
+      (Maybe [TagId])
+      (Maybe [TagId])
+      (Maybe Text)
+      (Maybe Text)
+      (Maybe Text)
+      (Maybe AuthorName)
+      (Maybe CategoryId)
   deriving (Show)
 
 instance ParseQueryStr GetPostsF where
   parseQueryStr qStr =
     GetPostsF
-      <$> parseMaybeDayParam      qStr "created_at"
-      <*> parseMaybeDayParam      qStr "created_at_lt"
-      <*> parseMaybeDayParam      qStr "created_at_gt"
-      <*> parseMaybeIdParam       qStr "tag"
-      <*> parseMaybeIdArrayParam  qStr "tags_in"
-      <*> parseMaybeIdArrayParam  qStr "tags_all"
-      <*> parseMaybeTxtParam   qStr 50 "name_in"
-      <*> parseMaybeTxtParam   qStr 50 "text_in"
-      <*> parseMaybeTxtParam   qStr 50 "everywhere_in"
-      <*> parseMaybeTxtParam   qStr 50 "author_name"
-      <*> parseMaybeIdParam       qStr "category_id"
+      <$> parseMaybeDayParam qStr "created_at"
+      <*> parseMaybeDayParam qStr "created_at_lt"
+      <*> parseMaybeDayParam qStr "created_at_gt"
+      <*> parseMaybeIdParam qStr "tag"
+      <*> parseMaybeIdArrayParam qStr "tags_in"
+      <*> parseMaybeIdArrayParam qStr "tags_all"
+      <*> parseMaybeTxtParam qStr 50 "name_in"
+      <*> parseMaybeTxtParam qStr 50 "text_in"
+      <*> parseMaybeTxtParam qStr 50 "everywhere_in"
+      <*> parseMaybeTxtParam qStr 50 "author_name"
+      <*> parseMaybeIdParam qStr "category_id"
 
 instance CheckExist GetPostsF where
   checkExist h (GetPostsF _ _ _ maybTag maybTagsIn maybTagsAll _ _ _ _ maybCat) = do
@@ -222,12 +218,12 @@ instance CheckExist GetPostsF where
     checkExist h $ (fmap . fmap) TagId maybTagsAll
     checkExist h $ fmap CategoryId maybCat
 
-data GetPostsOrd = 
-  GetPostsOrd 
-    (Maybe (SortOrd,Int))
-    (Maybe (SortOrd,Int))
-    (Maybe (SortOrd,Int))
-    (Maybe (SortOrd,Int))
+data GetPostsOrd
+  = GetPostsOrd
+      (Maybe (SortOrd, Int))
+      (Maybe (SortOrd, Int))
+      (Maybe (SortOrd, Int))
+      (Maybe (SortOrd, Int))
   deriving (Show)
 
 instance ParseQueryStr GetPostsOrd where
@@ -337,7 +333,7 @@ parseMaybeDayParam qStr paramKey = do
       return (Just day)
     Nothing -> return Nothing
 
-parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd,SortPriority))
+parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd, SortPriority))
 parseMaybeSortOrdParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
@@ -374,4 +370,4 @@ checkLength leng paramKey txt = case splitAt leng (unpack txt) of
   _ -> throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
 
 findParamIndex :: QueryText -> QueryParamKey -> Maybe Int
-findParamIndex qStr paramKey = elemIndex paramKey . fmap fst  $ qStr
+findParamIndex qStr paramKey = elemIndex paramKey . fmap fst $ qStr

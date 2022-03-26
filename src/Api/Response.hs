@@ -6,9 +6,8 @@ module Api.Response where
 
 import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), object, pairs)
 import Data.Text (Text)
+import Data.Time.Calendar (Day)
 import Types
-import Data.Time.Calendar ( Day)
-
 
 data UserResponse = UserResponse
   { user_id :: UserId,
@@ -50,8 +49,6 @@ instance ToJSON TokenResponse where
     object ["token" .= a]
   toEncoding (TokenResponse a) =
     pairs ("token" .= a)
-
-
 
 data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text} deriving (Eq, Show)
 

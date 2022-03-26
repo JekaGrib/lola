@@ -4,17 +4,16 @@
 
 module Types where
 
-import Data.Text (Text)
 --import Data.Map as Map
-import Database.PostgreSQL.Simple.ToField (ToField(..))
-import Database.PostgreSQL.Simple.Types (Binary,PGArray,In)
-import Data.Int (Int64)
-import Data.Time.Calendar ( Day)
-import Data.ByteString (ByteString)
 
+import Data.ByteString (ByteString)
+import Data.Int (Int64)
+import Data.Text (Text)
+import Data.Time.Calendar (Day)
+import Database.PostgreSQL.Simple.ToField (ToField (..))
+import Database.PostgreSQL.Simple.Types (Binary, In, PGArray)
 
 type Id = Int64
-
 
 type UserId = Id
 
@@ -34,7 +33,6 @@ type SubCategoryId = Id
 
 type SuperCatId = Id
 
-
 type TagId = Id
 
 type QueryParamKey = Text
@@ -49,16 +47,13 @@ type Table = String
 
 type JoinTable = String
 
-
 type DbParamKey = String
 
 type DbKey = String
 
 type DbReturnKey = DbKey
 
-
 type Predicate = String
-
 
 type DbReturnParamKey = DbParamKey
 
@@ -80,8 +75,8 @@ type ReturnParam = Param
 
 type CheckParam = Param
 
-
 type ResourseIdText = Text
+
 type ResourseName = Text
 
 type Page = Int
@@ -92,13 +87,13 @@ type AdminBool = Bool
 
 type TokenKey = String
 
-
 --type WhereMap = Map.Map DbParamKey DbParamValue
 
 type LogKey = String
-type LogValue = String
-type LogPair = (LogKey,LogValue)
 
+type LogValue = String
+
+type LogPair = (LogKey, LogValue)
 
 type DbTxtValue = Text
 
@@ -119,15 +114,15 @@ type Pwd = DbTxtValue
 type SortPriority = Int
 
 data SortOrd = ASC | DESC
-  deriving (Eq,Show)
+  deriving (Eq, Show)
 
-data DbValue = 
-  Txt Text 
-  | Num Int 
-  | IdArray (PGArray Id) 
-  | IdIn (In [Id]) 
-  | Id Id 
-  | Day Day 
+data DbValue
+  = Txt Text
+  | Num Int
+  | IdArray (PGArray Id)
+  | IdIn (In [Id])
+  | Id Id
+  | Day Day
   | Bool Bool
   | BS (Binary ByteString)
   | Str String
@@ -143,8 +138,6 @@ instance Show DbValue where
   show (BS a) = show a
   show (Str a) = show a
 
-
-
 instance ToField DbValue where
   toField (Num a) = toField a
   toField (Txt a) = toField a
@@ -156,20 +149,17 @@ instance ToField DbValue where
   toField (BS a) = toField a
   toField (Str a) = toField a
 
+data InsertUser
+  = InsertUser Text Text Text PictureId Day AdminBool TokenKey
 
+data InsertDraft
+  = InsertDraft (Maybe PostId) AuthorId Text CategoryId Text PictureId
 
+data InsertPost
+  = InsertPost AuthorId Text Day CategoryId Text PictureId
 
-data InsertUser =
-  InsertUser Text Text Text PictureId Day AdminBool TokenKey
+data UpdateDbDraft
+  = UpdateDbDraft Text CategoryId Text PictureId
 
-data InsertDraft =
-  InsertDraft (Maybe PostId) AuthorId Text CategoryId Text PictureId 
-
-data InsertPost =
-  InsertPost AuthorId Text Day CategoryId Text PictureId 
-
-data UpdateDbDraft =
-  UpdateDbDraft Text CategoryId Text PictureId
-
-data UpdateDbPost =
-  UpdateDbPost Text CategoryId Text PictureId
+data UpdateDbPost
+  = UpdateDbPost Text CategoryId Text PictureId

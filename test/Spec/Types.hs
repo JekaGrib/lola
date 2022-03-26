@@ -2,24 +2,24 @@
 {-# OPTIONS_GHC -Werror #-}
 
 module Spec.Types where
+
+import Logger
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Tag.Types
 
-import Logger
-
-data MockAction = 
-  LOG Priority
+data MockAction
+  = LOG Priority
   | TRANSACTIONOPEN
   | TRANSACTIONCLOSE
   | TRANSACTIONunROLL
-  | AuthMock  AuthMock 
-  | ExistMock ExistMock 
-  | TagMock   TagMock
+  | AuthMock AuthMock
+  | ExistMock ExistMock
+  | TagMock TagMock
   deriving (Eq, Show)
 
-{-data MockAction = 
-  LOG Priority 
+{-data MockAction =
+  LOG Priority
   | EXISTCHEK UncheckedExId
   | INSERTDATA Table  DbReturnParamKey  [DbInsertParamKey]  [DbParamValue]
   | SELECTDATA Table  [DbSelectParamKey]  Where  [DbParamValue]
@@ -27,7 +27,7 @@ data MockAction =
   | DELETEDATA Table  Where  [DbParamValue]
   | INSERTMANYDATA Table  [DbInsertParamKey]  [(DbNumValue, DbNumValue)]
   | SELECTLIMITDATA Table  OrderBy  Page  Limit  [DbSelectParamKey]  Where  [DbParamValue]  [FilterArg] [SortArg]
-  | TRANSACTIONOPEN 
+  | TRANSACTIONOPEN
   | TRANSACTIONCLOSE
   | TRANSACTIONunROLL
   deriving (Eq, Show)-}

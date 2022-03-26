@@ -5,11 +5,11 @@
 
 module Psql.Methods.Common.DeleteMany where
 
-import Types
-import Psql.Methods.Common
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Select (Select(..),Where(..))
 import Database.PostgreSQL.Simple (Connection)
+import Psql.Methods.Common
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Select (Select (..), Where (..))
+import Types
 
 selectDraftsForPost' :: Connection -> PostId -> IO [DraftId]
 selectDraftsForPost' conn postId = do
@@ -53,5 +53,3 @@ deleteDbDrafts' conn draftIds = do
   let toWhPair draftId = WherePair "draft_id=?" (Id draftId)
   let wh = WhereOr $ map toWhPair draftIds
   deleteFromDb' conn (Delete "drafts" wh)
-
-

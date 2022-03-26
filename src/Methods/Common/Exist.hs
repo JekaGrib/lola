@@ -1,22 +1,22 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.Exist where
 
-import Methods.Common
-import Control.Monad.Trans.Except (ExceptT,throwE)
-import Oops (ReqError(..))
-import Control.Monad.Catch (MonadCatch)
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
+import Control.Monad.Catch (MonadCatch)
+import Control.Monad.Trans.Except (ExceptT, throwE)
+import Methods.Common
+import Methods.Common.Exist.UncheckedExId
+import Oops (ReqError (..))
 import Psql.Methods.Common.Exist
-import Methods.Common.Exist.UncheckedExId 
 
 data Handle m = Handle
-  { hConf :: Config
-  , isExist :: UncheckedExId -> m Bool
+  { hConf :: Config,
+    isExist :: UncheckedExId -> m Bool
   }
 
 makeH :: Config -> Handle IO
@@ -26,21 +26,23 @@ makeH conf =
         conf
         (isExist' conn)
 
-
 isExistResourseE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
 isExistResourseE h iD = do
   isEx <- catchDbErrE $ isExist h iD
-  unless isEx $
-    throwE $ ResourseNotExistError $ toPretty iD ++ " doesn`t exist"
-
+  unless isEx
+    $ throwE
+    $ ResourseNotExistError
+    $ toPretty iD ++ " doesn`t exist"
 
 isExistE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
 isExistE h iD = do
   isEx <- catchDbErrE $ isExist h iD
-  unless isEx $
-    throwE $ BadReqError $ toPretty iD ++ " doesn`t exist"
+  unless isEx
+    $ throwE
+    $ BadReqError
+    $ toPretty iD ++ " doesn`t exist"
 
-class CheckExist a where 
+class CheckExist a where
   checkExist :: (MonadCatch m) => Handle m -> a -> ExceptT ReqError m ()
 
 instance CheckExist UncheckedExId where
@@ -75,7 +77,7 @@ toWherePair (PostId auId) = WherePair "post_id=?" (Id auId)
 toWherePair (TagId auId) = WherePair "tag_id=?" (Id auId)
 toWherePair (UserId auId) = WherePair "user_id=?" (Id auId)
 
-class ToTable a where 
+class ToTable a where
   toTable :: a -> Table
 
 toTable (AuthorId auId) =  "authors"

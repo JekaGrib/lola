@@ -1,5 +1,5 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
@@ -11,16 +11,16 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
 import Logger (LogHandle (..))
 import Methods.Common
-import Psql.Selecty (Cat (..))
 import Oops (ReqError)
-import Types
 import Psql.Methods.Common.MakeCatResp
+import Psql.Selecty (Cat (..))
+import Types
 
 data Handle m = Handle
-  { hConf :: Config
-  , hLog :: LogHandle m
-  , selectCats :: CategoryId -> m [Cat]
-  , selectSubCats :: CategoryId -> m [SubCategoryId]
+  { hConf :: Config,
+    hLog :: LogHandle m,
+    selectCats :: CategoryId -> m [Cat],
+    selectSubCats :: CategoryId -> m [SubCategoryId]
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -33,7 +33,7 @@ makeH conf logH =
         (selectSubCats' conn)
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
-makeCatResp h@Handle{..} catId = do
+makeCatResp h@Handle {..} catId = do
   Cat catName superCatId <- catchOneSelE hLog $ selectCats catId
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
@@ -43,5 +43,5 @@ makeCatResp h@Handle{..} catId = do
       return $ SubCatResponse {subCat_id = catId, subCat_name = catName, one_level_sub_categories = subCatsIds, super_category = superCatResp}
 
 findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
-findOneLevelSubCats Handle{..} catId =
+findOneLevelSubCats Handle {..} catId =
   catchSelE hLog $ selectSubCats catId

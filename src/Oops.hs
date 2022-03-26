@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr,hideResourseNotExistErr) where
+module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)
@@ -10,18 +10,17 @@ import Control.Monad.Trans.Except (ExceptT, catchE, throwE)
 import Database.PostgreSQL.Simple (FormatError, QueryError, ResultError, SqlError)
 import Logger (LogHandle (..), logWarning)
 
-data ReqError = 
-  SecretError String 
-  | DatabaseError String 
-  | SecretLogInError String 
-  | SecretTokenError String 
+data ReqError
+  = SecretError String
+  | DatabaseError String
+  | SecretLogInError String
+  | SecretTokenError String
   | BadReqError String
   | ResourseNotExistError String
   | NotImplementedError String
   | UriTooLongError String
   | ForbiddenError String
   | ReqBodyTooLargeError String
-
   deriving (Eq, Show)
 
 data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException

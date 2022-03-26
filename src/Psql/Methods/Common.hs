@@ -7,18 +7,16 @@ import Control.Monad.Catch (MonadCatch, throwM)
 import Data.ByteString (ByteString)
 import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
 import Database.PostgreSQL.Simple.FromField (FromField)
-import Oops (UnexpectedDbOutPutException(..))
-import Types
-import Psql.ToQuery (toQ,toVal)
+import Oops (UnexpectedDbOutPutException (..))
+import Psql.Selecty (Selecty)
+import Psql.ToQuery (toQ, toVal)
 import Psql.ToQuery.Delete (Delete)
 import Psql.ToQuery.Exists (Exists)
-import Psql.ToQuery.Insert (InsertRet,InsertMany(..),insManyVal)
-import Psql.ToQuery.SelectLimit (SelectLim)
+import Psql.ToQuery.Insert (InsertMany (..), InsertRet, insManyVal)
 import Psql.ToQuery.Select (Select)
+import Psql.ToQuery.SelectLimit (SelectLim)
 import Psql.ToQuery.Update (Update)
-import Psql.Selecty (Selecty)
-
-
+import Types
 
 select' :: (Selecty a) => Connection -> Select -> IO [a]
 select' conn sel =
@@ -35,7 +33,7 @@ selectBS' conn sel = do
   return $ fmap (fromBinary . fromOnly) xs
 
 selectLimit' :: (Selecty a) => Connection -> SelectLim -> IO [a]
-selectLimit' conn sel = 
+selectLimit' conn sel =
   query conn (toQ sel) (toVal sel)
 
 updateInDb' :: Connection -> Update -> IO ()
@@ -59,7 +57,6 @@ insertReturn' conn insRet = do
   onlyXs <- query conn (toQ insRet) (toVal insRet)
   Only num <- checkOneM onlyXs
   return num
-
 
 insertMany' :: Connection -> InsertMany -> IO ()
 insertMany' conn insMany@(InsertMany _ pair) = do

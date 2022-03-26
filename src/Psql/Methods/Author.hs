@@ -6,14 +6,14 @@
 module Psql.Methods.Author where
 
 import Database.PostgreSQL.Simple (Connection)
-import Psql.Selecty (Author (..))
-import Types
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Exists (Exists(..))
-import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
-import Psql.ToQuery.Select (Select(..),Where(..))
-import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
+import Psql.Selecty (Author (..))
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Exists (Exists (..))
+import Psql.ToQuery.Insert (InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Select (Select (..), Where (..))
+import Psql.ToQuery.Update (Set (..), Update (..))
+import Types
 
 selectDraftsForAuthor' :: Connection -> AuthorId -> IO [DraftId]
 selectDraftsForAuthor' conn auId = do
@@ -35,7 +35,7 @@ updateDbAuthor' conn usId auInfo auId = do
   let set1 = SetPair "user_id=?" (Id usId)
   let set2 = SetPair "author_info=?" (Txt auInfo)
   let wh = WherePair "author_id=?" (Id auId)
-  updateInDb' conn (Update "authors" [set1,set2] wh)
+  updateInDb' conn (Update "authors" [set1, set2] wh)
 
 updateDbAuthorForPosts' :: Connection -> AuthorId -> AuthorId -> IO ()
 updateDbAuthorForPosts' conn auIdNew auId = do
@@ -55,8 +55,7 @@ isUserAuthor' conn usId = do
 
 insertReturnAuthor' :: Connection -> UserId -> AuthorInfo -> IO AuthorId
 insertReturnAuthor' conn usId auInfo = do
-  let insPair1 = InsertPair "user_id"     (Id  usId)
-  let insPair2 = InsertPair "author_info" (Txt  auInfo)
-  let insPairs = [insPair1,insPair2]
+  let insPair1 = InsertPair "user_id" (Id usId)
+  let insPair2 = InsertPair "author_info" (Txt auInfo)
+  let insPairs = [insPair1, insPair2]
   insertReturn' conn (InsertRet "authors" insPairs "author_id")
-

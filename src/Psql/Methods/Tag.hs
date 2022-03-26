@@ -1,6 +1,3 @@
-
-
-
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -9,12 +6,12 @@
 module Psql.Methods.Tag where
 
 import Database.PostgreSQL.Simple (Connection)
-import Types
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
-import Psql.ToQuery.Select (Select(..),Where(..))
-import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Insert (InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Select (Select (..), Where (..))
+import Psql.ToQuery.Update (Set (..), Update (..))
+import Types
 
 selectTagNames' :: Connection -> TagId -> IO [TagName]
 selectTagNames' conn tagId = do
@@ -46,4 +43,3 @@ insertReturnTag' :: Connection -> TagName -> IO TagId
 insertReturnTag' conn tagName = do
   let insPair = InsertPair "tag_name" (Txt tagName)
   insertReturn' conn (InsertRet "tags" [insPair] "tag_id")
-

@@ -16,10 +16,10 @@ import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
 import Logger
-import Psql.ToQuery 
-import Psql.ToQuery.Select 
-import Psql.ToQuery.Exists
 import Network.Wai.Handler.Warp (Settings, defaultSettings, setHost, setPort)
+import Psql.ToQuery
+import Psql.ToQuery.Exists
+import Psql.ToQuery.Select
 import Types
 
 data Config = Config
@@ -219,20 +219,20 @@ inputIdOr valueName action = do
   input <- getLine
   case map toUpper input of
     "NEW" -> action
-    _ -> case reads input  of
-      [(a , "")] -> 
+    _ -> case reads input of
+      [(a, "")] ->
         checkBigIntOr a . inputIdOr valueName $ action
       _ -> inputIdOr valueName action
 
-inputOrCreateDefCatId,inputOrCreateDefPicId :: Connection -> IO Id
-inputOrCreateDefCatId  conn          = inputIdOr "defaultCategoryId" (createNewDefCat conn)
-inputOrCreateDefPicId  conn          = inputIdOr "defaultPictureId"  (createNewDefPic conn)
+inputOrCreateDefCatId, inputOrCreateDefPicId :: Connection -> IO Id
+inputOrCreateDefCatId conn = inputIdOr "defaultCategoryId" (createNewDefCat conn)
+inputOrCreateDefPicId conn = inputIdOr "defaultPictureId" (createNewDefPic conn)
 
 inputOrCreateDefUsId :: Connection -> PictureId -> IO UserId
-inputOrCreateDefUsId   conn defPicId = inputIdOr "defaultUserId"     (createNewDefUser conn defPicId)
+inputOrCreateDefUsId conn defPicId = inputIdOr "defaultUserId" (createNewDefUser conn defPicId)
 
 inputOrCreateDefAuthId :: Connection -> UserId -> IO AuthorId
-inputOrCreateDefAuthId conn defUsId  = inputIdOr "defaultAuthorId"   (createNewDefAuthor conn defUsId)
+inputOrCreateDefAuthId conn defUsId = inputIdOr "defaultAuthorId" (createNewDefAuthor conn defUsId)
 
 parseConfDefPicId :: C.Config -> Connection -> IO PictureId
 parseConfDefPicId conf conn = do
@@ -348,7 +348,7 @@ checkExistId conn table where' value ifTrue ifFalse = do
       putStrLn $ (where' \\ "=?") ++ ": " ++ show value ++ " doesn`t exist"
       ifFalse
     _ -> do
-      putStrLn $ "Something in DB went wrong with " ++ (where' \\ "=?") ++ ": " ++ show  value
+      putStrLn $ "Something in DB went wrong with " ++ (where' \\ "=?") ++ ": " ++ show value
       ifFalse
 
 checkLimitOr :: Integer -> IO Integer -> IO Page

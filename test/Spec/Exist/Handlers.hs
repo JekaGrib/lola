@@ -4,19 +4,18 @@
 
 module Spec.Exist.Handlers where
 
+import Control.Monad.State (StateT (..), modify)
+import Methods.Common.Exist (Handle (..))
+import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Spec.Conf (defConf)
-import Control.Monad.State (StateT (..),modify)
-import Spec.Types (MockAction (..))
 import Spec.Exist.Types
-import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Methods.Common.Exist (Handle(..))
+import Spec.Types (MockAction (..))
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
   Handle
     defConf
     isExistTest
-
 
 isExistTest :: UncheckedExId -> StateT [MockAction] IO Bool
 isExistTest unchId@(AuthorId x) = do
@@ -43,4 +42,3 @@ isExistTest unchId@(TagId x) = do
 isExistTest unchId@(UserId x) = do
   modify (ExistMock (IsExist unchId) :)
   return (x <= 100)
-

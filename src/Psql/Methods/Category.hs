@@ -6,13 +6,12 @@
 module Psql.Methods.Category where
 
 import Database.PostgreSQL.Simple (Connection)
-import Types
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
-import Psql.ToQuery.Select (Where(..))
-import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
-
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Insert (InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Select (Where (..))
+import Psql.ToQuery.Update (Set (..), Update (..))
+import Types
 
 updateDbCat' :: Connection -> CatName -> CategoryId -> IO ()
 updateDbCat' conn catName catId = do
@@ -25,7 +24,7 @@ updateDbSubCat' conn catName superCatId catId = do
   let set1 = SetPair "category_name=?" (Txt catName)
   let set2 = SetPair "super_category_id=?" (Id superCatId)
   let wh = WherePair "category_id=?" (Id catId)
-  updateInDb' conn (Update "categories" [set1,set2] wh)
+  updateInDb' conn (Update "categories" [set1, set2] wh)
 
 updateDbCatsForPosts' :: Connection -> CategoryId -> [CategoryId] -> IO ()
 updateDbCatsForPosts' conn newCatId catIds = do
@@ -56,5 +55,4 @@ insertReturnSubCat' :: Connection -> CatName -> SuperCatId -> IO CategoryId
 insertReturnSubCat' conn catName superCatId = do
   let insPair1 = InsertPair "category_name" (Txt catName)
   let insPair2 = InsertPair "super_category_id" (Id superCatId)
-  insertReturn' conn (InsertRet "categories" [insPair1,insPair2] "category_id")
-
+  insertReturn' conn (InsertRet "categories" [insPair1, insPair2] "category_id")

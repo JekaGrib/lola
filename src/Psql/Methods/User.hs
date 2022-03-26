@@ -5,21 +5,21 @@
 module Psql.Methods.User where
 
 import Database.PostgreSQL.Simple (Connection)
-import Psql.Selecty (User (..),Auth(..))
-import Types
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
-import Psql.ToQuery.Select (Select(..),Where(..))
-import Psql.ToQuery.Update (Update(..),Set(..))
 import Psql.Methods.Common
+import Psql.Selecty (Auth (..), User (..))
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Insert (InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Select (Select (..), Where (..))
+import Psql.ToQuery.Update (Set (..), Update (..))
+import Types
 
 selectUsers' :: Connection -> UserId -> IO [User]
 selectUsers' conn usId = do
   let wh = WherePair "user_id=?" (Id usId)
   select' conn $
-    Select 
+    Select
       ["first_name", "last_name", "user_pic_id", "user_create_date"]
-      "users" 
+      "users"
       wh
 
 selectAuthsForUser' :: Connection -> UserId -> IO [Auth]
@@ -67,13 +67,12 @@ deleteDbAuthor' conn auId = do
 
 insertReturnUser' :: Connection -> InsertUser -> IO UserId
 insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
-  let insPair1 = InsertPair "password"         (Txt  pwd)
-  let insPair2 = InsertPair "first_name"       (Txt  fName)
-  let insPair3 = InsertPair "last_name"        (Txt  lName)
-  let insPair4 = InsertPair "user_pic_id"      (Id   picId)
-  let insPair5 = InsertPair "user_create_date" (Day  day)
-  let insPair6 = InsertPair "admin"            (Bool bool)
-  let insPair7 = InsertPair "token_key"        (Str  tokenKey)
-  let insPairs = [insPair1,insPair2,insPair3,insPair4,insPair5,insPair6,insPair7]
+  let insPair1 = InsertPair "password" (Txt pwd)
+  let insPair2 = InsertPair "first_name" (Txt fName)
+  let insPair3 = InsertPair "last_name" (Txt lName)
+  let insPair4 = InsertPair "user_pic_id" (Id picId)
+  let insPair5 = InsertPair "user_create_date" (Day day)
+  let insPair6 = InsertPair "admin" (Bool bool)
+  let insPair7 = InsertPair "token_key" (Str tokenKey)
+  let insPairs = [insPair1, insPair2, insPair3, insPair4, insPair5, insPair6, insPair7]
   insertReturn' conn (InsertRet "users" insPairs "user_id")
-

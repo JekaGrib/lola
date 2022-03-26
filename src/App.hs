@@ -5,15 +5,17 @@
 
 module App where
 
+import Api.Request.EndPoint (AppMethod (..), EndPoint (..), parseEndPoint)
 import Api.Response (OkInfoResponse (..))
 import Conf (Config (..), reConnectDB)
+import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Data.Aeson (encode)
 import Data.ByteString (ByteString)
-import Data.Text (pack,unpack,Text)
 import Data.List (genericLength)
+import Data.Text (Text, pack, unpack)
 import Logger
 import qualified Methods (Handle, makeH)
 import Methods (hAdm, hAu, hCat, hCom, hDr, hPic, hPost, hTag, hUs)
@@ -21,22 +23,20 @@ import Methods.Admin (workWithAdmin)
 import Methods.Author (workWithAuthors)
 import Methods.Category (workWithCats)
 import Methods.Comment (workWithComms)
-import Methods.Common (ResponseInfo (..),jsonHeader,textHeader)
+import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Draft (workWithDrafts)
 import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
 import Methods.Tag (workWithTags)
-import Methods.User (workWithUsers,workWithLogIn)
-import Network.HTTP.Types (StdMethod,status400,status401,status403, status404,status413,status414,status500,status501,parseMethod,queryToQueryText,QueryText)
-import Network.Wai (Request, Response, ResponseReceived, pathInfo, responseLBS, getRequestBodyChunk,requestBodyLength,RequestBodyLength(..),requestMethod,queryString)
+import Methods.User (workWithLogIn, workWithUsers)
+import Network.HTTP.Types (QueryText, StdMethod, parseMethod, queryToQueryText, status400, status401, status403, status404, status413, status414, status500, status501)
+import Network.Wai (Request, RequestBodyLength (..), Response, ResponseReceived, getRequestBodyChunk, pathInfo, queryString, requestBodyLength, requestMethod, responseLBS)
 import Oops (ReqError (..), logOnErr)
-import Control.Monad (when)
-import Api.Request.EndPoint (EndPoint(..),parseEndPoint,AppMethod(..))
 
 data Handle m = Handle
-  { hLog :: LogHandle m
-  , hMeth :: Methods.Handle m
-  , getBody :: Request -> m ByteString
+  { hLog :: LogHandle m,
+    hMeth :: Methods.Handle m,
+    getBody :: Request -> m ByteString
   }
 
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
@@ -49,8 +49,6 @@ application config handleLog req send = do
   let resInfo = fromE respE
   logDebug (hLog h) $ "Output response: " ++ show resInfo
   send (responseFromInfo resInfo)
-
-
 
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseLBS s h b
@@ -94,12 +92,8 @@ fromE respE = case respE of
   Left (SecretError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status500 [textHeader] "Internal server error"
 
-
-
-
-
 chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
-chooseRespEx h@Handle{..} req = do
+chooseRespEx h@Handle {..} req = do
   lift $ logDebug hLog "Incoming request"
   stdMeth <- pullStdMethod req
   let path = pathInfo req
@@ -109,23 +103,22 @@ chooseRespEx h@Handle{..} req = do
   lift $ logDebug hLog $ "Request not too long: " ++ show req
   endPoint <- parseEndPoint stdMeth path
   case endPoint of
-    AdminEP        -> workWithAdmin   (hAdm hMeth) qStr
-    LogInEP        -> workWithLogIn   (hUs  hMeth) qStr
-    UserEP meth    -> workWithUsers   (hUs  hMeth) qStr meth 
-    AuthorEP meth  -> workWithAuthors (hAu  hMeth) qStr meth 
-    CatEP meth     -> workWithCats    (hCat hMeth) qStr meth 
-    CommentEP meth -> workWithComms (hCom hMeth) qStr meth 
-    TagEP meth     -> workWithTags    (hTag hMeth) qStr meth 
+    AdminEP -> workWithAdmin (hAdm hMeth) qStr
+    LogInEP -> workWithLogIn (hUs hMeth) qStr
+    UserEP meth -> workWithUsers (hUs hMeth) qStr meth
+    AuthorEP meth -> workWithAuthors (hAu hMeth) qStr meth
+    CatEP meth -> workWithCats (hCat hMeth) qStr meth
+    CommentEP meth -> workWithComms (hCom hMeth) qStr meth
+    TagEP meth -> workWithTags (hTag hMeth) qStr meth
     DraftEP ToPost -> do
       body <- pullReqBody h req
       workWithDrafts (hDr hMeth) qStr ToPost body
     DraftEP (ToPut iD) -> do
       body <- pullReqBody h req
       workWithDrafts (hDr hMeth) qStr (ToPut iD) body
-    DraftEP meth   -> workWithDrafts (hDr hMeth) qStr meth ""
-    PostEP meth    -> workWithPosts (hPost hMeth) qStr meth 
-    PictureEP meth -> workWithPics (hPic hMeth) qStr meth 
-
+    DraftEP meth -> workWithDrafts (hDr hMeth) qStr meth ""
+    PostEP meth -> workWithPosts (hPost hMeth) qStr meth
+    PictureEP meth -> workWithPics (hPic hMeth) qStr meth
 
 pullStdMethod :: (MonadCatch m) => Request -> ExceptT ReqError m StdMethod
 pullStdMethod req = do
@@ -143,19 +136,19 @@ checkPathLength path =
 checkPathTextLength :: (Monad m) => Text -> ExceptT ReqError m ()
 checkPathTextLength txt = case splitAt 20 (unpack txt) of
   (_, []) -> return ()
-  (x,_) -> throwE $ UriTooLongError $ "Request path part too long: " ++ show x ++ "..."
+  (x, _) -> throwE $ UriTooLongError $ "Request path part too long: " ++ show x ++ "..."
 
 checkLengthQStr :: (MonadCatch m) => QueryText -> ExceptT ReqError m ()
-checkLengthQStr qStr = 
+checkLengthQStr qStr =
   case drop 12 qStr of
     [] -> when ((sum . map lengthQText $ qStr) > 600) $ throwE $ UriTooLongError "Query string too long."
     _ -> throwE $ UriTooLongError "Query string too long"
 
-lengthQText :: (Text,Maybe Text) -> Integer
-lengthQText (txtKey,maybeTxt) = 
+lengthQText :: (Text, Maybe Text) -> Integer
+lengthQText (txtKey, maybeTxt) =
   case maybeTxt of
     Just txt -> genericLength (unpack txtKey) + genericLength (unpack txt)
-    Nothing  -> genericLength (unpack txtKey) 
+    Nothing -> genericLength (unpack txtKey)
 
 pullReqBody :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ByteString
 pullReqBody h req = do
@@ -173,7 +166,6 @@ getBodyAndCheck h req = do
   json <- lift $ getBody h req
   body <- checkDraftReqJson json
 
-
 parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
 parseQueryStrAndLog h req = do
   queStr <- parseQueryStr req
@@ -184,7 +176,6 @@ preParseQueryStr :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> (a
 preParseQueryStr h req foo = do
   queStr <- parseQueryStrAndLog h req
   foo queStr
-
 
 getBodyAndCheckUserToken :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m (UserId, DraftRequest)
 getBodyAndCheckUserToken h req = do

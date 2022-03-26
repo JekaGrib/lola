@@ -5,12 +5,7 @@
 
 module Spec.Exist.QStrExample where
 
-
 import Network.HTTP.Types (QueryText)
 
-
 qStr1 :: QueryText
-qStr1 = [("token",Just "lola")]
-
-
-
+qStr1 = [("token", Just "lola")]

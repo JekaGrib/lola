@@ -4,14 +4,12 @@
 
 module Psql.ToQuery where
 
-import Types
-import Database.PostgreSQL.Simple (Query)
 import Data.String (fromString)
-
+import Database.PostgreSQL.Simple (Query)
+import Types
 
 toQ :: (ToStr a) => a -> Query
 toQ = fromString . toStr
-
 
 class ToStr a where
   toStr :: a -> String
@@ -22,8 +20,5 @@ class ToVal a where
 class AddJoinTable a where
   addJoinTable :: a -> JoinTable
 
-
 instance (AddJoinTable a) => AddJoinTable [a] where
-  addJoinTable = concatMap addJoinTable 
-
-
+  addJoinTable = concatMap addJoinTable

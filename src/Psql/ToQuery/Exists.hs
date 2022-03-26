@@ -4,18 +4,16 @@
 
 module Psql.ToQuery.Exists where
 
-import Types
-import Psql.ToQuery (ToVal(..),ToStr(..))
+import Psql.ToQuery (ToStr (..), ToVal (..))
 import Psql.ToQuery.Select (Where)
+import Types
 
-
-data Exists =
-  Exists Table Where
+data Exists
+  = Exists Table Where
 
 instance ToStr Exists where
-  toStr (Exists t wh) = 
+  toStr (Exists t wh) =
     "SELECT EXISTS (SELECT 1 FROM " ++ t ++ " WHERE " ++ toStr wh ++ ")"
 
 instance ToVal Exists where
-  toVal (Exists _ wh)  = toVal wh
-
+  toVal (Exists _ wh) = toVal wh

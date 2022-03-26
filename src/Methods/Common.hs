@@ -17,23 +17,21 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.String (fromString)
 import Data.Text (Text, pack, unpack)
 import Data.Time.Calendar (Day)
-import Data.Time.LocalTime (getZonedTime, localDay ,zonedTimeToLocalTime)
+import Data.Time.LocalTime (getZonedTime, localDay, zonedTimeToLocalTime)
 import Logger
+import Network.HTTP.Types (Header, ResponseHeaders, Status, hLocation, status200, status201, status204)
+import Oops (ReqError (..), catchDbErr)
 import Psql.Selecty (Comment (..), Tag (..))
-import Network.HTTP.Types (ResponseHeaders, Status, status200, status201,status204,Header,hLocation)
-import Oops (ReqError(..),catchDbErr)
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
-
 
 -- common logic functions:
 
 data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBS :: BSL.ByteString}
-  deriving Eq
+  deriving (Eq)
 
-instance Show  ResponseInfo where
+instance Show ResponseInfo where
   show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". ByteString: " ++ show b
-
 
 jsonHeader :: Header
 jsonHeader = ("Content-Type", "application/json; charset=utf-8")
@@ -45,12 +43,14 @@ okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [jsonHeader] $ encode toJ
 
 ok201Helper :: (MonadCatch m) => Config -> String -> ExceptT ReqError m ResponseInfo
-ok201Helper conf str = return $ ResponseInfo status201 [textHeader,(hLocation,url)] "Status 201 Created"
-  where url = makeMyUrl conf str
+ok201Helper conf str = return $ ResponseInfo status201 [textHeader, (hLocation, url)] "Status 201 Created"
+  where
+    url = makeMyUrl conf str
 
 ok201JsonHelper :: (MonadCatch m, ToJSON a) => Config -> String -> a -> ExceptT ReqError m ResponseInfo
-ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader,(hLocation,url)] $ encode toJ
-  where url = makeMyUrl conf str
+ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader, (hLocation, url)] $ encode toJ
+  where
+    url = makeMyUrl conf str
 
 ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo
 ok204Helper = return $ ResponseInfo status204 [textHeader] "Status 204 No data"
@@ -66,21 +66,20 @@ checkOneE :: (MonadCatch m, Show a) => [a] -> ExceptT ReqError m a
 checkOneE xs = case xs of
   [] -> throwE $ DatabaseError "Empty output"
   [x] -> return x
-  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs  
+  _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-checkMaybeOneE :: (MonadCatch m, Show a) =>  [a] -> ExceptT ReqError m (Maybe a)
+checkMaybeOneE :: (MonadCatch m, Show a) => [a] -> ExceptT ReqError m (Maybe a)
 checkMaybeOneE xs = case xs of
   [] -> return Nothing
   [x] -> return (Just x)
   _ -> throwE $ DatabaseError $ "Output not single" ++ show xs
 
-
-catchOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
-catchOneSelE logH m = 
+catchOneSelE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m a
+catchOneSelE logH m =
   catchSelE logH m >>= checkOneE
 
-catchMaybeOneSelE :: (MonadCatch m,Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
-catchMaybeOneSelE logH m = 
+catchMaybeOneSelE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
+catchMaybeOneSelE logH m =
   catchSelE logH m >>= checkMaybeOneE
 
 catchDbErrE :: (MonadCatch m) => m a -> ExceptT ReqError m a
@@ -94,7 +93,8 @@ catchUpdE logH m = do
 
 catchInsRetE ::
   (MonadCatch m) =>
-  LogHandle m -> m Id ->
+  LogHandle m ->
+  m Id ->
   ExceptT ReqError m Id
 catchInsRetE logH m = do
   lift $ logDebug logH "Insert data in the DB"
@@ -109,7 +109,6 @@ catchTransactE logH m = do
   lift $ logInfo logH "Transaction closed. Several actions in DB finished."
   return a
 
-
 -- common IO handle functions:
 
 getDay' :: IO Day
@@ -117,7 +116,6 @@ getDay' = do
   time <- getZonedTime
   let day = localDay . zonedTimeToLocalTime $ time
   return day
-
 
 getTokenKey' :: IO TokenKey
 getTokenKey' = do

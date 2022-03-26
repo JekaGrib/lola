@@ -1,17 +1,16 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
 module Psql.Methods.Common.Exist where
 
-import Types
-import Psql.Methods.Common
-import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
-import Psql.ToQuery.Exists (Exists(..))
-import Psql.ToQuery.Select (Where(..))
 import Database.PostgreSQL.Simple (Connection)
-
+import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
+import Psql.Methods.Common
+import Psql.ToQuery.Exists (Exists (..))
+import Psql.ToQuery.Select (Where (..))
+import Types
 
 isExist' :: Connection -> UncheckedExId -> IO Bool
 isExist' conn (AuthorId auId) = do
@@ -38,5 +37,3 @@ isExist' conn (TagId tagId) = do
 isExist' conn (UserId usId) = do
   let wh = WherePair "user_id=?" (Id usId)
   isExistInDb' conn (Exists "users" wh)
-
-

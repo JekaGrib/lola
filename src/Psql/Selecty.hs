@@ -91,4 +91,3 @@ instance FromRow Post where
     Post <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field
 
 instance Selecty Post
-

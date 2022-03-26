@@ -7,17 +7,16 @@ module Psql.Methods.Post where
 
 import Database.PostgreSQL.Simple (Connection)
 import Psql.Methods.Common
-import Psql.Selecty (Post (..), Tag(..),PostInfo(..))
+import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
+import Psql.ToQuery.Select (Select (..), Where (..), toWhere)
+import Psql.ToQuery.SelectLimit (Filter, OrderBy, SelectLim (..))
 import Types
-import Psql.ToQuery.SelectLimit (SelectLim(..),OrderBy,Filter)
-import Psql.ToQuery.Select (Select(..),Where(..),toWhere)
-
 
 selectPosts' :: Connection -> PostId -> IO [Post]
 selectPosts' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
+  select' conn $
+    Select
       ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
       "posts JOIN authors ON authors.author_id = posts.author_id "
       wh
@@ -25,11 +24,15 @@ selectPosts' conn postId = do
 selectLimPosts' :: Connection -> [Filter] -> OrderBy -> Page -> Limit -> IO [Post]
 selectLimPosts' conn filterArgs orderBy page limit = do
   let wh = WhereAnd $ fmap toWhere filterArgs ++ [Where "true"]
-  selectLimit' conn $ 
-    SelectLim 
+  selectLimit' conn $
+    SelectLim
       ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
-      "posts JOIN authors ON authors.author_id = posts.author_id" 
-      wh filterArgs orderBy page limit
+      "posts JOIN authors ON authors.author_id = posts.author_id"
+      wh
+      filterArgs
+      orderBy
+      page
+      limit
 
 selectPicsForPost' :: Connection -> PostId -> IO [PictureId]
 selectPicsForPost' conn postId = do
@@ -39,17 +42,17 @@ selectPicsForPost' conn postId = do
 selectTagsForPost' :: Connection -> PostId -> IO [Tag]
 selectTagsForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
-      ["tags.tag_id", "tag_name"] 
-      "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id" 
+  select' conn $
+    Select
+      ["tags.tag_id", "tag_name"]
+      "poststags AS pt JOIN tags ON pt.tag_id=tags.tag_id"
       wh
 
 selectUsersForPost' :: Connection -> PostId -> IO [UserId]
 selectUsersForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   selectOnly' conn $
-    Select 
+    Select
       ["user_id"]
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh
@@ -57,9 +60,8 @@ selectUsersForPost' conn postId = do
 selectPostInfos' :: Connection -> PostId -> IO [PostInfo]
 selectPostInfos' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
-  select' conn $ 
-    Select 
+  select' conn $
+    Select
       ["a.author_id", "author_info", "post_name", "post_category_id", "post_text", "post_main_pic_id"]
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh
-

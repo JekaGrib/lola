@@ -4,18 +4,15 @@
 
 module Psql.ToQuery.Select where
 
-import Types
 import Data.List (intercalate)
-import Psql.ToQuery (ToVal(..),ToStr(..))
+import Psql.ToQuery (ToStr (..), ToVal (..))
+import Types
 
-
-
-
-data Select =
-  Select [DbKey] Table Where
+data Select
+  = Select [DbKey] Table Where
 
 instance ToStr Select where
-  toStr (Select keys t wh) = 
+  toStr (Select keys t wh) =
     "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t ++ " WHERE " ++ toStr wh
 
 instance ToVal Select where
@@ -24,8 +21,8 @@ instance ToVal Select where
 class ToWhere a where
   toWhere :: a -> Where
 
-data Where =
-  Where Predicate
+data Where
+  = Where Predicate
   | WherePair Predicate DbValue
   | WhereSelect Predicate Select
   | WhereSelectPair Select Predicate DbValue
@@ -43,8 +40,7 @@ instance ToStr Where where
 instance ToVal Where where
   toVal (Where _) = []
   toVal (WherePair _ val) = [val]
-  toVal (WhereSelect _ sel) = toVal sel 
-  toVal (WhereSelectPair sel _ val) =  toVal sel  ++ [val]
+  toVal (WhereSelect _ sel) = toVal sel
+  toVal (WhereSelectPair sel _ val) = toVal sel ++ [val]
   toVal (WhereOr xs) = concatMap toVal xs
   toVal (WhereAnd xs) = concatMap toVal xs
-

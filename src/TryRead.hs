@@ -5,13 +5,13 @@
 module TryRead where
 
 import Control.Monad (when)
+import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, catchE, throwE)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import Data.Time.Calendar (Day, fromGregorianValid)
 import Oops
 import Types
-import Control.Monad.Catch (MonadCatch)
 
 tryReadInteger :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Integer
 tryReadInteger paramKey "" = throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
@@ -25,8 +25,9 @@ tryReadId paramKey txt = do
   checkBigIntId paramKey num
 
 tryReadResourseId :: (MonadCatch m) => QueryParamKey -> Text -> ExceptT ReqError m Id
-tryReadResourseId paramKey txt = hideResourseNotExistErr $
-  tryReadId paramKey txt 
+tryReadResourseId paramKey txt =
+  hideResourseNotExistErr $
+    tryReadId paramKey txt
 
 tryReadPage :: (Monad m) => Text -> ExceptT ReqError m Page
 tryReadPage txt = do
@@ -64,7 +65,7 @@ tryReadDay paramKey txt = do
 
 tryReadSortOrd :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m SortOrd
 tryReadSortOrd paramKey "" = throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Empty input."
-tryReadSortOrd paramKey txt = case  T.toUpper . T.take 4 $ txt of
+tryReadSortOrd paramKey txt = case T.toUpper . T.take 4 $ txt of
   "ASC" -> return ASC
   "DESC" -> return DESC
   _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". Value: " ++ getTxtstart txt ++ ". It must be <ASC> or <DESC>"
@@ -90,7 +91,6 @@ getTxtstart txt = case splitAt 20 (unpack txt) of
 checkIdLength leng txt = case splitAt 20 (unpack txt) of
   (_, []) -> return ()
   _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
-
 
 tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
 tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."

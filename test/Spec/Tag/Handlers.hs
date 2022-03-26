@@ -5,17 +5,17 @@
 
 module Spec.Tag.Handlers where
 
-import Spec.Conf (defConf)
 import Control.Monad.Catch (throwM)
-import Spec.Log (handLogDebug)
-import Methods.Tag
-import Types
-import Spec.Types (MockAction (..))
-import qualified Spec.Auth.Handlers (handle)
-import qualified Spec.Exist.Handlers (handle)
-import Spec.Tag.Types
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (SqlError(..), ExecStatus(FatalError))
+import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
+import Methods.Tag
+import qualified Spec.Auth.Handlers (handle)
+import Spec.Conf (defConf)
+import qualified Spec.Exist.Handlers (handle)
+import Spec.Log (handLogDebug)
+import Spec.Tag.Types
+import Spec.Types (MockAction (..))
+import Types
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -36,24 +36,24 @@ throwSqlEx :: StateT [MockAction] IO a
 throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
 
 handle1 :: Handle (StateT [MockAction] IO)
-handle1 = handle {selectTagNames = selectTagNamesTest ["cats","food"]}
+handle1 = handle {selectTagNames = selectTagNamesTest ["cats", "food"]}
 
 handle2 :: Handle (StateT [MockAction] IO)
 handle2 = handle {selectTagNames = selectTagNamesTest []}
 
 handle3 :: Handle (StateT [MockAction] IO)
-handle3 = 
-  handle 
-  { insertReturnTag = insertReturnTagTestEx
-  , updateDbTag = updateDbTagTestEx
-  , deleteDbTag = deleteDbTagTestEx
-  }
+handle3 =
+  handle
+    { insertReturnTag = insertReturnTagTestEx,
+      updateDbTag = updateDbTagTestEx,
+      deleteDbTag = deleteDbTagTestEx
+    }
 
 handle4 :: Handle (StateT [MockAction] IO)
-handle4 = 
-  handle 
-  {  deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
-  }
+handle4 =
+  handle
+    { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
+    }
 
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do
@@ -67,25 +67,21 @@ selectTagNamesTest xs tagId = do
   modify (TagMock (SelectTagNames tagId) :)
   return xs
 
-updateDbTagTest :: TagName -> TagId  -> StateT [MockAction] IO ()
-updateDbTagTest tagName tagId = 
+updateDbTagTest :: TagName -> TagId -> StateT [MockAction] IO ()
+updateDbTagTest tagName tagId =
   modify (TagMock (UpdateDbTag tagName tagId) :)
 
-
-deleteDbTagTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagTest tagId = 
+deleteDbTagTest :: TagId -> StateT [MockAction] IO ()
+deleteDbTagTest tagId =
   modify (TagMock (DeleteDbTag tagId) :)
 
-
-deleteDbTagForDraftsTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagForDraftsTest tagId = 
+deleteDbTagForDraftsTest :: TagId -> StateT [MockAction] IO ()
+deleteDbTagForDraftsTest tagId =
   modify (TagMock (DeleteDbTagForDrafts tagId) :)
-  
 
-deleteDbTagForPostsTest :: TagId  -> StateT [MockAction] IO ()
-deleteDbTagForPostsTest tagId = 
+deleteDbTagForPostsTest :: TagId -> StateT [MockAction] IO ()
+deleteDbTagForPostsTest tagId =
   modify (TagMock (DeleteDbTagForPosts tagId) :)
-  
 
 insertReturnTagTest :: TagName -> StateT [MockAction] IO TagId
 insertReturnTagTest tagName = do
@@ -103,4 +99,3 @@ updateDbTagTestEx _ _ = throwSqlEx
 
 insertReturnTagTestEx :: TagName -> StateT [MockAction] IO TagId
 insertReturnTagTestEx _ = throwSqlEx
-

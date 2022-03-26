@@ -5,6 +5,7 @@
 
 module Methods.Common.Auth where
 
+import Api.Request.QueryStr (Token (..), parseQueryStr)
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -12,18 +13,16 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
-import Oops (ReqError(..),hideTokenErr,hideErr)
-import Api.Request.QueryStr ( Token (..), parseQueryStr)
+import Network.HTTP.Types.URI (QueryText)
+import Oops (ReqError (..), hideErr, hideTokenErr)
+import Psql.Methods.Common.Auth
 import TryRead (tryReadId)
 import Types
-import Network.HTTP.Types.URI (QueryText)
-import Psql.Methods.Common.Auth
-
 
 data Handle m = Handle
-  { hConf :: Config
-  , hLog :: LogHandle m
-  , selectTokenKeysForUser :: UserId -> m [TokenKey]
+  { hConf :: Config,
+    hLog :: LogHandle m,
+    selectTokenKeysForUser :: UserId -> m [TokenKey]
   }
 
 makeH :: Config -> LogHandle IO -> Handle IO
@@ -45,7 +44,7 @@ tokenAdminAuth h qStr = hideErr $ do
   checkAdminTokenParam h tokenParam
 
 checkAdminTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m ()
-checkAdminTokenParam Handle{..} tokenParam = 
+checkAdminTokenParam Handle {..} tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
@@ -67,7 +66,7 @@ tokenUserAuth h qStr = hideTokenErr $ do
   checkUserTokenParam h tokenParam
 
 checkUserTokenParam :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m UserAccessMode
-checkUserTokenParam Handle{..} tokenParam = 
+checkUserTokenParam Handle {..} tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
@@ -92,6 +91,3 @@ checkUserTokenParam Handle{..} tokenParam =
             else throwE . SecretTokenError $ "INVALID token. Wrong token key or user_id"
         Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"
     _ -> throwE . SecretTokenError $ "INVALID token"
-
-
-

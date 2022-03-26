@@ -4,21 +4,20 @@
 
 module Psql.Methods.Comment where
 
-import Psql.Selecty (Comment (..))
-import Types
-import Psql.ToQuery.Delete (Delete(..))
-import Psql.ToQuery.Insert (InsertRet(..),InsertPair(..))
-import Psql.ToQuery.SelectLimit (SelectLim(..),OrderBy)
-import Psql.ToQuery.Select (Select(..),Where(..))
-import Psql.ToQuery.Update (Update(..),Set(..))
-import Psql.Methods.Common
 import Database.PostgreSQL.Simple (Connection)
-
+import Psql.Methods.Common
+import Psql.Selecty (Comment (..))
+import Psql.ToQuery.Delete (Delete (..))
+import Psql.ToQuery.Insert (InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Select (Select (..), Where (..))
+import Psql.ToQuery.SelectLimit (OrderBy, SelectLim (..))
+import Psql.ToQuery.Update (Set (..), Update (..))
+import Types
 
 selectComm' :: Connection -> CommentId -> IO [Comment]
 selectComm' conn commId = do
   let wh = WherePair "comment_id=?" (Id commId)
-  select' conn (Select ["comment_id","user_id","comment_text","post_id"] "comments" wh)
+  select' conn (Select ["comment_id", "user_id", "comment_text", "post_id"] "comments" wh)
 
 selectUsersForPost' :: Connection -> PostId -> IO [UserId]
 selectUsersForPost' conn postId = do
@@ -35,13 +34,18 @@ selectPostsForComm' conn commId = do
   let wh = WherePair "comment_id=?" (Id commId)
   selectOnly' conn (Select ["post_id"] "comments" wh)
 
-selectLimCommsForPost' :: Connection -> PostId -> OrderBy -> Page -> Limit ->  IO [Comment]
+selectLimCommsForPost' :: Connection -> PostId -> OrderBy -> Page -> Limit -> IO [Comment]
 selectLimCommsForPost' conn postId orderBy page limit = do
   let wh = WherePair "post_id=?" (Id postId)
-  selectLimit' conn $ 
-    SelectLim 
-      ["comment_id","user_id","comment_text","post_id"]
-      "comments" wh [] orderBy page limit
+  selectLimit' conn $
+    SelectLim
+      ["comment_id", "user_id", "comment_text", "post_id"]
+      "comments"
+      wh
+      []
+      orderBy
+      page
+      limit
 
 updateDbComm' :: Connection -> CommentText -> CommentId -> IO ()
 updateDbComm' conn commTxt commId = do
@@ -59,6 +63,5 @@ insertReturnComm' conn commTxt postId usId = do
   let insPair1 = InsertPair "comment_text" (Txt commTxt)
   let insPair2 = InsertPair "post_id" (Id postId)
   let insPair3 = InsertPair "user_id" (Id usId)
-  let insPairs = [insPair1,insPair2,insPair3]
+  let insPairs = [insPair1, insPair2, insPair3]
   insertReturn' conn (InsertRet "comments" insPairs "comment_id")
-
