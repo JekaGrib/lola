@@ -25,10 +25,12 @@ import Spec.Tag.Handlers
 import Spec.Tag.Types
 import Spec.Tag.QStrExample
 import Spec.Auth.Types
+import Spec.Exist.Types
 import Data.Aeson (encode)
 import Api.Response (TagResponse(..))
 import Network.HTTP.Types (status200,status201,status204)
 import Api.Request.EndPoint (AppMethod(..))
+import Methods.Common.Exist.UncheckedExId (UncheckedExId(..))
 
 testTag :: IO ()
 testTag = hspec $ do
@@ -142,6 +144,53 @@ testTag = hspec $ do
         `shouldBe` 
         [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 ToPost ) []
+      eitherResp
+        `shouldBe` 
+          (Left $ BadReqError "Can't find parameter:tag_name")
+  describe "workWithTags (ToGet)" $ do
+    it "work with exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToGet 4) ) []
+      reverse state
+        `shouldBe` 
+        [LOG INFO,ExistMock (IsExist (TagId 4)),LOG DEBUG,TagMock (SelectTagNames 4),LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 ToPost ) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status201 [textHeader,("Location","http://localhost:3000/tags/14")] "Status 201 Created")
+    it "throw 404 Error on not exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200) ) []
+      reverse state
+        `shouldBe` 
+        [LOG INFO,ExistMock (IsExist (TagId 200))]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200) ) []
+      eitherResp
+        `shouldBe` 
+          (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+  describe "workWithTags (ToPut )" $ do
+    it "work with exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToPut 4) ) []
+      reverse state
+        `shouldBe` 
+       [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO,ExistMock (IsExist (TagId 4)),LOG DEBUG,TagMock (UpdateDbTag "dogs" 4),LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToPut 4) ) []
+      eitherResp
+        `shouldBe` 
+          (Right $ ResponseInfo status200 [jsonHeader] (encode $ TagResponse 4 "dogs"))
+    it "throw 404 Error on not exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToPut 200) ) []
+      reverse state
+        `shouldBe` 
+        [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO,ExistMock (IsExist (TagId 200))]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToPut 200) ) []
+      eitherResp
+        `shouldBe` 
+          (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+    it "throw BadReq Error on wrong QString" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToPut 4) ) []
+      reverse state
+        `shouldBe` 
+        [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO,ExistMock (IsExist (TagId 4))]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToPut 4) ) []
       eitherResp
         `shouldBe` 
           (Left $ BadReqError "Can't find parameter:tag_name")
