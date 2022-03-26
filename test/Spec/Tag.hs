@@ -194,3 +194,22 @@ testTag = hspec $ do
       eitherResp
         `shouldBe` 
           (Left $ BadReqError "Can't find parameter:tag_name")
+  describe "workWithTags (ToDelete )" $ do
+    it "work with exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToDelete 4) ) []
+      reverse state
+        `shouldBe` 
+       [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO,ExistMock (IsExist (TagId 4)),LOG DEBUG,TRANSACTIONOPEN,TagMock (DeleteDbTagForDrafts 4),TagMock (DeleteDbTagForPosts 4),TagMock (DeleteDbTag 4),TRANSACTIONCLOSE,LOG INFO,LOG INFO]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToDelete 4) ) []
+      eitherResp
+        `shouldBe` 
+         (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
+    it "throw 404 Error on not exist tag" $ do
+      state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200) ) []
+      reverse state
+        `shouldBe` 
+        [LOG INFO,LOG INFO,LOG DEBUG,AuthMock (SelectTokenKeyForUser 152),LOG INFO,LOG INFO,ExistMock (IsExist (TagId 200))]
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200) ) []
+      eitherResp
+        `shouldBe` 
+          (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
