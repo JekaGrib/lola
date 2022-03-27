@@ -151,15 +151,19 @@ instance ToField DbValue where
 
 data InsertUser
   = InsertUser Text Text Text PictureId Day AdminBool TokenKey
-
+    deriving (Eq,Show)
 data InsertDraft
   = InsertDraft (Maybe PostId) AuthorId Text CategoryId Text PictureId
+    deriving (Eq,Show)
 
 data InsertPost
   = InsertPost AuthorId Text Day CategoryId Text PictureId
+    deriving (Eq,Show)
 
 data UpdateDbDraft
   = UpdateDbDraft Text CategoryId Text PictureId
+    deriving (Eq,Show)
 
 data UpdateDbPost
   = UpdateDbPost Text CategoryId Text PictureId
+    deriving (Eq,Show)

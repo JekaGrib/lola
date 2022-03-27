@@ -16,6 +16,7 @@ import Spec.Log (handLogDebug)
 import Spec.Tag.Types
 import Spec.Types (MockAction (..))
 import Types
+import Oops (UnexpectedDbOutPutException(..))
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -55,6 +56,12 @@ handle4 :: Handle (StateT [MockAction] IO)
 handle4 =
   handle
     { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
+    }
+
+handle5 :: Handle (StateT [MockAction] IO)
+handle5 =
+  handle
+    { insertReturnTag = insertReturnTagTestEx1
     }
 
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
@@ -104,3 +111,6 @@ updateDbTagTestEx _ _ = throwSqlEx
 
 insertReturnTagTestEx :: TagName -> StateT [MockAction] IO TagId
 insertReturnTagTestEx _ = throwSqlEx
+
+insertReturnTagTestEx1 :: TagName -> StateT [MockAction] IO TagId
+insertReturnTagTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException

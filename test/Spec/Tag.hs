@@ -42,6 +42,13 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createTag handle3 (CreateTag "cats")) []
       eitherResp
         `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+    it "throw DBError to UnexpectedDbOutPutException" $ do 
+      state <- execStateT (runExceptT $ createTag handle5 (CreateTag "cats")) []
+      reverse state
+        `shouldBe` [LOG DEBUG]
+      eitherResp <- evalStateT (runExceptT $ createTag handle5 (CreateTag "cats")) []
+      eitherResp
+        `shouldBe` (Left $ DatabaseError "UnexpectedEmptyDbOutPutException")
   describe "getTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getTag handle 3) []

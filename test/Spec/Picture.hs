@@ -85,6 +85,13 @@ testPic = hspec $ do
       eitherResp <- evalStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
       eitherResp
         `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+    it "throw DBError to UnexpectedDbOutPutException" $ do 
+      state <- execStateT (runExceptT $ loadPicture handle6 (LoadPicture "url")) []
+      reverse state
+        `shouldBe` [PicMock (GoToUrl "url")]
+      eitherResp <- evalStateT (runExceptT $ loadPicture handle6 (LoadPicture "url")) []
+      eitherResp
+        `shouldBe` (Left $ DatabaseError "UnexpectedEmptyDbOutPutException")
   describe "workWithPics (ToPost)" $ do
     it "work with valid token" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
@@ -108,7 +115,7 @@ testPic = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [("Content-Type","image/jpeg")] "picture")
-    it "throw 404 Error on not exist tag" $ do
+    it "throw 404 Error on not exist pic" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr1 (ToGet 200)) []
       reverse state
         `shouldBe` [ExistMock (IsExist (PictureId 200))]

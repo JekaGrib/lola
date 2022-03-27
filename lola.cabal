@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 305a3669ec5675e05f04484d9f04ef6dae61c71f800e041ebcd9c3e1cd76ac52
+-- hash: 8e735e40d895bd2a80b2a2613e0be4a15418fc5e8f2defac39cd1a93d72335fb
 
 name:           lola
 version:        0.1.0.0
@@ -152,8 +152,9 @@ test-suite lola-test
       Spec.Auth.QStrExample
       Spec.Auth.Types
       Spec.Conf
+      Spec.DeleteMany.Handlers
+      Spec.DeleteMany.Types
       Spec.Exist.Handlers
-      Spec.Exist.QStrExample
       Spec.Exist.Types
       Spec.Log
       Spec.Oops
@@ -166,6 +167,10 @@ test-suite lola-test
       Spec.Tag.QStrExample
       Spec.Tag.Types
       Spec.Types
+      Spec.User
+      Spec.User.Handlers
+      Spec.User.QStrExample
+      Spec.User.Types
       SpecOld
       Paths_lola
   hs-source-dirs:

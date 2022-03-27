@@ -21,6 +21,7 @@ import qualified Data.ByteString.Lazy as BSL
 import Data.Text (Text)
 import Codec.Picture (encodePng,PixelRGB8(..),generateImage)
 import Network.HTTP.Simple (HttpException( InvalidUrlException ))
+import Oops (UnexpectedDbOutPutException(..))
 
 
 
@@ -66,6 +67,12 @@ handle5 =
     { insertRetPicBS = insertRetPicBSTestEx
     }
 
+handle6 :: Handle (StateT [MockAction] IO)
+handle6 =
+  handle
+    { insertRetPicBS = insertRetPicBSTestEx1
+    }
+
 selectPicBSTest :: [ByteString] -> PictureId -> StateT [MockAction] IO [ByteString]  
 selectPicBSTest xs picId = do
   modify (PicMock (SelectPicBS picId) :)
@@ -87,6 +94,9 @@ selectPicBSTestEx _ = throwSqlEx
 
 insertRetPicBSTestEx :: ByteString -> StateT [MockAction] IO PictureId
 insertRetPicBSTestEx _ = throwSqlEx
+
+insertRetPicBSTestEx1 :: ByteString -> StateT [MockAction] IO PictureId
+insertRetPicBSTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException
 
 goToUrlTestEx :: Text -> StateT [MockAction] IO BSL.ByteString
 goToUrlTestEx _ = throwHttpEx

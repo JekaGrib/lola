@@ -117,8 +117,8 @@ getDay' = do
   let day = localDay . zonedTimeToLocalTime $ time
   return day
 
-getTokenKey' :: IO TokenKey
-getTokenKey' = do
+generateTokenKey' :: IO TokenKey
+generateTokenKey' = do
   gen <- getStdGen
   _ <- newStdGen
   return . take 6 $ randomRs ('a', 'z') gen

@@ -45,7 +45,7 @@ data Handle m = Handle
     deleteDbAuthor :: AuthorId -> m (),
     insertReturnUser :: InsertUser -> m UserId,
     getDay :: m Day,
-    getTokenKey :: m TokenKey,
+    generateTokenKey :: m TokenKey,
     withTransactionDB :: forall a. m a -> m a,
     hDelMany :: Methods.Common.DeleteMany.Handle m,
     hAuth :: Methods.Common.Auth.Handle m,
@@ -69,7 +69,7 @@ makeH conf logH =
         (deleteDbAuthor' conn)
         (insertReturnUser' conn)
         getDay'
-        getTokenKey'
+        generateTokenKey'
         (withTransaction conn)
         (Methods.Common.DeleteMany.makeH conf)
         (Methods.Common.Auth.makeH conf logH)
@@ -101,7 +101,7 @@ logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle {..} (LogIn usIdParam pwdParam) = do
   Auth pwd admBool <- catchOneSelE hLog $ selectAuthsForUser usIdParam
   checkPwd pwdParam pwd
-  tokenKey <- lift getTokenKey
+  tokenKey <- lift generateTokenKey
   catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
   if admBool
     then do
@@ -116,7 +116,7 @@ logIn Handle {..} (LogIn usIdParam pwdParam) = do
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
 createUser Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   day <- lift getDay
-  tokenKey <- lift getTokenKey
+  tokenKey <- lift generateTokenKey
   let hashPwdParam = txtSha1 pwdParam
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day False tokenKey
   usId <- catchInsRetE hLog $ insertReturnUser insUser

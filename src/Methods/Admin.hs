@@ -27,7 +27,7 @@ data Handle m = Handle
     selectKeys :: m [Key],
     insertReturnUser :: InsertUser -> m UserId,
     getDay :: m Day,
-    getTokenKey :: m TokenKey,
+    generateTokenKey :: m TokenKey,
     hExist :: Methods.Common.Exist.Handle m
   }
 
@@ -40,7 +40,7 @@ makeH conf logH =
         (selectKeys' conn)
         (insertReturnUser' conn)
         getDay'
-        getTokenKey'
+        generateTokenKey'
         (Methods.Common.Exist.makeH conf)
 
 workWithAdmin :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
@@ -55,7 +55,7 @@ createAdmin Handle {..} (CreateAdmin keyParam pwdParam fNameParam lNameParam pic
   checkKeyE keyParam key
   day <- lift getDay
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
-  tokenKey <- lift getTokenKey
+  tokenKey <- lift generateTokenKey
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day True tokenKey
   admId <- catchInsRetE hLog $ insertReturnUser insUser
   let usToken = pack $ show admId ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
