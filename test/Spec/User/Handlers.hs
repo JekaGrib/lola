@@ -9,7 +9,7 @@ import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.User
-import qualified Spec.Auth.Handlers (handle0)
+import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
 import qualified Spec.DeleteMany.Handlers (handle)
@@ -42,7 +42,7 @@ handle =
     generateTokenKeyTest
     withTransactionDBTest
     Spec.DeleteMany.Handlers.handle
-    Spec.Auth.Handlers.handle0
+    Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
 throwSqlEx :: StateT [MockAction] IO a

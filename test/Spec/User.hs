@@ -125,3 +125,33 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithUsers handle qStr5 ToPost) []
       eitherResp
         `shouldBe` Left (BadReqError "pic_id: 200 doesn`t exist")
+  describe "workWithUsers (ToGet)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithUsers handle [] (ToGet 4)) []
+      reverse state
+        `shouldBe` [ExistMock (IsExist (UserId 4)),UserMock (SelectUsers 4)]
+      eitherResp <- evalStateT (runExceptT $ workWithUsers handle [] (ToGet 4)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ UserResponse 4 "fName" "lName" 4 "http://localhost:3000/pictures/4" dayExample ))
+  describe "workWithUsers (ToDelete)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithUsers handle qStr1 (ToDelete 4)) []
+      reverse state
+        `shouldBe` 
+        [ AuthMock (SelectTokenKeyForUser 152)
+        , ExistMock (IsExist (UserId 4))
+        , UserMock (SelectAuthorsForUser  4)
+        , UserMock (SelectDraftsForAuthor 4)
+        , TRANSACTIONOPEN
+        , UserMock (UpdateDbUserForComms   1 4)
+        , UserMock (UpdateDbAuthorForPosts 1 4)
+        , DeleteManyMock (DeleteDbPicsForDrafts [2,5])
+        , DeleteManyMock (DeleteDbTagsForDrafts [2,5])
+        , DeleteManyMock (DeleteDbDrafts        [2,5])
+        , UserMock (DeleteDbAuthor 4)
+        , UserMock (DeleteDbUser   4) 
+        , TRANSACTIONCLOSE
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithUsers handle qStr1 (ToDelete 4)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
