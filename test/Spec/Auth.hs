@@ -21,20 +21,20 @@ testAuth = hspec
   $ describe "tokenAdminAuth"
   $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ tokenAdminAuth handle qStr1) []
+      state <- execStateT (runExceptT $ tokenAdminAuth handle0 qStr1) []
       reverse state
         `shouldBe` [LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO]
     it "throw Auth Error on wrong token" $ do
-      state <- execStateT (runExceptT $ tokenAdminAuth handle qStr2) []
+      state <- execStateT (runExceptT $ tokenAdminAuth handle0 qStr2) []
       reverse state
         `shouldBe` [LOG INFO]
-      eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle qStr2) []
+      eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle0 qStr2) []
       eitherResp
         `shouldBe` Left (SecretError "SecretTokenError \"INVALID token\"")
     it "throw Auth Error on wrong token key" $ do
-      state <- execStateT (runExceptT $ tokenAdminAuth handle qStr3) []
+      state <- execStateT (runExceptT $ tokenAdminAuth handle0 qStr3) []
       reverse state
         `shouldBe` [LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO]
-      eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle qStr3) []
+      eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle0 qStr3) []
       eitherResp
         `shouldBe` Left (SecretError "SecretTokenError \"INVALID token. Wrong token key or user_id\"")

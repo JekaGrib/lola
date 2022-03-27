@@ -9,7 +9,7 @@ import Control.Monad.State (StateT (..), modify)
 import Methods.Common.Auth (Handle (..))
 import Spec.Auth.Types
 import Spec.Conf (defConf)
-import Spec.Log (handLogDebug)
+import Spec.Log (handLogDebug,handLogWarning)
 import Spec.Types (MockAction (..))
 import Types
 
@@ -17,8 +17,11 @@ handle :: Handle (StateT [MockAction] IO)
 handle =
   Handle
     defConf
-    handLogDebug
+    handLogWarning
     selectTokenKeysForUserTest
+
+handle0 :: Handle (StateT [MockAction] IO)
+handle0 = handle {hLog = handLogDebug}
 
 selectTokenKeysForUserTest :: UserId -> StateT [MockAction] IO [TokenKey]
 selectTokenKeysForUserTest usId = do

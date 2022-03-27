@@ -6,7 +6,7 @@
 module Spec.Picture where
 
 import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (CreateTag (..), UpdateTag (..))
+import Api.Request.QueryStr (LoadPicture(..))
 import Api.Response (TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
@@ -56,4 +56,62 @@ testPic = hspec $ do
       eitherResp <- evalStateT (runExceptT $ sendPicture handle3 4) []
       eitherResp
         `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
-  
+  describe "loadPicture" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
+      reverse state
+        `shouldBe` [PicMock (GoToUrl "url"),PicMock (InsertReturnPicBS sbsPicExample)]
+      eitherResp <- evalStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader,("Location","http://localhost:3000/pictures/14")] "Status 201 Created")
+    it "throw BadReq Error to invalid picture in url" $ do
+      state <- execStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
+      reverse state
+        `shouldBe` [PicMock (GoToUrl "url")]
+      eitherResp <- evalStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
+      eitherResp
+        `shouldBe` (Left (BadReqError "Invalid picture url:url"))
+    it "throw BadReq Error to invalid url" $ do
+      state <- execStateT (runExceptT $ loadPicture handle3 (LoadPicture "url")) []
+      reverse state
+        `shouldBe` []
+      eitherResp <- evalStateT (runExceptT $ loadPicture handle3 (LoadPicture "url")) []
+      eitherResp
+        `shouldBe` (Left (BadReqError "Invalid picture url:url. InvalidUrlException \"oops\" \"oops\""))
+    it "throw DBError to fatal Sql error" $ do
+      state <- execStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
+      reverse state
+        `shouldBe` [PicMock (GoToUrl "url")]
+      eitherResp <- evalStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
+      eitherResp
+        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+  describe "workWithPics (ToPost)" $ do
+    it "work with valid token" $ do
+      state <- execStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
+      reverse state
+        `shouldBe` [AuthMock (SelectTokenKeyForUser 152),PicMock (GoToUrl "url"),PicMock (InsertReturnPicBS sbsPicExample)]
+      eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/pictures/14")] "Status 201 Created")
+    it "throw BadReq Error on wrong QString" $ do
+      state <- execStateT (runExceptT $ workWithPics handle qStr1 ToPost) []
+      reverse state
+        `shouldBe` [AuthMock (SelectTokenKeyForUser 152)]
+      eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr1 ToPost) []
+      eitherResp
+        `shouldBe` (Left $ BadReqError "Can't find parameter:pic_url")
+  describe "workWithPics (ToGet)" $ do
+    it "work with exist tag" $ do
+      state <- execStateT (runExceptT $ workWithPics handle qStr2 (ToGet 4)) []
+      reverse state
+        `shouldBe` [ExistMock (IsExist (PictureId 4)),PicMock (SelectPicBS 4)]
+      eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 (ToGet 4)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [("Content-Type","image/jpeg")] "picture")
+    it "throw 404 Error on not exist tag" $ do
+      state <- execStateT (runExceptT $ workWithPics handle qStr1 (ToGet 200)) []
+      reverse state
+        `shouldBe` [ExistMock (IsExist (PictureId 200))]
+      eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr1 (ToGet 200)) []
+      eitherResp
+        `shouldBe` (Left $ ResourseNotExistError "pic_id: 200 doesn`t exist")

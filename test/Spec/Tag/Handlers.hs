@@ -9,7 +9,7 @@ import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Tag
-import qualified Spec.Auth.Handlers (handle)
+import qualified Spec.Auth.Handlers (handle0)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
 import Spec.Log (handLogDebug)
@@ -29,11 +29,12 @@ handle =
     deleteDbTagForPostsTest
     insertReturnTagTest
     withTransactionDBTest
-    Spec.Auth.Handlers.handle
+    Spec.Auth.Handlers.handle0
     Spec.Exist.Handlers.handle
 
 throwSqlEx :: StateT [MockAction] IO a
 throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
+
 
 handle1 :: Handle (StateT [MockAction] IO)
 handle1 = handle {selectTagNames = selectTagNamesTest ["cats", "food"]}

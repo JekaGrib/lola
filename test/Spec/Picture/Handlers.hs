@@ -19,6 +19,8 @@ import Types
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Text (Text)
+import Codec.Picture (encodePng,PixelRGB8(..),generateImage)
+import Network.HTTP.Simple (HttpException( InvalidUrlException ))
 
 
 
@@ -29,12 +31,15 @@ handle =
     handLogWarning
     (selectPicBSTest ["picture"])
     insertRetPicBSTest
-    goToUrlTest
+    (goToUrlTest bsPicExample)
     Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
 throwSqlEx :: StateT [MockAction] IO a
 throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
+
+throwHttpEx :: StateT [MockAction] IO a
+throwHttpEx = throwM $ InvalidUrlException "oops" "oops"
 
 handle1 :: Handle (StateT [MockAction] IO)
 handle1 = handle {selectPicBS = selectPicBSTest ["picture", "picture"]}
@@ -46,14 +51,21 @@ handle3 :: Handle (StateT [MockAction] IO)
 handle3 =
   handle
     { selectPicBS = selectPicBSTestEx
+    , goToUrl = goToUrlTestEx
     }
-{-
+
 handle4 :: Handle (StateT [MockAction] IO)
 handle4 =
   handle
-    { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
+    { goToUrl = goToUrlTest "oops"
     }
--}
+
+handle5 :: Handle (StateT [MockAction] IO)
+handle5 =
+  handle
+    { insertRetPicBS = insertRetPicBSTestEx
+    }
+
 selectPicBSTest :: [ByteString] -> PictureId -> StateT [MockAction] IO [ByteString]  
 selectPicBSTest xs picId = do
   modify (PicMock (SelectPicBS picId) :)
@@ -64,14 +76,24 @@ insertRetPicBSTest bs = do
   modify (PicMock (InsertReturnPicBS bs) :)
   return 14
 
-goToUrlTest :: Text -> StateT [MockAction] IO BSL.ByteString
-goToUrlTest url = do
+goToUrlTest :: BSL.ByteString -> Text -> StateT [MockAction] IO BSL.ByteString
+goToUrlTest bs url = do
   modify (PicMock (GoToUrl url) :)
-  return "picture"
+  return bs
 
 selectPicBSTestEx :: PictureId -> StateT [MockAction] IO [ByteString]  
 selectPicBSTestEx _ = throwSqlEx
 
 
-insertReturnTagTestEx :: ByteString -> StateT [MockAction] IO PictureId
-insertReturnTagTestEx _ = throwSqlEx
+insertRetPicBSTestEx :: ByteString -> StateT [MockAction] IO PictureId
+insertRetPicBSTestEx _ = throwSqlEx
+
+goToUrlTestEx :: Text -> StateT [MockAction] IO BSL.ByteString
+goToUrlTestEx _ = throwHttpEx
+
+bsPicExample :: BSL.ByteString
+bsPicExample = encodePng $ generateImage pixelRenderer 1 1
+   where pixelRenderer x y = PixelRGB8 (fromIntegral x) (fromIntegral y) 1
+
+sbsPicExample :: ByteString
+sbsPicExample = BSL.toStrict bsPicExample

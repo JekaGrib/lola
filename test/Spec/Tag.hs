@@ -128,9 +128,9 @@ testTag = hspec $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToGet 4)) []
       reverse state
         `shouldBe` [LOG INFO, ExistMock (IsExist (TagId 4)), LOG DEBUG, TagMock (SelectTagNames 4), LOG INFO, LOG INFO]
-      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 ToPost) []
+      eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/tags/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ TagResponse 4 "cats"))
     it "throw 404 Error on not exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200)) []
       reverse state
