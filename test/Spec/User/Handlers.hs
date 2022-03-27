@@ -88,7 +88,7 @@ withTransactionDBTest m = do
 selectUsersTest :: UserId -> StateT [MockAction] IO [User]
 selectUsersTest uId = do
   modify (UserMock (SelectUsers uId) :)
-  return [User "fName" "lName" 4 (fromGregorian 2020 02 02)]
+  return [User "fName" "lName" 4 dayExample]
 
 selectAuthsForUserTest :: [Auth] -> UserId -> StateT [MockAction] IO [Auth]
 selectAuthsForUserTest auths uId = do
@@ -133,7 +133,10 @@ insertReturnUserTest insU = do
 getDayTest :: StateT [MockAction] IO Day
 getDayTest =  do
   modify (UserMock GetDay :)
-  return (fromGregorian 2020 02 02)
+  return dayExample
+
+dayExample :: Day
+dayExample = (fromGregorian 2020 02 02)
 
 generateTokenKeyTest :: StateT [MockAction] IO TokenKey
 generateTokenKeyTest = do
@@ -141,46 +144,3 @@ generateTokenKeyTest = do
   return "lilu"
 
 
-{-selectTagNamesTest :: [TagName] -> TagId -> StateT [MockAction] IO [TagName]
-selectTagNamesTest xs tagId = do
-  modify (TagMock (SelectTagNames tagId) :)
-  return xs
-
-updateDbTagTest :: TagName -> TagId -> StateT [MockAction] IO ()
-updateDbTagTest tagName tagId =
-  modify (TagMock (UpdateDbTag tagName tagId) :)
-
-deleteDbTagTest :: TagId -> StateT [MockAction] IO ()
-deleteDbTagTest tagId =
-  modify (TagMock (DeleteDbTag tagId) :)
-
-deleteDbTagForDraftsTest :: TagId -> StateT [MockAction] IO ()
-deleteDbTagForDraftsTest tagId =
-  modify (TagMock (DeleteDbTagForDrafts tagId) :)
-
-deleteDbTagForPostsTest :: TagId -> StateT [MockAction] IO ()
-deleteDbTagForPostsTest tagId =
-  modify (TagMock (DeleteDbTagForPosts tagId) :)
-
-insertReturnTagTest :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTest tagName = do
-  modify (TagMock (InsertReturnTag tagName) :)
-  return 14
-
-selectTagNamesTestEx :: TagId -> StateT [MockAction] IO [TagName]
-selectTagNamesTestEx _ = throwSqlEx
-
-deleteDbTagTestEx :: TagId -> StateT [MockAction] IO ()
-deleteDbTagTestEx _ = throwSqlEx
-
-deleteDbTagForDraftsTestEx :: TagId -> StateT [MockAction] IO ()
-deleteDbTagForDraftsTestEx _ = throwSqlEx
-
-updateDbTagTestEx :: TagName -> TagId -> StateT [MockAction] IO ()
-updateDbTagTestEx _ _ = throwSqlEx
-
-insertReturnTagTestEx :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTestEx _ = throwSqlEx
-
-insertReturnTagTestEx1 :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException-}

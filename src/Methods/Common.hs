@@ -141,7 +141,7 @@ inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
 
 makeMyPicUrl :: Config -> PictureId -> Text
-makeMyPicUrl conf picId = pack $ "http://" ++ cServHost conf ++ ":" ++ show (cServPort conf) ++ "/picture/" ++ show picId
+makeMyPicUrl conf picId = pack $ "http://" ++ cServHost conf ++ ":" ++ show (cServPort conf) ++ "/pictures/" ++ show picId
 
 inPicIdUrl :: Config -> PictureId -> PicIdUrl
 inPicIdUrl conf picId = PicIdUrl picId (makeMyPicUrl conf picId)
