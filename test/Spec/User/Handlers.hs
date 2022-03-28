@@ -106,12 +106,12 @@ selectDraftsForAuthorTest aId =  do
   return [2,5]
 
 updateDbUserForCommsTest :: UserId -> UserId -> StateT [MockAction] IO ()
-updateDbUserForCommsTest uId newUId = do
-  modify (UserMock (UpdateDbUserForComms uId newUId) :)
+updateDbUserForCommsTest newUId uId  = do
+  modify (UserMock (UpdateDbUserForComms newUId uId ) :)
 
 updateDbAuthorForPostsTest :: AuthorId -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorForPostsTest aId newAId =  do
-  modify (UserMock (UpdateDbAuthorForPosts aId newAId) :)
+updateDbAuthorForPostsTest newAId aId  =  do
+  modify (UserMock (UpdateDbAuthorForPosts newAId aId ) :)
 
 updateDbTokenKeyForUserTest :: TokenKey -> UserId -> StateT [MockAction] IO ()
 updateDbTokenKeyForUserTest tk uI = do

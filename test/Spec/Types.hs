@@ -10,6 +10,8 @@ import Spec.Tag.Types (TagMock)
 import Spec.Picture.Types (PicMock)
 import Spec.User.Types (UserMock)
 import Spec.DeleteMany.Types (DeleteManyMock)
+import Spec.MakeCatResp.Types (MakeCatRMock)
+import Spec.Category.Types (CatMock)
 
 data MockAction
   = LOG Priority
@@ -17,8 +19,10 @@ data MockAction
   | TRANSACTIONCLOSE
   | TRANSACTIONunROLL
   | AuthMock AuthMock
+  | CatMock CatMock
   | DeleteManyMock DeleteManyMock
   | ExistMock ExistMock
+  | MakeCatRMock MakeCatRMock
   | PicMock PicMock
   | TagMock TagMock
   | UserMock UserMock
