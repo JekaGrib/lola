@@ -14,7 +14,7 @@ import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
 import qualified Spec.MakeCatResp.Handlers (handle)
 import Spec.Log (handLogWarning)
-import Spec.Category.Types
+import Spec.Category.Types 
 import Spec.Types (MockAction (..))
 import Types
 import Oops (UnexpectedDbOutPutException(..))
@@ -40,34 +40,7 @@ handle =
 throwSqlEx :: StateT [MockAction] IO a
 throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
 
-{-}
-handle1 :: Handle (StateT [MockAction] IO)
-handle1 = handle {selectTagNames = selectTagNamesTest ["cats", "food"]}
 
-handle2 :: Handle (StateT [MockAction] IO)
-handle2 = handle {selectTagNames = selectTagNamesTest []}
-
-handle3 :: Handle (StateT [MockAction] IO)
-handle3 =
-  handle
-    { selectTagNames = selectTagNamesTestEx
-    , insertReturnTag = insertReturnTagTestEx
-    , updateDbTag = updateDbTagTestEx
-    , deleteDbTag = deleteDbTagTestEx
-    }
-
-handle4 :: Handle (StateT [MockAction] IO)
-handle4 =
-  handle
-    { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
-    }
-
-handle5 :: Handle (StateT [MockAction] IO)
-handle5 =
-  handle
-    { insertReturnTag = insertReturnTagTestEx1
-    }
--}
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do
   modify (TRANSACTIONOPEN :)

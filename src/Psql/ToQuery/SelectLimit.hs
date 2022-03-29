@@ -39,7 +39,7 @@ data OrderBy
   | ByCommId SortOrd
   | ByDraftId SortOrd
   | OrderList [OrderBy]
-  deriving (Eq)
+  deriving (Eq,Show)
 
 instance ToStr OrderBy where
   toStr (ByPostPicsNumb sOrd) = "count_pics " ++ show sOrd

@@ -12,6 +12,8 @@ import Spec.User.Types (UserMock)
 import Spec.DeleteMany.Types (DeleteManyMock)
 import Spec.MakeCatResp.Types (MakeCatRMock)
 import Spec.Category.Types (CatMock)
+import Spec.Comment.Types (CommMock)
+
 
 data MockAction
   = LOG Priority
@@ -20,6 +22,7 @@ data MockAction
   | TRANSACTIONunROLL
   | AuthMock AuthMock
   | CatMock CatMock
+  | CommMock CommMock
   | DeleteManyMock DeleteManyMock
   | ExistMock ExistMock
   | MakeCatRMock MakeCatRMock

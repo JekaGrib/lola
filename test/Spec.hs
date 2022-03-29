@@ -7,11 +7,13 @@ import Spec.Picture (testPic)
 import Spec.User (testUser)
 import Spec.MakeCatResp (testMakeCatResp)
 import Spec.Category (testCat)
+import Spec.Comment (testComm)
 
 main :: IO ()
 main = do
   testAuth
   testCat
+  testComm
   testMakeCatResp
   testPic
   testTag

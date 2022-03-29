@@ -3,10 +3,10 @@
 --{-# OPTIONS_GHC -Wall #-}
 --{-# OPTIONS_GHC -Werror #-}
 
-module Spec.Category where
+module Spec.Comment where
 
 import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (CreateCategory (..),UpdateCategory (..))
+import Api.Request.QueryStr (CreateComment (..),UpdateComment (..))
 import Api.Response (CatResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
@@ -14,36 +14,29 @@ import Data.Aeson (encode)
 import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
-import Methods.Category
+import Methods.Comment
 import Network.HTTP.Types (status200, status201, status204)
 import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
-import Spec.Category.Handlers
-import Spec.Category.QStrExample
-import Spec.Category.Types
+import Spec.Comment.Handlers
+import Spec.Comment.QStrExample
+import Spec.Comment.Types
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 
-testCat :: IO ()
-testCat = hspec $ do
-  describe "createCategory" $ do
-    it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ createCategory handle (CreateCategory "food" Nothing)) []
+testComm :: IO ()
+testComm = hspec $ do
+  describe "createComment" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       reverse state
-        `shouldBe` [CatMock (InsertReturnCat "food")]
-      eitherResp <- evalStateT (runExceptT $ createCategory handle (CreateCategory "food" Nothing)) []
+        `shouldBe` [CommMock (InsertReturnComm "cool" 7 3)]
+      eitherResp <- evalStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-    it "work with valid DB answer, with super category" $ do
-      state <- execStateT (runExceptT $ createCategory handle (CreateCategory "food" (Just 4))) []
-      reverse state
-        `shouldBe` [CatMock (InsertReturnSubCat "food" 4)]
-      eitherResp <- evalStateT (runExceptT $ createCategory handle (CreateCategory "food" (Just 4))) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-  describe "getCategory" $ do
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
+{-}  describe "getComment" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getCategory handle 4) []
       reverse state
@@ -186,3 +179,4 @@ testCat = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr1 (ToDelete 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
+-}
