@@ -61,14 +61,11 @@ testCat = hspec $ do
       state <- execStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" Nothing)) []
       reverse state
         `shouldBe` 
-        [ CatMock (UpdateDbCat "food" 4)
+        [ CatMock      (UpdateDbCat "food" 4)
         , MakeCatRMock (SelectCats    4)
         , MakeCatRMock (SelectSubCats 4)
         , MakeCatRMock (SelectCats    1)
         , MakeCatRMock (SelectSubCats 1)]
-      eitherResp <- evalStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" Nothing)) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]))
     it "work with valid DB answer, with super category" $ do
       state <- execStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" (Just 2))) []
       reverse state
@@ -78,12 +75,57 @@ testCat = hspec $ do
         , MakeCatRMock (SelectSubCats 12)
         , MakeCatRMock (SelectSubCats 16)
         , MakeCatRMock (SelectSubCats 17)
-        , CatMock (UpdateDbSubCat "food" 2 4)
+        , CatMock      (UpdateDbSubCat "food" 2 4)
         , MakeCatRMock (SelectCats    4)
         , MakeCatRMock (SelectSubCats 4)
         , MakeCatRMock (SelectCats    1)
         , MakeCatRMock (SelectSubCats 1)
         ]
-      eitherResp <- evalStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" (Just 2))) []
+  describe "deleteCategory" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ deleteCategory handle 4) []
+      reverse state
+        `shouldBe` 
+        [ MakeCatRMock (SelectSubCats 4)
+        , MakeCatRMock (SelectSubCats 11)
+        , MakeCatRMock (SelectSubCats 12)
+        , MakeCatRMock (SelectSubCats 16)
+        , MakeCatRMock (SelectSubCats 17)
+        , TRANSACTIONOPEN
+        , CatMock (UpdateDbCatsForPosts  1 [4,11,12,16,17])
+        , CatMock (UpdateDbCatsForDrafts 1 [4,11,12,16,17])
+        , CatMock (DeleteDbCats [4,11,12,16,17])
+        , TRANSACTIONCLOSE
+        ]
+      eitherResp <- evalStateT (runExceptT $ deleteCategory handle 4) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
+  describe "workWithCats (ToPost)" $ do
+    it "work with valid DB answer, without super category" $ do
+      state <- execStateT (runExceptT $ workWithCats handle qStr2 ToPost) []
+      reverse state
+        `shouldBe` [AuthMock (SelectTokenKeyForUser 152),CatMock (InsertReturnCat "dogs")]
+      eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr2 ToPost) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+    it "work with valid DB answer, with super category" $ do
+      state <- execStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
+      reverse state
+        `shouldBe` [AuthMock (SelectTokenKeyForUser 152),ExistMock (IsExist (CategoryId 4)),CatMock (InsertReturnSubCat "dogs" 4)]
+      eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+  describe "workWithCats (ToGet)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
+      reverse state
+        `shouldBe` 
+        [ ExistMock (IsExist (CategoryId 4))
+        , MakeCatRMock (SelectCats    4)
+        , MakeCatRMock (SelectSubCats 4)
+        , MakeCatRMock (SelectCats    1)
+        , MakeCatRMock (SelectSubCats 1)
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]))
