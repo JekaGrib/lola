@@ -7,7 +7,7 @@ module Spec.Comment where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateComment (..),UpdateComment (..))
-import Api.Response (CatResponse (..))
+import Api.Response (CommentResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -25,6 +25,7 @@ import Spec.Comment.Types
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
+import Methods.Common.Auth (AccessMode(..))
 
 testComm :: IO ()
 testComm = hspec $ do
@@ -36,147 +37,84 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
-{-}  describe "getComment" $ do
+  describe "getComment" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ getCategory handle 4) []
+      state <- execStateT (runExceptT $ getComment handle 4) []
       reverse state
         `shouldBe` 
-        [ MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
-        ]
-      eitherResp <- evalStateT (runExceptT $ getCategory handle 4) []
+        [CommMock (SelectComm 4)]
+      eitherResp <- evalStateT (runExceptT $ getComment handle 4) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]))
-  describe "updateCategory" $ do
-    it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" Nothing)) []
-      reverse state
-        `shouldBe` 
-        [ CatMock      (UpdateDbCat "food" 4)
-        , MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
-        ]
-    it "work with valid DB answer, with super category" $ do
-      state <- execStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" (Just 2))) []
-      reverse state
-        `shouldBe` 
-        [ MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectSubCats 11)
-        , MakeCatRMock (SelectSubCats 12)
-        , MakeCatRMock (SelectSubCats 16)
-        , MakeCatRMock (SelectSubCats 17)
-        , CatMock      (UpdateDbSubCat "food" 2 4)
-        , MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
-        ]
-  describe "deleteCategory" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
+  describe "updateComment" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ deleteCategory handle 4) []
+      state <- execStateT (runExceptT $ updateComment handle 3 2 (UpdateComment "yes")) []
       reverse state
         `shouldBe` 
-        [ MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectSubCats 11)
-        , MakeCatRMock (SelectSubCats 12)
-        , MakeCatRMock (SelectSubCats 16)
-        , MakeCatRMock (SelectSubCats 17)
-        , TRANSACTIONOPEN
-        , CatMock (UpdateDbCatsForPosts  1 [4,11,12,16,17])
-        , CatMock (UpdateDbCatsForDrafts 1 [4,11,12,16,17])
-        , CatMock (DeleteDbCats [4,11,12,16,17])
-        , TRANSACTIONCLOSE
+        [ CommMock (SelectUsersForComm 2)
+        , CommMock (UpdateDbComm "yes" 2)
+        , CommMock (SelectPostsForComm 2)
         ]
-      eitherResp <- evalStateT (runExceptT $ deleteCategory handle 4) []
+  describe "deleteComment" $ do
+    it "work with valid DB answer in UserMode" $ do
+      state <- execStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
+      reverse state
+        `shouldBe` 
+        [ CommMock (SelectPostsForComm 7)
+        , CommMock (SelectUsersForPost 7)
+        , CommMock (SelectUsersForComm 7)
+        , CommMock (DeleteDbComm 7)]
+      eitherResp <- evalStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")  
+    it "work with valid DB answer in AdminMode" $ do
+      state <- execStateT (runExceptT $ deleteComment handle 3 AdminMode 7) []
+      reverse state
+        `shouldBe` 
+        [CommMock (DeleteDbComm 7)]
+      eitherResp <- evalStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
-  describe "workWithCats (ToPost)" $ do
-    it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ workWithCats handle qStr2 ToPost) []
-      reverse state
-        `shouldBe` [AuthMock (SelectTokenKeyForUser 152),CatMock (InsertReturnCat "dogs")]
-      eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr2 ToPost) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-    it "work with valid DB answer, with super category" $ do
-      state <- execStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
+  describe "workWithComms (ToPost)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       reverse state
         `shouldBe` 
         [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (CategoryId 2))
-        , CatMock (InsertReturnSubCat "dogs" 2)
-        ]
-      eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
+        , ExistMock (IsExist (PostId 7))
+        , CommMock (InsertReturnComm "yes" 7 152)]
+      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-  describe "workWithCats (ToGet)" $ do
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
+  describe "workWithComms (ToGet)" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
+      state <- execStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       reverse state
         `shouldBe` 
-        [ ExistMock (IsExist (CategoryId 4))
-        , MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
+        [ ExistMock (IsExist (CommentId 4))
+        , CommMock (SelectComm 4)
         ]
-      eitherResp <- evalStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
+      eitherResp <- evalStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]))
-  describe "workWithCats (ToPut)" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
+  describe "workWithComms (ToPut)" $ do
     it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ workWithCats handle qStr2 (ToPut 4)) []
-      reverse state
-        `shouldBe` 
-        [ AuthMock     (SelectTokenKeyForUser 152)
-        , ExistMock    (IsExist (CategoryId 4))
-        , CatMock      (UpdateDbCat "dogs" 4)
-        , MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
-        ]
-    it "work with valid DB answer, with super category" $ do
-      state <- execStateT (runExceptT $ workWithCats handle qStr3 (ToPut 4)) []
+      state <- execStateT (runExceptT $ workWithComms handle qStr3 (ToPut 4)) []
       reverse state
         `shouldBe` 
         [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (CategoryId 4))
-        , ExistMock (IsExist (CategoryId 2))
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectSubCats 11)
-        , MakeCatRMock (SelectSubCats 12)
-        , MakeCatRMock (SelectSubCats 16)
-        , MakeCatRMock (SelectSubCats 17)
-        , CatMock      (UpdateDbSubCat "dogs" 2 4)
-        , MakeCatRMock (SelectCats    4)
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectCats    1)
-        , MakeCatRMock (SelectSubCats 1)
+        , ExistMock (IsExist (CommentId 4))
+        , CommMock (SelectUsersForComm 4)
         ]
-  describe "workWithCats (ToDelete)" $ do
+  describe "workWithComms (ToDelete)" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithCats handle qStr1 (ToDelete 4)) []
+      state <- execStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
       reverse state
         `shouldBe` 
-        [ AuthMock     (SelectTokenKeyForUser 152)
-        , ExistMock    (IsExist (CategoryId 4))
-        , MakeCatRMock (SelectSubCats 4)
-        , MakeCatRMock (SelectSubCats 11)
-        , MakeCatRMock (SelectSubCats 12)
-        , MakeCatRMock (SelectSubCats 16)
-        , MakeCatRMock (SelectSubCats 17)
-        , TRANSACTIONOPEN
-        , CatMock (UpdateDbCatsForPosts  1 [4,11,12,16,17])
-        , CatMock (UpdateDbCatsForDrafts 1 [4,11,12,16,17])
-        , CatMock (DeleteDbCats [4,11,12,16,17])
-        , TRANSACTIONCLOSE
+        [ AuthMock (SelectTokenKeyForUser 152)
+        , ExistMock (IsExist (CommentId 4))
+        , CommMock (DeleteDbComm 4)
         ]
-      eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr1 (ToDelete 4)) []
+      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
--}

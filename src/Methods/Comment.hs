@@ -71,6 +71,7 @@ workWithComms h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= getComments h
     ToGet commId -> do
       lift $ logInfo hLog "Get comment command"
+      isExistResourseE hExist (CommentId commId)
       getComment h commId
     ToPut commId -> do
       lift $ logInfo hLog "Update comment command"
