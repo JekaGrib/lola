@@ -6,8 +6,8 @@
 module Spec.Comment where
 
 import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (CreateComment (..),UpdateComment (..))
-import Api.Response (CommentResponse (..))
+import Api.Request.QueryStr (CreateComment (..),UpdateComment (..),GetComments(..))
+import Api.Response (CommentResponse (..),CommentIdTextUserResponse(..),CommentsResponse(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -26,6 +26,8 @@ import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Methods.Common.Auth (AccessMode(..))
+import Psql.ToQuery.SelectLimit (OrderBy (..))
+import Types
 
 testComm :: IO ()
 testComm = hspec $ do
@@ -46,6 +48,15 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getComment handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
+  describe "getComments" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ getComments handle (GetComments 7 1)) []
+      reverse state
+        `shouldBe` 
+        [CommMock (SelectLimCommsForPost 7 (ByCommId DESC) 1 20)]
+      eitherResp <- evalStateT (runExceptT $ getComments handle (GetComments 7 1)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3,CommentIdTextUserResponse 2 "ok" 4,CommentIdTextUserResponse 3 "yes" 5]))
   describe "updateComment" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateComment handle 3 2 (UpdateComment "yes")) []
@@ -86,7 +97,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
-  describe "workWithComms (ToGet)" $ do
+  describe "workWithComms (ToGet id)" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       reverse state
@@ -97,6 +108,15 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
+  describe "workWithComms (ToGetAll)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+      reverse state
+        `shouldBe` 
+        [ExistMock (IsExist (PostId 7)),CommMock (SelectLimCommsForPost 7 (ByCommId DESC) 1 20)]
+      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3,CommentIdTextUserResponse 2 "ok" 4,CommentIdTextUserResponse 3 "yes" 5]))
   describe "workWithComms (ToPut)" $ do
     it "work with valid DB answer, without super category" $ do
       state <- execStateT (runExceptT $ workWithComms handle qStr3 (ToPut 4)) []
