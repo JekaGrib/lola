@@ -66,6 +66,9 @@ getDayTest = do
   return dayExample
 
 selectDraftsTest :: DraftId -> StateT [MockAction] IO [Draft]
+selectDraftsTest 25 = do
+  modify (DraftMock (SelectDrafts 25) :)
+  return [Draft 25 "author" 0 "draft" 9 "lalala" 6]
 selectDraftsTest dId = do
   modify (DraftMock (SelectDrafts dId) :)
   return [Draft dId "author" 7 "draft" 9 "lalala" 6]
