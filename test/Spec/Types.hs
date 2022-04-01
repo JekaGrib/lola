@@ -4,7 +4,8 @@
 module Spec.Types where
 
 import Logger
-import Spec.Auth.Types
+import Spec.Auth.Types (AuthMock)
+import Spec.Author.Types (AuthorMock)
 import Spec.Exist.Types (ExistMock)
 import Spec.Tag.Types (TagMock)
 import Spec.Picture.Types (PicMock)
@@ -22,6 +23,7 @@ data MockAction
   | TRANSACTIONCLOSE
   | GETDay
   | AuthMock AuthMock
+  | AuthorMock AuthorMock
   | CatMock CatMock
   | CommMock CommMock
   | DeleteManyMock DeleteManyMock

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f23c108baeb1c8554389e85b7892f157985973cc5c65be75575d78673dc7026a
+-- hash: b7e9de377822eb21170857194a2ba4c3acd68f835e01b530f8f1eb5927eaaaa1
 
 name:           lola
 version:        0.1.0.0
@@ -151,6 +151,10 @@ test-suite lola-test
       Spec.Auth.Handlers
       Spec.Auth.QStrExample
       Spec.Auth.Types
+      Spec.Author
+      Spec.Author.Handlers
+      Spec.Author.QStrExample
+      Spec.Author.Types
       Spec.Category
       Spec.Category.Handlers
       Spec.Category.QStrExample
