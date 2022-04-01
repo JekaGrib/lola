@@ -67,16 +67,20 @@ data Filter
   | TagF TagF
   | InF InF
   | AuthorNameF Text
+  deriving (Eq,Show)
+
 
 data CreatedF
   = At Day
   | AtLt Day
   | AtGt Day
+  deriving (Eq,Show)
 
 data TagF
   = TagIdF TagId
   | TagsIn [TagId]
   | TagsAll [TagId]
+  deriving (Eq,Show)
 
 data InF
   = PostText Text
@@ -85,6 +89,7 @@ data InF
   | CatName Text
   | TagName Text
   | EveryWhere [InF]
+  deriving (Eq,Show)
 
 instance ToWhere Filter where
   toWhere (CatIdF catId) = WherePair " post_category_id = ? " (Id catId)

@@ -9,6 +9,7 @@ import Spec.Author.Types (AuthorMock)
 import Spec.Exist.Types (ExistMock)
 import Spec.Tag.Types (TagMock)
 import Spec.Picture.Types (PicMock)
+import Spec.Post.Types (PostMock)
 import Spec.User.Types (UserMock)
 import Spec.DeleteMany.Types (DeleteManyMock)
 import Spec.MakeCatResp.Types (MakeCatRMock)
@@ -31,6 +32,7 @@ data MockAction
   | ExistMock ExistMock
   | MakeCatRMock MakeCatRMock
   | PicMock PicMock
+  | PostMock PostMock
   | TagMock TagMock
   | UserMock UserMock
   deriving (Eq, Show)

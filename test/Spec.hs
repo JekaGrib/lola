@@ -5,6 +5,7 @@ import Spec.Auth (testAuth)
 import Spec.Author (testAuthor)
 import Spec.Tag (testTag)
 import Spec.Picture (testPic)
+import Spec.Post (testPost)
 import Spec.User (testUser)
 import Spec.MakeCatResp (testMakeCatResp)
 import Spec.Category (testCat)
@@ -20,5 +21,6 @@ main = do
   testDraft
   testMakeCatResp
   testPic
+  testPost
   testTag
   testUser
