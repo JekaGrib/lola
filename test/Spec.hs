@@ -8,12 +8,14 @@ import Spec.User (testUser)
 import Spec.MakeCatResp (testMakeCatResp)
 import Spec.Category (testCat)
 import Spec.Comment (testComm)
+import Spec.Draft (testDraft)
 
 main :: IO ()
 main = do
   testAuth
   testCat
   testComm
+  testDraft
   testMakeCatResp
   testPic
   testTag

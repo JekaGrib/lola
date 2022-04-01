@@ -13,17 +13,19 @@ import Spec.DeleteMany.Types (DeleteManyMock)
 import Spec.MakeCatResp.Types (MakeCatRMock)
 import Spec.Category.Types (CatMock)
 import Spec.Comment.Types (CommMock)
+import Spec.Draft.Types (DraftMock)
 
 
 data MockAction
   = LOG Priority
   | TRANSACTIONOPEN
   | TRANSACTIONCLOSE
-  | TRANSACTIONunROLL
+  | GETDay
   | AuthMock AuthMock
   | CatMock CatMock
   | CommMock CommMock
   | DeleteManyMock DeleteManyMock
+  | DraftMock DraftMock
   | ExistMock ExistMock
   | MakeCatRMock MakeCatRMock
   | PicMock PicMock
