@@ -200,67 +200,186 @@ testDraft = hspec $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       reverse state
         `shouldBe` 
-        [AuthMock (SelectTokenKeyForUser 152)
-        ,ExistMock (IsExist (CategoryId 3))
-        ,ExistMock (IsExist (PictureId 42))
-        ,ExistMock (IsExist (PictureId 6))
-        ,ExistMock (IsExist (PictureId 9))
-        ,ExistMock (IsExist (PictureId 12))
-        ,ExistMock (IsExist (TagId 15))
-        ,ExistMock (IsExist (TagId 18))
-        ,ExistMock (IsExist (TagId 20))
-        ,DraftMock (SelectAuthorsForUser 152)
-        ,TRANSACTIONOPEN
-        ,DraftMock (InsertReturnDraft (InsertDraft Nothing 7 "rock" 3 "heyhey" 42))
-        ,DraftMock (InsertManyDraftsPics [(14,6),(14,9),(14,12)])
-        ,DraftMock (InsertManyDraftsTags [(14,15),(14,18),(14,20)])
-        ,TRANSACTIONCLOSE
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (CategoryId 3))
+        , ExistMock (IsExist (PictureId 42))
+        , ExistMock (IsExist (PictureId 6))
+        , ExistMock (IsExist (PictureId 9))
+        , ExistMock (IsExist (PictureId 12))
+        , ExistMock (IsExist (TagId 15))
+        , ExistMock (IsExist (TagId 18))
+        , ExistMock (IsExist (TagId 20))
+        , DraftMock (SelectAuthorsForUser 3)
+        , TRANSACTIONOPEN
+        , DraftMock (InsertReturnDraft (InsertDraft Nothing 7 "rock" 3 "heyhey" 42))
+        , DraftMock (InsertManyDraftsPics [(14,6),(14,9),(14,12)])
+        , DraftMock (InsertManyDraftsTags [(14,15),(14,18),(14,20)])
+        , TRANSACTIONCLOSE
         ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
-{-} describe "workWithComms (ToGet id)" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
+  describe "workWithDrafts (ToPost id)" $ do
+    it "work with valid DB answer for update post" $ do
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 7) "") []
       reverse state
         `shouldBe` 
-        [ ExistMock (IsExist (CommentId 4))
-        , CommMock (SelectComm 4)
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (DraftId 7))
+        , DraftMock (SelectAuthorsForUser 3)
+        , DraftMock (SelectUsersForDraft 7)
+        , DraftMock (SelectDrafts 7)
+        , DraftMock (SelectPicsForDraft 7)
+        , DraftMock (SelectTagsForDraft 7)
+        , MakeCatRMock (SelectCats 9)
+        , MakeCatRMock (SelectSubCats 9)
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        , DraftMock (SelectDaysForPost 7)
+        , TRANSACTIONOPEN
+        , DraftMock (UpdatePost 7 (UpdateDbPost "draft" 9 "lalala" 6))
+        , DeleteManyMock (DeleteDbPicsForPost 7)
+        , DeleteManyMock (DeleteDbTagsForPost 7)
+        , DraftMock (InsertManyPostsPics [(7,6),(7,9),(7,12)])
+        , DraftMock (InsertManyPostsTags [(7,15),(7,18),(7,20)])
+        , TRANSACTIONCLOSE
         ]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
-  describe "workWithComms (ToGetAll)" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+    it "work with valid DB answer for create new post" $ do
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) "") []
       reverse state
         `shouldBe` 
-        [ExistMock (IsExist (PostId 7)),CommMock (SelectLimCommsForPost 7 (ByCommId DESC) 1 20)]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (DraftId 25))
+        , DraftMock (SelectAuthorsForUser 3)
+        , DraftMock (SelectUsersForDraft 25)
+        , DraftMock (SelectDrafts 25)
+        , DraftMock (SelectPicsForDraft 25)
+        , DraftMock (SelectTagsForDraft 25)
+        , MakeCatRMock (SelectCats 9)
+        , MakeCatRMock (SelectSubCats 9)
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        , GETDay
+        , TRANSACTIONOPEN
+        , DraftMock (InsertReturnPost (InsertPost 7 "draft" dayExample 9 "lalala" 6))
+        , DraftMock (InsertManyPostsPics [(20,6),(20,9),(20,12)])
+        , DraftMock (InsertManyPostsTags [(20,15),(20,18),(20,20)])
+        , TRANSACTIONCLOSE
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3,CommentIdTextUserResponse 2 "ok" 4,CommentIdTextUserResponse 3 "yes" 5]))
-  describe "workWithComms (ToPut)" $ do
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
+  describe "workWithDrafts (ToGet)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToGet 4) "") []
+      reverse state
+        `shouldBe` 
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (DraftId 4))
+        , DraftMock (SelectAuthorsForUser 3)
+        , DraftMock (SelectUsersForDraft 4)
+        , DraftMock (SelectDrafts 4)
+        , DraftMock (SelectPicsForDraft 4)
+        , DraftMock (SelectTagsForDraft 4)
+        , MakeCatRMock (SelectCats 9)
+        , MakeCatRMock (SelectSubCats 9)
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToGet 4) "") []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ draftResp0)
+  describe "workWithDrafts (ToGetAll)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr2 ToGetAll "") []
+      reverse state
+        `shouldBe` 
+        [ AuthMock (SelectTokenKeyForUser 4)
+        , DraftMock (SelectAuthorsForUser 4)
+        , DraftMock (SelectLimDraftsForAuthor 7 (ByDraftId DESC) 1 5)
+        , DraftMock (SelectPicsForDraft 1)
+        , DraftMock (SelectTagsForDraft 1)
+        , MakeCatRMock (SelectCats 15)
+        , MakeCatRMock (SelectSubCats 15)
+        , MakeCatRMock (SelectCats 9)
+        , MakeCatRMock (SelectSubCats 9)
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        , DraftMock (SelectPicsForDraft 5)
+        , DraftMock (SelectTagsForDraft 5)
+        , MakeCatRMock (SelectCats 24)
+        , MakeCatRMock (SelectSubCats 24)
+        , MakeCatRMock (SelectCats 20)
+        , MakeCatRMock (SelectSubCats 20)
+        , MakeCatRMock (SelectCats 15)
+        , MakeCatRMock (SelectSubCats 15)
+        , MakeCatRMock (SelectCats 9)
+        , MakeCatRMock (SelectSubCats 9)
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        , DraftMock (SelectPicsForDraft 12)
+        , DraftMock (SelectTagsForDraft 12)
+        , MakeCatRMock (SelectCats 17)
+        , MakeCatRMock (SelectSubCats 17)
+        , MakeCatRMock (SelectCats 12)
+        , MakeCatRMock (SelectSubCats 12)
+        , MakeCatRMock (SelectCats 4)
+        , MakeCatRMock (SelectSubCats 4)
+        , MakeCatRMock (SelectCats 1)
+        , MakeCatRMock (SelectSubCats 1)
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr2 ToGetAll "") []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
+          DraftsResponse 1 [draftResp1,draftResp2,draftResp3])
+  describe "workWithDrafts (ToPut)" $ do
     it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr3 (ToPut 4)) []
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToPut 4) json1) []
       reverse state
         `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (CommentId 4))
-        , CommMock (SelectUsersForComm 4)
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (DraftId 4))
+        , ExistMock (IsExist (CategoryId 3))
+        , ExistMock (IsExist (PictureId 42))
+        , ExistMock (IsExist (PictureId 6))
+        , ExistMock (IsExist (PictureId 9))
+        , ExistMock (IsExist (PictureId 12))
+        , ExistMock (IsExist (TagId 15))
+        , ExistMock (IsExist (TagId 18))
+        , ExistMock (IsExist (TagId 20))
+        , DraftMock (SelectUsersForDraft 4)
+        , DraftMock (SelectAuthorsForUser 3)
+        , DraftMock (SelectTags [15,18,20])
+        , MakeCatRMock (SelectCats 3)
+        , MakeCatRMock (SelectSubCats 3)
+        , DraftMock (SelectPostsForDraft 4)
+        , TRANSACTIONOPEN
+        , DeleteManyMock (DeleteDbPicsForDrafts [4])
+        , DeleteManyMock (DeleteDbTagsForDrafts [4])
+        , DraftMock (UpdateDraft 4 (UpdateDbDraft "rock" 3 "heyhey" 42))
+        , DraftMock (InsertManyDraftsPics [(4,6),(4,9),(4,12)])
+        , DraftMock (InsertManyDraftsTags [(4,15),(4,18),(4,20)])
+        , TRANSACTIONCLOSE
         ]
-  describe "workWithComms (ToDelete)" $ do
+  describe "workWithDrafts (ToDelete)" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
+      state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToDelete 4) "") []
       reverse state
         `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (CommentId 4))
-        , CommMock (DeleteDbComm 4)
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (DraftId 4))
+        , DraftMock (SelectAuthorsForUser 3)
+        , DraftMock (SelectUsersForDraft 4)
+        , TRANSACTIONOPEN
+        , DeleteManyMock (DeleteDbPicsForDrafts [4])
+        , DeleteManyMock (DeleteDbTagsForDrafts [4])
+        , DeleteManyMock (DeleteDbDrafts [4])
+        , TRANSACTIONCLOSE
         ]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
+      eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToDelete 4) "") []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
--}
+
 
 draftResp0 :: DraftResponse
 draftResp0 = 
