@@ -49,7 +49,7 @@ testUser = hspec $ do
         `shouldBe` [UserMock (SelectAuthsForUser 4)]
       eitherResp <- evalStateT (runExceptT $ logIn handle (LogIn 4 "oops")) []
       eitherResp
-        `shouldBe`  (Left (SecretLogInError "INVALID password"))
+        `shouldBe`  Left (SecretLogInError "INVALID password")
   describe "workWithLogIn" $ do
     it "work for valid query string" $ do
       state <- execStateT (runExceptT $ workWithLogIn handle qStr3) []
@@ -64,7 +64,7 @@ testUser = hspec $ do
         `shouldBe`  [ExistMock (IsExist (UserId 200))]
       eitherResp <- evalStateT (runExceptT $ workWithLogIn handle qStr4) []
       eitherResp
-        `shouldBe` (Left (SecretLogInError "BadReqError \"user_id: 200 doesn`t exist\""))
+        `shouldBe` Left (SecretLogInError "BadReqError \"user_id: 200 doesn`t exist\"")
     it "throw BadReq Error on not valid query string" $ do
       state <- execStateT (runExceptT $ workWithLogIn handle qStr1) []
       reverse state
@@ -72,7 +72,7 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithLogIn handle qStr1) []
       eitherResp
         `shouldBe` Left (SecretLogInError "BadReqError \"Can't find parameter:user_id\"")
-  describe "createUser" $ do
+  describe "createUser" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createUser handle (CreateUser "pwd" "fName" "lName" 4)) []
       reverse state
@@ -80,7 +80,7 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createUser handle (CreateUser "pwd" "fName" "lName" 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [jsonHeader,("Location","http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.stu." ++ strSha1 "stulilu")))
-  describe "getUser" $ do
+  describe "getUser" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getUser handle 4) []
       reverse state
@@ -88,7 +88,7 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getUser handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ UserResponse 4 "fName" "lName" 4 "http://localhost:3000/pictures/4" dayExample ))
-  describe "deleteUser" $ do
+  describe "deleteUser" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteUser handle 4) []
       reverse state
@@ -123,7 +123,7 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithUsers handle qStr5 ToPost) []
       eitherResp
         `shouldBe` Left (BadReqError "pic_id: 200 doesn`t exist")
-  describe "workWithUsers (ToGet)" $ do
+  describe "workWithUsers (ToGet)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithUsers handle [] (ToGet 4)) []
       reverse state
@@ -131,7 +131,7 @@ testUser = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithUsers handle [] (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ UserResponse 4 "fName" "lName" 4 "http://localhost:3000/pictures/4" dayExample ))
-  describe "workWithUsers (ToDelete)" $ do
+  describe "workWithUsers (ToDelete)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithUsers handle qStr1 (ToDelete 4)) []
       reverse state

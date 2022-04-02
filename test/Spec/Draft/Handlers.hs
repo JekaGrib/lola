@@ -79,13 +79,11 @@ selectUsersForDraftTest dId = do
 selectTagsTest :: [TagId] -> StateT [MockAction] IO [Tag]
 selectTagsTest tIds  = do
   modify (DraftMock (SelectTags tIds) :)
-  return $ zipWith toTag tIds tagsNames
+  return $ zipWith Tag tIds tagsNames
 
 tagsNames :: [TagName]
 tagsNames = cycle ["cats","dogs","birds","cows"]
 
-toTag :: TagId -> TagName -> Tag
-toTag iD name = Tag iD name
 
 selectDaysForPostTest :: PostId -> StateT [MockAction] IO [Day]
 selectDaysForPostTest pId = do
@@ -93,7 +91,7 @@ selectDaysForPostTest pId = do
   return [dayExample]
 
 dayExample :: Day
-dayExample = (fromGregorian 2020 02 02)
+dayExample = fromGregorian 2020 02 02
 
 
 selectLimDraftsForAuthorTest :: AuthorId -> OrderBy -> Page -> Limit -> StateT [MockAction] IO [Draft]
@@ -123,12 +121,12 @@ selectAuthorsForUserTest uId = do
   return [Author 7 "author" uId]
 
 updateDbDraftTest :: DraftId -> UpdateDbDraft -> StateT [MockAction] IO ()
-updateDbDraftTest dId updDr = do
+updateDbDraftTest dId updDr = 
   modify (DraftMock (UpdateDraft dId updDr) :)
   
 
 updateDbPostTest :: PostId -> UpdateDbPost -> StateT [MockAction] IO ()
-updateDbPostTest pId updPs = do
+updateDbPostTest pId updPs = 
   modify (DraftMock (UpdatePost pId updPs) :)
 
 
@@ -138,12 +136,12 @@ insertReturnDraftTest insDr = do
   return 14
 
 insertManyDraftsPicsTest :: [(DraftId, PictureId)] -> StateT [MockAction] IO ()
-insertManyDraftsPicsTest xs = do
+insertManyDraftsPicsTest xs = 
   modify (DraftMock (InsertManyDraftsPics xs) :)
 
 
 insertManyDraftsTagsTest :: [(DraftId, TagId)] -> StateT [MockAction] IO ()
-insertManyDraftsTagsTest xs = do
+insertManyDraftsTagsTest xs = 
   modify (DraftMock (InsertManyDraftsTags xs) :)
 
 
@@ -153,10 +151,10 @@ insertReturnPostTest insPs = do
   return 20
 
 insertManyPostsPicsTest :: [(PostId, PictureId)] -> StateT [MockAction] IO ()
-insertManyPostsPicsTest xs  = do
+insertManyPostsPicsTest xs  = 
   modify (DraftMock (InsertManyPostsPics xs) :)
 
 
 insertManyPostsTagsTest :: [(PostId, TagId)] -> StateT [MockAction] IO ()
-insertManyPostsTagsTest xs  = do
+insertManyPostsTagsTest xs  = 
   modify (DraftMock (InsertManyPostsTags xs) :)

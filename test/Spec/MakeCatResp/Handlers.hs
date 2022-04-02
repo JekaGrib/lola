@@ -26,9 +26,9 @@ handle =
 selectCatsTest :: CategoryId -> StateT [MockAction] IO [Cat]
 selectCatsTest catId = do
   modify (MakeCatRMock (SelectCats catId) :)
-  if (catId <= 20) 
+  if catId <= 20
     then return $ map toCat . filter ((== catId) . cat_idCat) $ exampleCats
-    else return $ [Cat "u" 20]
+    else return [Cat "u" 20]
 
 selectSubCatsTest :: CategoryId -> StateT [MockAction] IO [SubCategoryId]
 selectSubCatsTest catId = do

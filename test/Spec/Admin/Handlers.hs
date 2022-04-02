@@ -45,7 +45,7 @@ getDayTest =  do
   return dayExample
 
 dayExample :: Day
-dayExample = (fromGregorian 2020 02 02)
+dayExample = fromGregorian 2020 02 02
 
 generateTokenKeyTest :: StateT [MockAction] IO TokenKey
 generateTokenKeyTest = do

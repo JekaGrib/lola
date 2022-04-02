@@ -112,4 +112,4 @@ insertReturnTagTestEx :: TagName -> StateT [MockAction] IO TagId
 insertReturnTagTestEx _ = throwSqlEx
 
 insertReturnTagTestEx1 :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException
+insertReturnTagTestEx1 _ = throwM UnexpectedEmptyDbOutPutException

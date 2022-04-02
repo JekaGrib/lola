@@ -14,7 +14,7 @@ import Test.Hspec (describe, hspec, it, shouldBe)
 import Api.Response (CatResponse(..))
 
 testMakeCatResp :: IO ()
-testMakeCatResp = hspec $ do
+testMakeCatResp = hspec $ 
   describe "makeCatResp" $ do
     it "work with super cat" $ do
       state <- execStateT (runExceptT $ makeCatResp handle 1) []

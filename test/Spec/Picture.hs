@@ -37,14 +37,14 @@ testPic = hspec $ do
         `shouldBe` [PicMock (SelectPicBS 4)]
       eitherResp <- evalStateT (runExceptT $ sendPicture handle1 4) []
       eitherResp
-        `shouldBe` (Left (DatabaseError "Output not single[\"picture\",\"picture\"]"))
+        `shouldBe` Left (DatabaseError "Output not single[\"picture\",\"picture\"]")
     it "throw DBError to empty DB answer" $ do
       state <- execStateT (runExceptT $ sendPicture handle2 4) []
       reverse state
         `shouldBe` [PicMock (SelectPicBS 4)]
       eitherResp <- evalStateT (runExceptT $ sendPicture handle2 4) []
       eitherResp
-        `shouldBe` (Left (DatabaseError "Empty output"))
+        `shouldBe` Left (DatabaseError "Empty output")
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ sendPicture handle3 4) []
       reverse state
@@ -66,14 +66,14 @@ testPic = hspec $ do
         `shouldBe` [PicMock (GoToUrl "url")]
       eitherResp <- evalStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Left (BadReqError "Invalid picture url:url"))
+        `shouldBe` Left (BadReqError "Invalid picture url:url")
     it "throw BadReq Error to invalid url" $ do
       state <- execStateT (runExceptT $ loadPicture handle3 (LoadPicture "url")) []
       reverse state
         `shouldBe` []
       eitherResp <- evalStateT (runExceptT $ loadPicture handle3 (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Left (BadReqError "Invalid picture url:url. InvalidUrlException \"oops\" \"oops\""))
+        `shouldBe` Left (BadReqError "Invalid picture url:url. InvalidUrlException \"oops\" \"oops\"")
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
       reverse state

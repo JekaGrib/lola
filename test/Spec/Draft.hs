@@ -31,7 +31,7 @@ import Data.Text (pack,Text)
 
 testDraft :: IO ()
 testDraft = hspec $ do
-  describe "createNewDraft" $ do
+  describe "createNewDraft" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createNewDraft handle 4 (DraftRequest "ok" 12 "lala" 3 [5,7,24] [2,8,41])) []
       reverse state
@@ -46,7 +46,7 @@ testDraft = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createNewDraft handle 4 (DraftRequest "ok" 12 "lala" 3 [5,7,24] [2,8,41])) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
-  describe "getDraft" $ do
+  describe "getDraft" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getDraft handle 3 4) []
       reverse state
@@ -63,8 +63,8 @@ testDraft = hspec $ do
         ]
       eitherResp <- evalStateT (runExceptT $ getDraft handle 3 4) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ draftResp0)
-  describe "getDrafts" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode draftResp0)
+  describe "getDrafts" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getDrafts handle 4 (GetDrafts 1)) []
       reverse state
@@ -106,7 +106,7 @@ testDraft = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
           DraftsResponse 1 [draftResp1,draftResp2,draftResp3])
-  describe "updateDraft" $ do
+  describe "updateDraft" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateDraft handle 3 14 (DraftRequest "ok" 12 "lala" 3 [5,7,24] [2,8,41])) []
       reverse state
@@ -129,7 +129,7 @@ testDraft = hspec $ do
         , DraftMock (InsertManyDraftsTags [(14,2),(14,8),(14,41)])
         , TRANSACTIONCLOSE
         ]
-  describe "deleteDraft" $ do
+  describe "deleteDraft" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteDraft handle 3 7) []
       reverse state
@@ -191,7 +191,7 @@ testDraft = hspec $ do
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 3 25) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
-  describe "workWithDrafts (ToPost)" $ do
+  describe "workWithDrafts (ToPost)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       reverse state
@@ -265,7 +265,7 @@ testDraft = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) json1) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
-  describe "workWithDrafts (ToGet)" $ do
+  describe "workWithDrafts (ToGet)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToGet 4) "") []
       reverse state
@@ -284,8 +284,8 @@ testDraft = hspec $ do
         ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToGet 4) "") []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ draftResp0)
-  describe "workWithDrafts (ToGetAll)" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode draftResp0)
+  describe "workWithDrafts (ToGetAll)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr2 ToGetAll "") []
       reverse state
@@ -328,7 +328,7 @@ testDraft = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
           DraftsResponse 1 [draftResp1,draftResp2,draftResp3])
-  describe "workWithDrafts (ToPut)" $ do
+  describe "workWithDrafts (ToPut)" $ 
     it "work with valid DB answer, without super category" $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToPut 4) json1) []
       reverse state
@@ -357,7 +357,7 @@ testDraft = hspec $ do
         , DraftMock (InsertManyDraftsTags [(4,15),(4,18),(4,20)])
         , TRANSACTIONCLOSE
         ]
-  describe "workWithDrafts (ToDelete)" $ do
+  describe "workWithDrafts (ToDelete)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithDrafts handle qStr1 (ToDelete 4) "") []
       reverse state

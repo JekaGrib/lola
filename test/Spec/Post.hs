@@ -30,7 +30,7 @@ import Psql.ToQuery.SelectLimit (OrderBy (..))
 
 testPost :: IO ()
 testPost = hspec $ do
-  describe "createPostsDraft" $ do
+  describe "createPostsDraft" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createPostsDraft handle 3 7) []
       reverse state
@@ -49,7 +49,7 @@ testPost = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createPostsDraft handle 3 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
-  describe "getPost" $ do
+  describe "getPost" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getPost handle 4) []
       reverse state
@@ -64,8 +64,8 @@ testPost = hspec $ do
         ]
       eitherResp <- evalStateT (runExceptT $ getPost handle 4) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ postResp0)
-  describe "getPosts" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode postResp0)
+  describe "getPosts" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getPosts handle (GetPosts 1 
         (GetPostsF Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing)
@@ -96,7 +96,7 @@ testPost = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
         PostsResponse 1 [postResp1,postResp2,postResp3])
-  describe "deletePost" $ do
+  describe "deletePost" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deletePost handle 4) []
       reverse state
@@ -115,7 +115,7 @@ testPost = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deletePost handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
-  describe "workWithPosts (ToPost id)" $ do
+  describe "workWithPosts (ToPost id)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
       reverse state
@@ -136,7 +136,7 @@ testPost = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
-  describe "workWithPosts (ToGet)" $ do
+  describe "workWithPosts (ToGet)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithPosts handle [] (ToGet 4)) []
       reverse state
@@ -152,8 +152,8 @@ testPost = hspec $ do
         ]
       eitherResp <- evalStateT (runExceptT $ workWithPosts handle [] (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ postResp0)
-  describe "workWithPosts (ToGetAll)" $ do
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode postResp0)
+  describe "workWithPosts (ToGetAll)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithPosts handle qStr3 ToGetAll) []
       reverse state
@@ -178,7 +178,7 @@ testPost = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
         PostsResponse 1 [postResp1,postResp2,postResp3])
-  describe "workWithPosts (ToDelete)" $ do
+  describe "workWithPosts (ToDelete)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithPosts handle qStr1 (ToDelete 4)) []
       reverse state
@@ -211,11 +211,7 @@ postResp0 =
   in  PostResponse 4 (AuthorResponse 7 "author" 3) "post" dayExample catResp "lalala" 8 (toPicUrl 8) picsResps tagsResps 
 
 postResp1 :: PostResponse
-postResp1 = 
-  let catResp = SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]
-      picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
-      tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
-  in  PostResponse 1 (AuthorResponse 7 "author" 3) "post1" dayExample catResp "lalala" 8 (toPicUrl 8) picsResps tagsResps 
+postResp1 = postResp0 {post_id=1}
 
 postResp2 :: PostResponse
 postResp2 = 

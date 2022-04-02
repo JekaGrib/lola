@@ -59,17 +59,17 @@ selectAuthorsTest aId = do
   return [Author aId "author" 3]
 
 updateDbAuthorTest :: UserId -> AuthorInfo -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorTest uId aInfo aId = do
+updateDbAuthorTest uId aInfo aId = 
   modify (AuthorMock (UpdateDbAuthor uId aInfo aId) :)
 
 
 updateDbAuthorForPostsTest :: AuthorId -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorForPostsTest newAId aId = do
+updateDbAuthorForPostsTest newAId aId = 
   modify (AuthorMock (UpdateDbAuthorForPosts newAId aId) :)
 
 
 deleteDbAuthorTest :: AuthorId -> StateT [MockAction] IO ()
-deleteDbAuthorTest aId = do
+deleteDbAuthorTest aId = 
   modify (AuthorMock (DeleteDbAuthor aId) :)
 
 

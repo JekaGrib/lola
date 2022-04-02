@@ -55,13 +55,13 @@ selectPostsTest pId = do
   return [Post pId 7 "author" 3 "post" dayExample 4 "lalala" 8]
 
 dayExample :: Day
-dayExample = (fromGregorian 2020 02 02)
+dayExample = fromGregorian 2020 02 02
 
 selectLimPostsTest :: [Filter] -> OrderBy -> Page -> Limit -> StateT [MockAction] IO [Post]
 selectLimPostsTest filt ordBy page lim = do
   modify (PostMock (SelectLimPosts filt ordBy page lim) :)
   return 
-    [ Post 1 7 "author" 3 "post1" dayExample 4 "lalala" 8
+    [ Post 1 7 "author" 3 "post"  dayExample 4 "lalala" 8
     , Post 2 8 "author" 4 "post2" dayExample 2 "lalala" 7
     , Post 3 9 "author" 5 "post3" dayExample 1 "lalala" 6
     ]

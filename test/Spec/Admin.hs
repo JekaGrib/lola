@@ -24,7 +24,7 @@ import Types
 
 testAdmin :: IO ()
 testAdmin = hspec $ do
-  describe "createAdmin" $ do
+  describe "createAdmin" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createAdmin handle (CreateAdmin "lola" "pwd" "fName" "lName" 6)) []
       reverse state
@@ -38,7 +38,7 @@ testAdmin = hspec $ do
       eitherResp
         `shouldBe` 
           (Right $ ResponseInfo status201 [jsonHeader,("Location","http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.hij." ++ strSha1 "hijlilu")))
-  describe "workWithAdmin " $ do
+  describe "workWithAdmin " $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithAdmin handle qStr1) []
       reverse state

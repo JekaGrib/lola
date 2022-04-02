@@ -75,23 +75,23 @@ selectDraftsForAuthorTest aId =  do
   return [2,5]
 
 updateDbUserForCommsTest :: UserId -> UserId -> StateT [MockAction] IO ()
-updateDbUserForCommsTest newUId uId  = do
+updateDbUserForCommsTest newUId uId  = 
   modify (UserMock (UpdateDbUserForComms newUId uId ) :)
 
 updateDbAuthorForPostsTest :: AuthorId -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorForPostsTest newAId aId  =  do
+updateDbAuthorForPostsTest newAId aId  =  
   modify (UserMock (UpdateDbAuthorForPosts newAId aId ) :)
 
 updateDbTokenKeyForUserTest :: TokenKey -> UserId -> StateT [MockAction] IO ()
-updateDbTokenKeyForUserTest tk uI = do
+updateDbTokenKeyForUserTest tk uI = 
   modify (UserMock (UpdateDbTokenKeyForUser tk uI) :)
 
 deleteDbUserTest :: UserId -> StateT [MockAction] IO ()
-deleteDbUserTest uId =  do
+deleteDbUserTest uId =  
   modify (UserMock (DeleteDbUser uId) :)
 
 deleteDbAuthorTest :: AuthorId -> StateT [MockAction] IO ()
-deleteDbAuthorTest aId = do
+deleteDbAuthorTest aId = 
   modify (UserMock (DeleteDbAuthor aId) :)
 
 insertReturnUserTest :: InsertUser -> StateT [MockAction] IO UserId
@@ -105,7 +105,7 @@ getDayTest =  do
   return dayExample
 
 dayExample :: Day
-dayExample = (fromGregorian 2020 02 02)
+dayExample = fromGregorian 2020 02 02
 
 generateTokenKeyTest :: StateT [MockAction] IO TokenKey
 generateTokenKeyTest = do

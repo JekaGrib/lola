@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
@@ -42,23 +41,23 @@ withTransactionDBTest m = do
   return a
 
 updateDbCatTest :: CatName -> CategoryId -> StateT [MockAction] IO ()
-updateDbCatTest cN cId = do
+updateDbCatTest cN cId = 
   modify ( CatMock (UpdateDbCat cN cId) :)
 
 updateDbSubCatTest :: CatName -> SuperCatId -> CategoryId -> StateT [MockAction] IO ()
-updateDbSubCatTest cN supCId cId  = do
+updateDbSubCatTest cN supCId cId  = 
   modify ( CatMock (UpdateDbSubCat cN supCId cId) :)
 
 updateDbCatsForPostsTest :: CategoryId -> [CategoryId] -> StateT [MockAction] IO ()
-updateDbCatsForPostsTest cId cIds  = do
+updateDbCatsForPostsTest cId cIds  = 
   modify ( CatMock (UpdateDbCatsForPosts cId cIds) :)
 
 updateDbCatsForDraftsTest :: CategoryId -> [CategoryId] -> StateT [MockAction] IO ()
-updateDbCatsForDraftsTest cId cIds  = do
+updateDbCatsForDraftsTest cId cIds  = 
   modify ( CatMock (UpdateDbCatsForDrafts cId cIds) :)
 
 deleteDbCatsTest :: [CategoryId] -> StateT [MockAction] IO ()
-deleteDbCatsTest cIds  = do
+deleteDbCatsTest cIds  = 
   modify ( CatMock (DeleteDbCats cIds) :)
 
 insertReturnCatTest :: CatName -> StateT [MockAction] IO CategoryId

@@ -95,7 +95,7 @@ insertRetPicBSTestEx :: ByteString -> StateT [MockAction] IO PictureId
 insertRetPicBSTestEx _ = throwSqlEx
 
 insertRetPicBSTestEx1 :: ByteString -> StateT [MockAction] IO PictureId
-insertRetPicBSTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException
+insertRetPicBSTestEx1 _ = throwM UnexpectedEmptyDbOutPutException
 
 goToUrlTestEx :: Text -> StateT [MockAction] IO BSL.ByteString
 goToUrlTestEx _ = throwHttpEx

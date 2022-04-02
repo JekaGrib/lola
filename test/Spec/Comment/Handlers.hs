@@ -60,12 +60,12 @@ selectLimCommsForPostTest pId ordBy page lim = do
   return [Comment 1 3 "cool" pId,Comment 2 4 "ok" pId,Comment 3 5 "yes" pId]
 
 updateDbCommTest :: CommentText -> CommentId -> StateT [MockAction] IO  ()
-updateDbCommTest cTxt cId = do
+updateDbCommTest cTxt cId = 
   modify (CommMock (UpdateDbComm cTxt cId) :)
 
 
 deleteDbCommTest :: CommentId -> StateT [MockAction] IO  ()
-deleteDbCommTest cId = do
+deleteDbCommTest cId = 
   modify (CommMock (DeleteDbComm cId) :)
 
 

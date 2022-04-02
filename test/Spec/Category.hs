@@ -40,7 +40,7 @@ testCat = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createCategory handle (CreateCategory "food" (Just 4))) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-  describe "getCategory" $ do
+  describe "getCategory" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getCategory handle 4) []
       reverse state
@@ -79,7 +79,7 @@ testCat = hspec $ do
         , MakeCatRMock (SelectCats    1)
         , MakeCatRMock (SelectSubCats 1)
         ]
-  describe "deleteCategory" $ do
+  describe "deleteCategory" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteCategory handle 4) []
       reverse state
@@ -117,7 +117,7 @@ testCat = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
-  describe "workWithCats (ToGet)" $ do
+  describe "workWithCats (ToGet)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
       reverse state
@@ -162,7 +162,7 @@ testCat = hspec $ do
         , MakeCatRMock (SelectCats    1)
         , MakeCatRMock (SelectSubCats 1)
         ]
-  describe "workWithCats (ToDelete)" $ do
+  describe "workWithCats (ToDelete)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithCats handle qStr1 (ToDelete 4)) []
       reverse state

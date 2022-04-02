@@ -27,7 +27,7 @@ import Types
 
 testComm :: IO ()
 testComm = hspec $ do
-  describe "createComment" $ do
+  describe "createComment" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       reverse state
@@ -35,7 +35,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
-  describe "getComment" $ do
+  describe "getComment" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getComment handle 4) []
       reverse state
@@ -44,7 +44,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getComment handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
-  describe "getComments" $ do
+  describe "getComments" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ getComments handle (GetComments 7 1)) []
       reverse state
@@ -53,7 +53,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getComments handle (GetComments 7 1)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3,CommentIdTextUserResponse 2 "ok" 4,CommentIdTextUserResponse 3 "yes" 5]))
-  describe "updateComment" $ do
+  describe "updateComment" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateComment handle 3 2 (UpdateComment "yes")) []
       reverse state
@@ -82,7 +82,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
-  describe "workWithComms (ToPost)" $ do
+  describe "workWithComms (ToPost)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       reverse state
@@ -93,7 +93,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
-  describe "workWithComms (ToGet id)" $ do
+  describe "workWithComms (ToGet id)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       reverse state
@@ -104,7 +104,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
-  describe "workWithComms (ToGetAll)" $ do
+  describe "workWithComms (ToGetAll)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
       reverse state
@@ -113,7 +113,7 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3,CommentIdTextUserResponse 2 "ok" 4,CommentIdTextUserResponse 3 "yes" 5]))
-  describe "workWithComms (ToPut)" $ do
+  describe "workWithComms (ToPut)" $ 
     it "work with valid DB answer, without super category" $ do
       state <- execStateT (runExceptT $ workWithComms handle qStr3 (ToPut 4)) []
       reverse state
@@ -122,7 +122,7 @@ testComm = hspec $ do
         , ExistMock (IsExist (CommentId 4))
         , CommMock (SelectUsersForComm 4)
         ]
-  describe "workWithComms (ToDelete)" $ do
+  describe "workWithComms (ToDelete)" $ 
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
       reverse state

@@ -71,10 +71,10 @@ testTag = hspec $ do
       eitherResp
         `shouldBe` Left (DatabaseError "Empty output")
     it "throw DBError to fatal Sql error" $ do
-      state <- execStateT (runExceptT $ deleteTag handle3 7) []
+      state <- execStateT (runExceptT $ getTag handle3 7) []
       reverse state
         `shouldBe` [LOG DEBUG]
-      eitherResp <- evalStateT (runExceptT $ deleteTag handle3 7) []
+      eitherResp <- evalStateT (runExceptT $ getTag handle3 7) []
       eitherResp
         `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
   describe "updateTag" $ do
@@ -181,9 +181,8 @@ testTag = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200)) []
       eitherResp
         `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
-  describe "workWithTags (ToPostId)"
-    $ it "throw 404 Error "
-    $ do
+  describe "workWithTags (ToPostId)" $
+    it "throw 404 Error " $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToPostId 4)) []
       reverse state
         `shouldBe` []
