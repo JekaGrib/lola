@@ -5,20 +5,19 @@
 module Spec.Draft.Handlers where
 
 import Control.Monad.State (StateT (..), modify)
+import Data.Time.Calendar (Day, fromGregorian)
 import Methods.Draft
+import Psql.Selecty (Author (..), Draft (..), Tag (..))
+import Psql.ToQuery.SelectLimit (OrderBy (..))
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
-import qualified Spec.Exist.Handlers (handle)
-import qualified Spec.MakeCatResp.Handlers (handle)
 import qualified Spec.DeleteMany.Handlers (handle)
-import Spec.Log (handLogWarning)
 import Spec.Draft.Types
+import qualified Spec.Exist.Handlers (handle)
+import Spec.Log (handLogWarning)
+import qualified Spec.MakeCatResp.Handlers (handle)
 import Spec.Types (MockAction (..))
 import Types
-import Psql.ToQuery.SelectLimit (OrderBy (..))
-import Psql.Selecty (Draft(..),Tag(..),Author(..),)
-import Data.Time.Calendar (Day,fromGregorian)
-
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -56,7 +55,7 @@ withTransactionDBTest m = do
   modify (TRANSACTIONCLOSE :)
   return a
 
-getDayTest ::  StateT [MockAction] IO Day
+getDayTest :: StateT [MockAction] IO Day
 getDayTest = do
   modify (GETDay :)
   return dayExample
@@ -69,21 +68,18 @@ selectDraftsTest dId = do
   modify (DraftMock (SelectDrafts dId) :)
   return [Draft dId "author" 7 "draft" 9 "lalala" 6]
 
-
 selectUsersForDraftTest :: DraftId -> StateT [MockAction] IO [UserId]
 selectUsersForDraftTest dId = do
   modify (DraftMock (SelectUsersForDraft dId) :)
   return [3]
 
-
 selectTagsTest :: [TagId] -> StateT [MockAction] IO [Tag]
-selectTagsTest tIds  = do
+selectTagsTest tIds = do
   modify (DraftMock (SelectTags tIds) :)
   return $ zipWith Tag tIds tagsNames
 
 tagsNames :: [TagName]
-tagsNames = cycle ["cats","dogs","birds","cows"]
-
+tagsNames = cycle ["cats", "dogs", "birds", "cows"]
 
 selectDaysForPostTest :: PostId -> StateT [MockAction] IO [Day]
 selectDaysForPostTest pId = do
@@ -93,22 +89,20 @@ selectDaysForPostTest pId = do
 dayExample :: Day
 dayExample = fromGregorian 2020 02 02
 
-
 selectLimDraftsForAuthorTest :: AuthorId -> OrderBy -> Page -> Limit -> StateT [MockAction] IO [Draft]
-selectLimDraftsForAuthorTest aId ordBy page lim  = do
+selectLimDraftsForAuthorTest aId ordBy page lim = do
   modify (DraftMock (SelectLimDraftsForAuthor aId ordBy page lim) :)
-  return [Draft 1 "author" 7 "draft" 15 "lalala" 6,Draft 5 "author" 0 "draft5" 24 "lalala" 4,Draft 12 "author" 0 "draft12" 17 "lalala" 13]
+  return [Draft 1 "author" 7 "draft" 15 "lalala" 6, Draft 5 "author" 0 "draft5" 24 "lalala" 4, Draft 12 "author" 0 "draft12" 17 "lalala" 13]
 
 selectPicsForDraftTest :: PostId -> StateT [MockAction] IO [PictureId]
 selectPicsForDraftTest pId = do
   modify (DraftMock (SelectPicsForDraft pId) :)
-  return [6,9,12]
-
+  return [6, 9, 12]
 
 selectTagsForDraftTest :: DraftId -> StateT [MockAction] IO [Tag]
 selectTagsForDraftTest dId = do
   modify (DraftMock (SelectTagsForDraft dId) :)
-  return [Tag 15 "cats",Tag 18 "dogs",Tag 20 "birds"]
+  return [Tag 15 "cats", Tag 18 "dogs", Tag 20 "birds"]
 
 selectPostsForDraftTest :: DraftId -> StateT [MockAction] IO [PostId]
 selectPostsForDraftTest dId = do
@@ -121,14 +115,12 @@ selectAuthorsForUserTest uId = do
   return [Author 7 "author" uId]
 
 updateDbDraftTest :: DraftId -> UpdateDbDraft -> StateT [MockAction] IO ()
-updateDbDraftTest dId updDr = 
+updateDbDraftTest dId updDr =
   modify (DraftMock (UpdateDraft dId updDr) :)
-  
 
 updateDbPostTest :: PostId -> UpdateDbPost -> StateT [MockAction] IO ()
-updateDbPostTest pId updPs = 
+updateDbPostTest pId updPs =
   modify (DraftMock (UpdatePost pId updPs) :)
-
 
 insertReturnDraftTest :: InsertDraft -> StateT [MockAction] IO DraftId
 insertReturnDraftTest insDr = do
@@ -136,14 +128,12 @@ insertReturnDraftTest insDr = do
   return 14
 
 insertManyDraftsPicsTest :: [(DraftId, PictureId)] -> StateT [MockAction] IO ()
-insertManyDraftsPicsTest xs = 
+insertManyDraftsPicsTest xs =
   modify (DraftMock (InsertManyDraftsPics xs) :)
 
-
 insertManyDraftsTagsTest :: [(DraftId, TagId)] -> StateT [MockAction] IO ()
-insertManyDraftsTagsTest xs = 
+insertManyDraftsTagsTest xs =
   modify (DraftMock (InsertManyDraftsTags xs) :)
-
 
 insertReturnPostTest :: InsertPost -> StateT [MockAction] IO PostId
 insertReturnPostTest insPs = do
@@ -151,10 +141,9 @@ insertReturnPostTest insPs = do
   return 20
 
 insertManyPostsPicsTest :: [(PostId, PictureId)] -> StateT [MockAction] IO ()
-insertManyPostsPicsTest xs  = 
+insertManyPostsPicsTest xs =
   modify (DraftMock (InsertManyPostsPics xs) :)
 
-
 insertManyPostsTagsTest :: [(PostId, TagId)] -> StateT [MockAction] IO ()
-insertManyPostsTagsTest xs  = 
+insertManyPostsTagsTest xs =
   modify (DraftMock (InsertManyPostsTags xs) :)

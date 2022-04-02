@@ -3,14 +3,14 @@
 
 module Spec.Post.Types where
 
+import Psql.ToQuery.SelectLimit (Filter (..), OrderBy (..))
 import Types
-import Psql.ToQuery.SelectLimit (OrderBy (..),Filter(..))
 
 data PostMock
-  = SelectPosts PostId 
-  | SelectLimPosts [Filter] OrderBy Page Limit 
-  | SelectPicsForPost PostId 
-  | SelectTagsForPost PostId 
-  | SelectUsersForPost PostId 
-  | SelectPostInfos PostId 
+  = SelectPosts PostId
+  | SelectLimPosts [Filter] OrderBy Page Limit
+  | SelectPicsForPost PostId
+  | SelectTagsForPost PostId
+  | SelectUsersForPost PostId
+  | SelectPostInfos PostId
   deriving (Eq, Show)

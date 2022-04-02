@@ -5,7 +5,7 @@
 module Spec.Picture where
 
 import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (LoadPicture(..))
+import Api.Request.QueryStr (LoadPicture (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Methods.Common (ResponseInfo (..), textHeader)
@@ -30,7 +30,7 @@ testPic = hspec $ do
         `shouldBe` [PicMock (SelectPicBS 4)]
       eitherResp <- evalStateT (runExceptT $ sendPicture handle 4) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [("Content-Type","image/jpeg")] "picture")
+        `shouldBe` (Right $ ResponseInfo status200 [("Content-Type", "image/jpeg")] "picture")
     it "throw DBError to multiple DB answer" $ do
       state <- execStateT (runExceptT $ sendPicture handle1 4) []
       reverse state
@@ -56,10 +56,10 @@ testPic = hspec $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
       reverse state
-        `shouldBe` [PicMock (GoToUrl "url"),PicMock (InsertReturnPicBS sbsPicExample)]
+        `shouldBe` [PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
       eitherResp <- evalStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader,("Location","http://localhost:3000/pictures/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/pictures/14")] "Status 201 Created")
     it "throw BadReq Error to invalid picture in url" $ do
       state <- execStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
       reverse state
@@ -81,7 +81,7 @@ testPic = hspec $ do
       eitherResp <- evalStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
       eitherResp
         `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
-    it "throw DBError to UnexpectedDbOutPutException" $ do 
+    it "throw DBError to UnexpectedDbOutPutException" $ do
       state <- execStateT (runExceptT $ loadPicture handle6 (LoadPicture "url")) []
       reverse state
         `shouldBe` [PicMock (GoToUrl "url")]
@@ -92,7 +92,7 @@ testPic = hspec $ do
     it "work with valid token" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
       reverse state
-        `shouldBe` [AuthMock (SelectTokenKeyForUser 152),PicMock (GoToUrl "url"),PicMock (InsertReturnPicBS sbsPicExample)]
+        `shouldBe` [AuthMock (SelectTokenKeyForUser 152), PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/pictures/14")] "Status 201 Created")
@@ -107,10 +107,10 @@ testPic = hspec $ do
     it "work with exist tag" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr2 (ToGet 4)) []
       reverse state
-        `shouldBe` [ExistMock (IsExist (PictureId 4)),PicMock (SelectPicBS 4)]
+        `shouldBe` [ExistMock (IsExist (PictureId 4)), PicMock (SelectPicBS 4)]
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [("Content-Type","image/jpeg")] "picture")
+        `shouldBe` (Right $ ResponseInfo status200 [("Content-Type", "image/jpeg")] "picture")
     it "throw 404 Error on not exist pic" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr1 (ToGet 200)) []
       reverse state

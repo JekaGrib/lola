@@ -5,8 +5,8 @@ module Spec.DeleteMany.Types where
 
 import Types
 
-data DeleteManyMock = 
-  SelectDraftsForPost PostId
+data DeleteManyMock
+  = SelectDraftsForPost PostId
   | DeleteDbPicsForPost PostId
   | DeleteDbTagsForPost PostId
   | DeleteDbCommsForPost PostId

@@ -7,7 +7,7 @@ import Types
 
 data AdminMock
   = SelectKeys
-  | InsertReturnUser InsertUser 
-  | GetDay 
+  | InsertReturnUser InsertUser
+  | GetDay
   | GenerateTokenKey
   deriving (Eq, Show)

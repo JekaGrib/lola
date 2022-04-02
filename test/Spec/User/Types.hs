@@ -6,8 +6,7 @@ module Spec.User.Types where
 import Types
 
 data UserMock
-  = 
-  SelectUsers UserId
+  = SelectUsers UserId
   | SelectAuthsForUser UserId
   | SelectAuthorsForUser UserId
   | SelectDraftsForAuthor AuthorId
@@ -17,6 +16,6 @@ data UserMock
   | DeleteDbUser UserId
   | DeleteDbAuthor AuthorId
   | InsertReturnUser InsertUser
-  | GetDay 
+  | GetDay
   | GenerateTokenKey
   deriving (Eq, Show)

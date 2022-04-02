@@ -6,13 +6,12 @@ module Spec.MakeCatResp.Handlers where
 
 import Control.Monad.State (StateT (..), modify)
 import Methods.Common.MakeCatResp
+import Psql.Selecty (Cat (..))
 import Spec.Conf (defConf)
 import Spec.Log (handLogWarning)
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Types
-import Psql.Selecty (Cat(..))
-
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -21,7 +20,6 @@ handle =
     handLogWarning
     selectCatsTest
     selectSubCatsTest
-    
 
 selectCatsTest :: CategoryId -> StateT [MockAction] IO [Cat]
 selectCatsTest catId = do
@@ -39,28 +37,27 @@ data Category = Category {cat_idCat :: CategoryId, cat_nameCat :: CatName, super
 
 exampleCats :: [Category]
 exampleCats =
-  [ Category 1  "a" 0
-  , Category 2  "b" 0
-  , Category 3  "c" 0
-  , Category 4  "d" 1
-  , Category 5  "e" 1
-  , Category 6  "f" 1
-  , Category 7  "g" 2
-  , Category 8  "h" 2
-  , Category 9  "i" 3
-  , Category 10 "j" 3
-  , Category 11 "k" 4
-  , Category 12 "l" 4
-  , Category 13 "m" 6
-  , Category 14 "n" 8
-  , Category 15 "o" 9
-  , Category 16 "p" 12
-  , Category 17 "q" 12
-  , Category 18 "r" 14
-  , Category 19 "s" 15
-  , Category 20 "t" 15
+  [ Category 1 "a" 0,
+    Category 2 "b" 0,
+    Category 3 "c" 0,
+    Category 4 "d" 1,
+    Category 5 "e" 1,
+    Category 6 "f" 1,
+    Category 7 "g" 2,
+    Category 8 "h" 2,
+    Category 9 "i" 3,
+    Category 10 "j" 3,
+    Category 11 "k" 4,
+    Category 12 "l" 4,
+    Category 13 "m" 6,
+    Category 14 "n" 8,
+    Category 15 "o" 9,
+    Category 16 "p" 12,
+    Category 17 "q" 12,
+    Category 18 "r" 14,
+    Category 19 "s" 15,
+    Category 20 "t" 15
   ]
 
 toCat :: Category -> Cat
-toCat (Category _ a b) =  Cat a b
-
+toCat (Category _ a b) = Cat a b

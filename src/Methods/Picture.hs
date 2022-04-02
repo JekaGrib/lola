@@ -93,5 +93,5 @@ checkPicUrlGetPic Handle {..} url = do
 
 goToUrl' :: Text -> IO BSL.ByteString
 goToUrl' url = do
-  res <- HT.httpLBS . fromString . unpack $ url 
+  res <- HT.httpLBS . fromString . unpack $ url
   return (HT.getResponseBody res)

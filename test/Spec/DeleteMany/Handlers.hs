@@ -26,40 +26,32 @@ handle =
 selectDraftsForPostTest :: PostId -> StateT [MockAction] IO [DraftId]
 selectDraftsForPostTest pId = do
   modify (DeleteManyMock (SelectDraftsForPost pId) :)
-  return [5,7]
+  return [5, 7]
 
 deleteDbPicsForPostTest :: PostId -> StateT [MockAction] IO ()
-deleteDbPicsForPostTest pId = 
+deleteDbPicsForPostTest pId =
   modify (DeleteManyMock (DeleteDbPicsForPost pId) :)
 
-
 deleteDbTagsForPostTest :: PostId -> StateT [MockAction] IO ()
-deleteDbTagsForPostTest pId = 
+deleteDbTagsForPostTest pId =
   modify (DeleteManyMock (DeleteDbTagsForPost pId) :)
 
-
 deleteDbCommsForPostTest :: PostId -> StateT [MockAction] IO ()
-deleteDbCommsForPostTest pId = 
+deleteDbCommsForPostTest pId =
   modify (DeleteManyMock (DeleteDbCommsForPost pId) :)
 
-
 deleteDbPostTest :: PostId -> StateT [MockAction] IO ()
-deleteDbPostTest pId = 
+deleteDbPostTest pId =
   modify (DeleteManyMock (DeleteDbPost pId) :)
 
-
 deleteDbPicsForDraftsTest :: [DraftId] -> StateT [MockAction] IO ()
-deleteDbPicsForDraftsTest dIds = 
+deleteDbPicsForDraftsTest dIds =
   modify (DeleteManyMock (DeleteDbPicsForDrafts dIds) :)
 
-
 deleteDbTagsForDraftsTest :: [DraftId] -> StateT [MockAction] IO ()
-deleteDbTagsForDraftsTest dIds = 
+deleteDbTagsForDraftsTest dIds =
   modify (DeleteManyMock (DeleteDbTagsForDrafts dIds) :)
 
-
 deleteDbDraftsTest :: [DraftId] -> StateT [MockAction] IO ()
-deleteDbDraftsTest dIds = 
+deleteDbDraftsTest dIds =
   modify (DeleteManyMock (DeleteDbDrafts dIds) :)
-
-

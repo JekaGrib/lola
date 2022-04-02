@@ -6,15 +6,15 @@ module Spec.Author.Handlers where
 
 import Control.Monad.State (StateT (..), modify)
 import Methods.Author
+import Psql.Selecty (Author (..))
 import qualified Spec.Auth.Handlers (handle)
+import Spec.Author.Types
 import Spec.Conf (defConf)
-import qualified Spec.Exist.Handlers (handle)
 import qualified Spec.DeleteMany.Handlers (handle)
+import qualified Spec.Exist.Handlers (handle)
 import Spec.Log (handLogWarning)
-import Spec.Author.Types 
 import Spec.Types (MockAction (..))
 import Types
-import Psql.Selecty  (Author(..))
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -34,8 +34,6 @@ handle =
     Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
-
-
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do
   modify (TRANSACTIONOPEN :)
@@ -46,7 +44,7 @@ withTransactionDBTest m = do
 selectDraftsForAuthorTest :: AuthorId -> StateT [MockAction] IO [DraftId]
 selectDraftsForAuthorTest aId = do
   modify (AuthorMock (SelectDraftsForAuthor aId) :)
-  return [2,5]
+  return [2, 5]
 
 selectAuthorsForUserTest :: UserId -> StateT [MockAction] IO [AuthorId]
 selectAuthorsForUserTest uId = do
@@ -59,25 +57,21 @@ selectAuthorsTest aId = do
   return [Author aId "author" 3]
 
 updateDbAuthorTest :: UserId -> AuthorInfo -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorTest uId aInfo aId = 
+updateDbAuthorTest uId aInfo aId =
   modify (AuthorMock (UpdateDbAuthor uId aInfo aId) :)
 
-
 updateDbAuthorForPostsTest :: AuthorId -> AuthorId -> StateT [MockAction] IO ()
-updateDbAuthorForPostsTest newAId aId = 
+updateDbAuthorForPostsTest newAId aId =
   modify (AuthorMock (UpdateDbAuthorForPosts newAId aId) :)
 
-
 deleteDbAuthorTest :: AuthorId -> StateT [MockAction] IO ()
-deleteDbAuthorTest aId = 
+deleteDbAuthorTest aId =
   modify (AuthorMock (DeleteDbAuthor aId) :)
-
 
 isUserAuthorTest :: UserId -> StateT [MockAction] IO Bool
 isUserAuthorTest uId = do
   modify (AuthorMock (IsUserAuthor uId) :)
   return False
-
 
 insertReturnAuthorTest :: UserId -> AuthorInfo -> StateT [MockAction] IO AuthorId
 insertReturnAuthorTest uId aInfo = do

@@ -4,10 +4,16 @@
 
 module Spec.Picture.Handlers where
 
+import Codec.Picture (PixelRGB8 (..), encodePng, generateImage)
 import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as BSL
+import Data.Text (Text)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Picture
+import Network.HTTP.Simple (HttpException (InvalidUrlException))
+import Oops (UnexpectedDbOutPutException (..))
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
@@ -15,14 +21,6 @@ import Spec.Log (handLogWarning)
 import Spec.Picture.Types
 import Spec.Types (MockAction (..))
 import Types
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as BSL
-import Data.Text (Text)
-import Codec.Picture (encodePng,PixelRGB8(..),generateImage)
-import Network.HTTP.Simple (HttpException( InvalidUrlException ))
-import Oops (UnexpectedDbOutPutException(..))
-
-
 
 handle :: Handle (StateT [MockAction] IO)
 handle =
@@ -50,8 +48,8 @@ handle2 = handle {selectPicBS = selectPicBSTest []}
 handle3 :: Handle (StateT [MockAction] IO)
 handle3 =
   handle
-    { selectPicBS = selectPicBSTestEx
-    , goToUrl = goToUrlTestEx
+    { selectPicBS = selectPicBSTestEx,
+      goToUrl = goToUrlTestEx
     }
 
 handle4 :: Handle (StateT [MockAction] IO)
@@ -72,7 +70,7 @@ handle6 =
     { insertRetPicBS = insertRetPicBSTestEx1
     }
 
-selectPicBSTest :: [ByteString] -> PictureId -> StateT [MockAction] IO [ByteString]  
+selectPicBSTest :: [ByteString] -> PictureId -> StateT [MockAction] IO [ByteString]
 selectPicBSTest xs picId = do
   modify (PicMock (SelectPicBS picId) :)
   return xs
@@ -87,9 +85,8 @@ goToUrlTest bs url = do
   modify (PicMock (GoToUrl url) :)
   return bs
 
-selectPicBSTestEx :: PictureId -> StateT [MockAction] IO [ByteString]  
+selectPicBSTestEx :: PictureId -> StateT [MockAction] IO [ByteString]
 selectPicBSTestEx _ = throwSqlEx
-
 
 insertRetPicBSTestEx :: ByteString -> StateT [MockAction] IO PictureId
 insertRetPicBSTestEx _ = throwSqlEx
@@ -102,7 +99,8 @@ goToUrlTestEx _ = throwHttpEx
 
 bsPicExample :: BSL.ByteString
 bsPicExample = encodePng $ generateImage pixelRenderer 1 1
-   where pixelRenderer x y = PixelRGB8 (fromIntegral x) (fromIntegral y) 1
+  where
+    pixelRenderer x y = PixelRGB8 (fromIntegral x) (fromIntegral y) 1
 
 sbsPicExample :: ByteString
 sbsPicExample = BSL.toStrict bsPicExample

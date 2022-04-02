@@ -36,7 +36,7 @@ makeH conf logH =
 type UserAccessMode = (UserId, AccessMode)
 
 data AccessMode = UserMode | AdminMode
-  deriving (Eq,Show)
+  deriving (Eq, Show)
 
 tokenAdminAuth :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ()
 tokenAdminAuth h qStr = hideErr $ do

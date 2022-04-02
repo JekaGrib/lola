@@ -3,9 +3,9 @@
 
 module Spec.Picture.Types where
 
-import Types
 import Data.ByteString (ByteString)
 import Data.Text (Text)
+import Types
 
 data PicMock
   = SelectPicBS PictureId

@@ -7,7 +7,7 @@ module Spec.Auth where
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Logger (Priority (..))
-import Methods.Common.Auth 
+import Methods.Common.Auth
 import Oops (ReqError (..))
 import Spec.Auth.Handlers
 import Spec.Auth.QStrExample
@@ -28,7 +28,7 @@ testAuth = hspec $ do
         `shouldBe` [LOG INFO]
       eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle0 qStr4) []
       eitherResp
-        `shouldBe`  Left (SecretError "SecretTokenError \"INVALID token\"")
+        `shouldBe` Left (SecretError "SecretTokenError \"INVALID token\"")
     it "throw Secret Error on wrong token" $ do
       state <- execStateT (runExceptT $ tokenAdminAuth handle0 qStr2) []
       reverse state
