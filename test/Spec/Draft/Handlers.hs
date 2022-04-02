@@ -1,13 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Draft.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Draft
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
@@ -18,7 +15,6 @@ import Spec.Log (handLogWarning)
 import Spec.Draft.Types
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Psql.Selecty (Draft(..),Tag(..),Author(..),)
 import Data.Time.Calendar (Day,fromGregorian)
@@ -89,7 +85,7 @@ tagsNames :: [TagName]
 tagsNames = cycle ["cats","dogs","birds","cows"]
 
 toTag :: TagId -> TagName -> Tag
-toTag id name = Tag id name
+toTag iD name = Tag iD name
 
 selectDaysForPostTest :: PostId -> StateT [MockAction] IO [Day]
 selectDaysForPostTest pId = do

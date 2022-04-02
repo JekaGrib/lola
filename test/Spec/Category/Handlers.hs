@@ -1,13 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Category.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Category
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
@@ -17,7 +14,6 @@ import Spec.Log (handLogWarning)
 import Spec.Category.Types 
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
 
 
 handle :: Handle (StateT [MockAction] IO)

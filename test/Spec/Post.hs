@@ -1,22 +1,19 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Post where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (GetPosts (..),GetPostsF (..),GetPostsOrd (..))
-import Api.Response (PostResponse(..),PostIdOrNull(..),AuthorResponse(..),CatResponse(..),TagResponse(..),PicIdUrl(..),PostsResponse(..))
+import Api.Response (PostResponse(..),AuthorResponse(..),CatResponse(..),TagResponse(..),PicIdUrl(..),PostsResponse(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
-import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Post
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Post.Handlers
@@ -28,8 +25,8 @@ import Spec.DeleteMany.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types
-import Data.Text (pack)
-import Psql.ToQuery.SelectLimit (OrderBy (..),Filter(..))
+import Data.Text (pack,Text)
+import Psql.ToQuery.SelectLimit (OrderBy (..))
 
 testPost :: IO ()
 testPost = hspec $ do
@@ -203,12 +200,12 @@ testPost = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
 
-
+toPicUrl :: Integer -> Text
+toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
 
 postResp0 :: PostResponse
 postResp0 = 
   let catResp = SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  PostResponse 4 (AuthorResponse 7 "author" 3) "post" dayExample catResp "lalala" 8 (toPicUrl 8) picsResps tagsResps 
@@ -216,7 +213,6 @@ postResp0 =
 postResp1 :: PostResponse
 postResp1 = 
   let catResp = SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  PostResponse 1 (AuthorResponse 7 "author" 3) "post1" dayExample catResp "lalala" 8 (toPicUrl 8) picsResps tagsResps 
@@ -224,7 +220,6 @@ postResp1 =
 postResp2 :: PostResponse
 postResp2 = 
   let catResp = CatResponse 2 "b" [7,8]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  PostResponse 2 (AuthorResponse 8 "author" 4) "post2" dayExample catResp "lalala" 7 (toPicUrl 7) picsResps tagsResps 
@@ -232,7 +227,6 @@ postResp2 =
 postResp3 :: PostResponse
 postResp3 = 
   let catResp = CatResponse 1 "a" [4,5,6]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  PostResponse 3 (AuthorResponse 9 "author" 5) "post3" dayExample catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps   

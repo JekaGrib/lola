@@ -4,7 +4,6 @@
 
 module Types where
 
---import Data.Map as Map
 
 import Data.ByteString (ByteString)
 import Data.Int (Int64)

@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.User where
 
@@ -12,7 +11,6 @@ import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
 import Data.Text (pack)
-import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader,strSha1,txtSha1)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.User

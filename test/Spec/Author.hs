@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Author where
 
@@ -11,18 +10,15 @@ import Api.Response (AuthorResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
-import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Author
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Author.Handlers
 import Spec.Author.QStrExample
 import Spec.Author.Types
-import Spec.MakeCatResp.Types
 import Spec.DeleteMany.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)

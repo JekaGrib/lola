@@ -1,21 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Picture where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (LoadPicture(..))
-import Api.Response (TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
-import Data.Aeson (encode)
-import Logger (Priority (..))
-import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
+import Methods.Common (ResponseInfo (..), textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Picture
-import Network.HTTP.Types (status200, status201, status204)
+import Network.HTTP.Types (status200, status201)
 import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types

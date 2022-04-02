@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Draft where
 
@@ -12,12 +11,10 @@ import Api.Response (DraftResponse(..),PostIdOrNull(..),AuthorResponse(..),CatRe
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
-import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Draft
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Draft.Handlers
@@ -28,10 +25,9 @@ import Spec.MakeCatResp.Types
 import Spec.DeleteMany.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
-import Methods.Common.Auth (AccessMode(..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Types
-import Data.Text (pack)
+import Data.Text (pack,Text)
 
 testDraft :: IO ()
 testDraft = hspec $ do
@@ -380,11 +376,12 @@ testDraft = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
 
+toPicUrl :: Integer -> Text
+toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
 
 draftResp0 :: DraftResponse
 draftResp0 = 
   let catResp = SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9,10]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  DraftResponse 4 (PostIdExist 7) (AuthorResponse 7 "author" 3) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps 
@@ -392,7 +389,6 @@ draftResp0 =
 draftResp1 :: DraftResponse
 draftResp1 = 
   let catResp = SubCatResponse 15 "o" [19,20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9,10]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  DraftResponse 1 (PostIdExist 7) (AuthorResponse 7 "author" 4) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps 
@@ -400,7 +396,6 @@ draftResp1 =
 draftResp2 :: DraftResponse
 draftResp2 = 
   let catResp = SubCatResponse 24 "u" [] $ SubCatResponse 20 "t" [] $ SubCatResponse 15 "o" [19,20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9,10]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  DraftResponse 5 PostIdNull (AuthorResponse 7 "author" 4) "draft5" catResp "lalala" 4 (toPicUrl 4) picsResps tagsResps 
@@ -408,7 +403,6 @@ draftResp2 =
 draftResp3 :: DraftResponse
 draftResp3 = 
   let catResp = SubCatResponse 17 "q" [] $ SubCatResponse 12 "l" [16,17] $ SubCatResponse 4 "d" [11,12] $ CatResponse 1 "a" [4,5,6]
-      toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]
   in  DraftResponse 12 PostIdNull (AuthorResponse 7 "author" 4) "draft12" catResp "lalala" 13 (toPicUrl 13) picsResps tagsResps 

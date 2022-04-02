@@ -1,23 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Comment.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Comment
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
-import qualified Spec.MakeCatResp.Handlers (handle)
 import Spec.Log (handLogWarning)
 import Spec.Comment.Types
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Psql.Selecty (Comment(..))
 

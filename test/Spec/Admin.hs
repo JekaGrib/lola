@@ -1,29 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Admin where
 
-import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (LogIn (..),CreateAdmin(..))
-import Api.Response (TokenResponse (..),UserResponse (..))
+import Api.Request.QueryStr (CreateAdmin(..))
+import Api.Response (TokenResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
 import Data.Text (pack)
-import Logger (Priority (..))
-import Methods.Common (ResponseInfo (..), jsonHeader, textHeader,strSha1,txtSha1)
+import Methods.Common (ResponseInfo (..), jsonHeader,strSha1)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Admin
-import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
-import Spec.Auth.Types
+import Network.HTTP.Types ( status201)
 import Spec.Exist.Types
 import Spec.Admin.Handlers
 import Spec.Admin.QStrExample
 import Spec.Admin.Types
-import Spec.DeleteMany.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types

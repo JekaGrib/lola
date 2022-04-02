@@ -1,22 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.MakeCatResp.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Common.MakeCatResp
-import qualified Spec.Auth.Handlers (handle0)
 import Spec.Conf (defConf)
-import qualified Spec.Exist.Handlers (handle)
 import Spec.Log (handLogWarning)
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
 import Psql.Selecty (Cat(..))
 
 

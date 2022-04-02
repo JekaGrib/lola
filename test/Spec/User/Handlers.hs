@@ -1,24 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.User.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.User
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)
 import qualified Spec.DeleteMany.Handlers (handle)
-import Spec.Log (handLogDebug,handLogWarning)
+import Spec.Log (handLogWarning)
 import Spec.User.Types
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
-import Psql.Selecty (Author(..),User(..),Auth(..),Author(..))
+import Psql.Selecty (User(..),Auth(..))
 import Data.Time.Calendar (Day,fromGregorian)
 
 

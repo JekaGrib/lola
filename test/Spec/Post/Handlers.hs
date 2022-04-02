@@ -1,13 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
---{-# OPTIONS_GHC -Wall #-}
---{-# OPTIONS_GHC -Werror #-}
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Werror #-}
 
 module Spec.Post.Handlers where
 
-import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
-import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Post
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
@@ -19,7 +16,6 @@ import Spec.Log (handLogWarning)
 import Spec.Post.Types 
 import Spec.Types (MockAction (..))
 import Types
-import Oops (UnexpectedDbOutPutException(..))
 import Psql.Selecty  (Tag(..),PostInfo(..),Post(..))
 import Psql.ToQuery.SelectLimit (OrderBy (..),Filter(..))
 import Data.Time.Calendar (Day,fromGregorian)
