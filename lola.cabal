@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f1e97aed3f22cd7c86d65325b023799ec43d317af321939f7f7a24b3938dc954
+-- hash: 16f3037ebee0afb40758a0b4d7628e3179b6f722c74625ea915342c6dd85eefa
 
 name:           lola
 version:        0.1.0.0
@@ -147,6 +147,10 @@ test-suite lola-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Spec.Admin
+      Spec.Admin.Handlers
+      Spec.Admin.QStrExample
+      Spec.Admin.Types
       Spec.Auth
       Spec.Auth.Handlers
       Spec.Auth.QStrExample

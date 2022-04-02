@@ -37,9 +37,6 @@ handle =
     Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
-throwSqlEx :: StateT [MockAction] IO a
-throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
-
 
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do

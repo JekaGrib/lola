@@ -45,37 +45,10 @@ handle =
     Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
-throwSqlEx :: StateT [MockAction] IO a
-throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
-
 
 handle1 :: Handle (StateT [MockAction] IO)
 handle1 = handle {selectAuthsForUser = selectAuthsForUserTest [Auth "37fa265330ad83eaa879efb1e2db6380896cf639" True]}
-{-}
-handle2 :: Handle (StateT [MockAction] IO)
-handle2 = handle {selectTagNames = selectTagNamesTest []}
 
-handle3 :: Handle (StateT [MockAction] IO)
-handle3 =
-  handle
-    { selectTagNames = selectTagNamesTestEx
-    , insertReturnTag = insertReturnTagTestEx
-    , updateDbTag = updateDbTagTestEx
-    , deleteDbTag = deleteDbTagTestEx
-    }
-
-handle4 :: Handle (StateT [MockAction] IO)
-handle4 =
-  handle
-    { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
-    }
-
-handle5 :: Handle (StateT [MockAction] IO)
-handle5 =
-  handle
-    { insertReturnTag = insertReturnTagTestEx1
-    }
--}
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do
   modify (TRANSACTIONOPEN :)

@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
+import Spec.Admin (testAdmin)
 import Spec.Auth (testAuth)
 import Spec.Author (testAuthor)
 import Spec.Tag (testTag)
@@ -14,6 +15,7 @@ import Spec.Draft (testDraft)
 
 main :: IO ()
 main = do
+  testAdmin
   testAuth
   testAuthor
   testCat

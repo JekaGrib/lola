@@ -6,7 +6,7 @@
 module Spec.Post where
 
 import Api.Request.EndPoint (AppMethod (..))
-import Api.Request.QueryStr (CreateAuthor (..),UpdateAuthor (..))
+import Api.Request.QueryStr (GetPosts (..),GetPostsF (..),GetPostsOrd (..))
 import Api.Response (PostResponse(..),PostIdOrNull(..),AuthorResponse(..),CatResponse(..),TagResponse(..),PicIdUrl(..),PostsResponse(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
@@ -29,6 +29,7 @@ import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types
 import Data.Text (pack)
+import Psql.ToQuery.SelectLimit (OrderBy (..),Filter(..))
 
 testPost :: IO ()
 testPost = hspec $ do
@@ -67,105 +68,142 @@ testPost = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getPost handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ postResp0)
-{-}  describe "getPosts" $ do
+  describe "getPosts" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ getPosts handle (GetPosts 1 ) ) []
+      state <- execStateT (runExceptT $ getPosts handle (GetPosts 1 
+        (GetPostsF Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing)
+        (GetPostsOrd Nothing Nothing Nothing Nothing))
+        ) []
       reverse state
         `shouldBe` 
-        [ PostMock (SelectPosts 4)
-        , PostMock (SelectPicsForPost 4)
-        , PostMock (SelectTagsForPost 4)
+        [ PostMock (SelectLimPosts [] (OrderList [ByPostDate DESC,ByPostId DESC]) 1 5)
+        , PostMock (SelectPicsForPost 1)
+        , PostMock (SelectTagsForPost 1)
         , MakeCatRMock (SelectCats 4)
         , MakeCatRMock (SelectSubCats 4)
         , MakeCatRMock (SelectCats 1)
         , MakeCatRMock (SelectSubCats 1)
+        , PostMock (SelectPicsForPost 2)
+        , PostMock (SelectTagsForPost 2)
+        , MakeCatRMock (SelectCats 2)
+        , MakeCatRMock (SelectSubCats 2)
+        , PostMock (SelectPicsForPost 3)
+        , PostMock (SelectTagsForPost 3)
+        , MakeCatRMock (SelectCats 1)
+        , MakeCatRMock (SelectSubCats 1)
         ]
-      eitherResp <- evalStateT (runExceptT $ getPosts handle 4) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ postResp0)
-  describe "updateAuthor" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ updateAuthor handle 4 (UpdateAuthor 3 "author")) []
-      reverse state
-        `shouldBe` 
-        [ AuthorMock (SelectAuthorsForUser 3)
-        , AuthorMock (UpdateDbAuthor 3 "author" 4)
-        ]
-  describe "deleteAuthor" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ deleteAuthor handle 4) []
-      reverse state
-        `shouldBe` 
-        [ AuthorMock (SelectDraftsForAuthor 4)
-        , TRANSACTIONOPEN
-        , AuthorMock (UpdateDbAuthorForPosts 1 4)
-        , DeleteManyMock (DeleteDbPicsForDrafts [2,5])
-        , DeleteManyMock (DeleteDbTagsForDrafts [2,5])
-        , DeleteManyMock (DeleteDbDrafts [2,5])
-        , AuthorMock (DeleteDbAuthor 4)
-        , TRANSACTIONCLOSE
-        ]
-      eitherResp <- evalStateT (runExceptT $ deleteAuthor handle 4) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
-  describe "workWithAuthors (ToPost)" $ do
-    it "work with valid DB answer, without super category" $ do
-      state <- execStateT (runExceptT $ workWithAuthors handle qStr2 ToPost) []
-      reverse state
-        `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (UserId 3))
-        , AuthorMock (IsUserAuthor 3)
-        , AuthorMock (InsertReturnAuthor 3 "author")
-        ]
-      eitherResp <- evalStateT (runExceptT $ workWithAuthors handle qStr2 ToPost) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
-  describe "workWithAuthors (ToGet)" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithAuthors handle qStr1 (ToGet 4)) []
-      reverse state
-        `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (AuthorId 4))
-        , AuthorMock (SelectAuthors 4)
-        ]
-      eitherResp <- evalStateT (runExceptT $ workWithAuthors handle qStr1 (ToGet 4)) []
+      eitherResp <- evalStateT (runExceptT $ getPosts handle (GetPosts 1 
+        (GetPostsF Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing)
+        (GetPostsOrd Nothing Nothing Nothing Nothing))
+        ) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
-          AuthorResponse 4 "author" 3)
-  describe "workWithAuthors (ToPut)" $ do
+        PostsResponse 1 [postResp1,postResp2,postResp3])
+  describe "deletePost" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithAuthors handle qStr2 (ToPut 4)) []
+      state <- execStateT (runExceptT $ deletePost handle 4) []
       reverse state
         `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (AuthorId 4))
-        , ExistMock (IsExist (UserId 3))
-        , AuthorMock (SelectAuthorsForUser 3)
-        , AuthorMock (UpdateDbAuthor 3 "author" 4)
-        ]
-  describe "workWithAuthors (ToDelete)" $ do
-    it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ workWithAuthors handle qStr1 (ToDelete 4)) []
-      reverse state
-        `shouldBe` 
-        [ AuthMock (SelectTokenKeyForUser 152)
-        , ExistMock (IsExist (AuthorId 4))
-        , AuthorMock (SelectDraftsForAuthor 4)
-        , TRANSACTIONOPEN
-        , AuthorMock (UpdateDbAuthorForPosts 1 4)
-        , DeleteManyMock (DeleteDbPicsForDrafts [2,5])
-        , DeleteManyMock (DeleteDbTagsForDrafts [2,5])
-        , DeleteManyMock (DeleteDbDrafts [2,5])
-        , AuthorMock (DeleteDbAuthor 4)
+        [ TRANSACTIONOPEN
+        , DeleteManyMock (DeleteDbPicsForPost  4)
+        , DeleteManyMock (DeleteDbTagsForPost  4)
+        , DeleteManyMock (DeleteDbCommsForPost 4)
+        , DeleteManyMock (SelectDraftsForPost  4)
+        , DeleteManyMock (DeleteDbPicsForDrafts [5,7])
+        , DeleteManyMock (DeleteDbTagsForDrafts [5,7])
+        , DeleteManyMock (DeleteDbDrafts        [5,7])
+        , DeleteManyMock (DeleteDbPost 4)
         , TRANSACTIONCLOSE
         ]
-      eitherResp <- evalStateT (runExceptT $ workWithAuthors handle qStr1 (ToDelete 4)) []
+      eitherResp <- evalStateT (runExceptT $ deletePost handle 4) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")    
+  describe "workWithPosts (ToPost id)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
+      reverse state
+        `shouldBe` 
+        [AuthMock (SelectTokenKeyForUser 3)
+        ,ExistMock (IsExist (PostId 4))
+        ,DraftMock (SelectAuthorsForUser 3)
+        ,PostMock (SelectPostInfos    4)
+        ,PostMock (SelectUsersForPost 4)
+        ,PostMock (SelectPicsForPost  4)
+        ,PostMock (SelectTagsForPost  4)
+        ,TRANSACTIONOPEN
+        ,DraftMock (InsertReturnDraft (InsertDraft (Just 4) 7 "post" 4 "lalala" 8))
+        ,DraftMock (InsertManyDraftsPics [(14,6),(14,9),(14,12)])
+        ,DraftMock (InsertManyDraftsTags [(14,15),(14,18),(14,20)])
+        ,TRANSACTIONCLOSE
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+  describe "workWithPosts (ToGet)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithPosts handle [] (ToGet 4)) []
+      reverse state
+        `shouldBe` 
+        [ ExistMock (IsExist (PostId 4))
+        , PostMock (SelectPosts 4)
+        , PostMock (SelectPicsForPost 4)
+        , PostMock (SelectTagsForPost 4)
+        , MakeCatRMock (SelectCats    4)
+        , MakeCatRMock (SelectSubCats 4)
+        , MakeCatRMock (SelectCats    1)
+        , MakeCatRMock (SelectSubCats 1)
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithPosts handle [] (ToGet 4)) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ postResp0)
+  describe "workWithPosts (ToGetAll)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithPosts handle qStr3 ToGetAll) []
+      reverse state
+        `shouldBe` 
+        [ PostMock (SelectLimPosts [] (OrderList [ByPostDate DESC,ByPostId DESC]) 1 5)
+        , PostMock (SelectPicsForPost 1)
+        , PostMock (SelectTagsForPost 1)
+        , MakeCatRMock (SelectCats 4)
+        , MakeCatRMock (SelectSubCats 4)
+        , MakeCatRMock (SelectCats 1)
+        , MakeCatRMock (SelectSubCats 1)
+        , PostMock (SelectPicsForPost 2)
+        , PostMock (SelectTagsForPost 2)
+        , MakeCatRMock (SelectCats 2)
+        , MakeCatRMock (SelectSubCats 2)
+        , PostMock (SelectPicsForPost 3)
+        , PostMock (SelectTagsForPost 3)
+        , MakeCatRMock (SelectCats 1)
+        , MakeCatRMock (SelectSubCats 1)
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr3 ToGetAll) []
+      eitherResp
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ 
+        PostsResponse 1 [postResp1,postResp2,postResp3])
+  describe "workWithPosts (ToDelete)" $ do
+    it "work with valid DB answer" $ do
+      state <- execStateT (runExceptT $ workWithPosts handle qStr1 (ToDelete 4)) []
+      reverse state
+        `shouldBe`
+        [ AuthMock (SelectTokenKeyForUser 3)
+        , ExistMock (IsExist (PostId 4)) 
+        , TRANSACTIONOPEN
+        , DeleteManyMock (DeleteDbPicsForPost  4)
+        , DeleteManyMock (DeleteDbTagsForPost  4)
+        , DeleteManyMock (DeleteDbCommsForPost 4)
+        , DeleteManyMock (SelectDraftsForPost  4)
+        , DeleteManyMock (DeleteDbPicsForDrafts [5,7])
+        , DeleteManyMock (DeleteDbTagsForDrafts [5,7])
+        , DeleteManyMock (DeleteDbDrafts        [5,7])
+        , DeleteManyMock (DeleteDbPost 4)
+        , TRANSACTIONCLOSE
+        ]
+      eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr1 (ToDelete 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")   
 
--}
+
 
 postResp0 :: PostResponse
 postResp0 = 
@@ -185,7 +223,7 @@ postResp1 =
 
 postResp2 :: PostResponse
 postResp2 = 
-  let catResp = CatResponse 2 "b" [7]
+  let catResp = CatResponse 2 "b" [7,8]
       toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
       picsResps = [PicIdUrl 6 (toPicUrl 6),PicIdUrl 9 (toPicUrl 9),PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats",TagResponse 18 "dogs",TagResponse 20 "birds"]

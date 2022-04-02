@@ -28,38 +28,6 @@ handle =
     selectCatsTest
     selectSubCatsTest
     
-throwSqlEx :: StateT [MockAction] IO a
-throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
-
-{-}
-handle1 :: Handle (StateT [MockAction] IO)
-handle1 = handle {selectTagNames = selectTagNamesTest ["cats", "food"]}
-
-handle2 :: Handle (StateT [MockAction] IO)
-handle2 = handle {selectTagNames = selectTagNamesTest []}
-
-handle3 :: Handle (StateT [MockAction] IO)
-handle3 =
-  handle
-    { selectTagNames = selectTagNamesTestEx
-    , insertReturnTag = insertReturnTagTestEx
-    , updateDbTag = updateDbTagTestEx
-    , deleteDbTag = deleteDbTagTestEx
-    }
-
-handle4 :: Handle (StateT [MockAction] IO)
-handle4 =
-  handle
-    { deleteDbTagForDrafts = deleteDbTagForDraftsTestEx
-    }
-
-handle5 :: Handle (StateT [MockAction] IO)
-handle5 =
-  handle
-    { insertReturnTag = insertReturnTagTestEx1
-    }
-
--}
 
 selectCatsTest :: CategoryId -> StateT [MockAction] IO [Cat]
 selectCatsTest catId = do
@@ -102,22 +70,3 @@ exampleCats =
 toCat :: Category -> Cat
 toCat (Category _ a b) =  Cat a b
 
-{-
-selectTagNamesTestEx :: TagId -> StateT [MockAction] IO [TagName]
-selectTagNamesTestEx _ = throwSqlEx
-
-deleteDbTagTestEx :: TagId -> StateT [MockAction] IO ()
-deleteDbTagTestEx _ = throwSqlEx
-
-deleteDbTagForDraftsTestEx :: TagId -> StateT [MockAction] IO ()
-deleteDbTagForDraftsTestEx _ = throwSqlEx
-
-updateDbTagTestEx :: TagName -> TagId -> StateT [MockAction] IO ()
-updateDbTagTestEx _ _ = throwSqlEx
-
-insertReturnTagTestEx :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTestEx _ = throwSqlEx
-
-insertReturnTagTestEx1 :: TagName -> StateT [MockAction] IO TagId
-insertReturnTagTestEx1 _ = throwM $ UnexpectedEmptyDbOutPutException
--}

@@ -38,9 +38,6 @@ handle =
     Spec.Auth.Handlers.handle
     Spec.Exist.Handlers.handle
 
-throwSqlEx :: StateT [MockAction] IO a
-throwSqlEx = throwM $ SqlError "oops" FatalError "oops" "oops" "oops"
-
 selectCommTest :: CommentId -> StateT [MockAction] IO  [Comment]
 selectCommTest cId = do
   modify (CommMock (SelectComm cId) :)
