@@ -79,19 +79,19 @@ INT - number from 0 to 9223372036854775805 for id and from 0 to 100000 for page
 
 Success answers:
 1. For endpoint GET :
-            ▪  Status 200 OK with resourse entity in request body.
+    *  Status 200 OK with resourse entity in request body.
 2. For endpoint POST :
-            ▪  Status 201 Created with Location of created entity in Headers.
+    *  Status 201 Created with Location of created entity in Headers.
 3. For endpoint PUT (Put only update resourse, NOT create new ) :
-            ▪  Status 200 OK with entity of resourse in request body.
+    *  Status 200 OK with entity of resourse in request body.
 4. For endpoint DELETE :
-            ▪  Status 204 No Data
+    *  Status 204 No Data
 
 Fail answers:
-            ▪ Status 404 (resourse or resourse entity doesn`t exist)
-            ▪ Status 400 BadRequest with JSON body {«ok»:«false»,«info»:«Some error info»}
-            ▪ Status 401 Unauthorized with JSON body {«ok»:«false»,«info»:«Some error info»}
-            ▪ Status 500 Internal server error
+* Status 404 (resourse or resourse entity doesn`t exist)
+* Status 400 BadRequest with JSON body {«ok»:«false»,«info»:«Some error info»}
+* Status 401 Unauthorized with JSON body {«ok»:«false»,«info»:«Some error info»}
+* Status 500 Internal server error
 
 Methods:
 1. User methods :
@@ -205,7 +205,7 @@ Methods:
            Query parameters:
             ▪ token TXT (admin token)
            
-5. pictures methods :
+5. Pictures methods :
          a) To load  picture from url:
            POST /pictures
            Query parameters:
