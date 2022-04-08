@@ -76,15 +76,17 @@ You can run App with:
 # Api
 
 INT - number from 0 to 9223372036854775805 for id and from 0 to 100000 for page
+
 Success answers:
-    1. For endpoint GET :
+1. For endpoint GET :
             ▪  Status 200 OK with resourse entity in request body.
-    2. For endpoint POST :
+2. For endpoint POST :
             ▪  Status 201 Created with Location of created entity in Headers.
-    3. For endpoint PUT (Put only update resourse, NOT create new ) :
+3. For endpoint PUT (Put only update resourse, NOT create new ) :
             ▪  Status 200 OK with entity of resourse in request body.
-    4. For endpoint DELETE :
+4. For endpoint DELETE :
             ▪  Status 204 No Data
+
 Fail answers:
             ▪ Status 404 (resourse or resourse entity doesn`t exist)
             ▪ Status 400 BadRequest with JSON body {«ok»:«false»,«info»:«Some error info»}
@@ -92,7 +94,7 @@ Fail answers:
             ▪ Status 500 Internal server error
 
 Methods:
-     1. User methods :
+1. User methods :
          a) To create user:
            POST /users
            Query parameters:
@@ -128,7 +130,7 @@ Methods:
             ▪ password TXT (max50char)
            answer example:
            {"token":"abc"}
-     2. Author methods:
+2. Author methods:
          a) To create author:
            POST /authors
            Query parameters:
@@ -155,7 +157,7 @@ Methods:
            Query parameters:
             ▪ token TXT (admin token)
            
-     3. Category methods :
+3. Category methods :
          a) To create category:
            POST /categories
            Query parameters:
@@ -180,7 +182,7 @@ Methods:
            Query parameters:
             ▪ token TXT (admin token)
            
-     4. Tag methods :
+4. Tag methods :
          a) To create tag:
            POST /tags 
            Query parameters:
@@ -203,7 +205,7 @@ Methods:
            Query parameters:
             ▪ token TXT (admin token)
            
-     5. pictures methods :
+5. pictures methods :
          a) To load  picture from url:
            POST /pictures
            Query parameters:
@@ -211,7 +213,7 @@ Methods:
          b) To get picture:
            GET /pictures/INT(pic_id)
            answer will be picture
-     6. Draft methods:
+6. Draft methods:
          a) To create new draft:
            POST /drafts
            User should be author.
@@ -282,7 +284,7 @@ Methods:
            Query parameters:
             ▪ token TXT (user/admin token)
            
-     7. Post methods:
+7. Post methods:
          a) To get one post:
            GET /posts/INT(post_id)
            answer example:
@@ -316,7 +318,7 @@ Methods:
                 • sort_by_date TXT (asc/desc)
            answer example:
            {"page":1,"posts":[{"post_id":40,"author":{"author_id":35,"author_info":"info","user_id":35},"post_name":"name","post_create_date":"2021-02-17","post_category":{"category_id":15,"category_name":"donec","sub_categories":[37,46,58]}}}}},"post_text":"text","post_main_pic_id":18,"post_main_pic_url":"http://localhost:3000/pictures/18","post_pics":[{"pic_id":40,"pic_url":"http://localhost:3000/pictures/40"},{"pic_id":31,"pic_url":"http://localhost:3000/pictures/31"}],"post_tags":[{"tag_id":6,"tag_name":"eget"},{"tag_id":63,"tag_name":"quis"}]},{"post_id":16,"author":{"author_id":33,"author_info":"info","user_id":33},"post_name":"name","post_create_date":"2021-02-02","post_category":{"category_id":15,"category_name":"donec","sub_categories":[37,46,58]}}},"post_text":"text","post_main_pic_id":96,"post_main_pic_url":"http://localhost:3000/pictures/96","post_pics":[{"pic_id":114,"pic_url":"http://localhost:3000/pictures/114"},{"pic_id":421,"pic_url":"http://localhost:3000/pictures/421"}],"post_tags":[{"tag_id":29,"tag_name":"amet"},{"tag_id":67,"tag_name":"cras"}]}]}
-     8. Comment methods:
+8. Comment methods:
          a) To create comment:
            POST comments/post_id INT
            Query parameters:
