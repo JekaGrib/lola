@@ -95,7 +95,7 @@ Fail answers:
 
 Methods:
 1. User methods :
-         a) To create user:
+    1. To create user:
            POST /users
            Query parameters:
             ▪ password TXT (max50char)
@@ -104,7 +104,7 @@ Methods:
             ▪ user_pic_id INT
            answer example:
            {"token":"abc"}
-         b) To create admin:
+    2. To create admin:
            POST /admins
            Query parameters:
             ▪ create_admin_key TXT (max50char)
@@ -114,16 +114,16 @@ Methods:
             ▪ user_pic_id INT
            answer example:
            {"token":"abc"}
-         c) To get user:
+    3. To get user:
            GET /users/INT(user_id)
            answer example:
            {"user_id":4,"first_name":"Petronella","last_name":"Gillingham","user_pic_id":235,"user_pic_url":"http://localhost:3000/pictures/235","user_create_date":"2021-08-01"}
-         d) To delete user:
+    4. To delete user:
            DELETE /users/user_id INT
            Query parameters:
             ▪ token TXT (admin token)
            
-         e) To log in:
+    5. To log in:
            POST /logIn
            Query parameters:
             ▪ user_id INT
