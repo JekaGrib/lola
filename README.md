@@ -95,9 +95,9 @@ Fail answers:
 
 Methods:
 1. User methods :
-    1. To create user:
-    POST /users
-    Query parameters:
+    1. To create user:  
+    POST /users  
+    Query parameters:  
     - password TXT (max50char)
     - first_name TXT (max50char)
     - last_name TXT (max50char)
@@ -106,9 +106,9 @@ Methods:
     Json answer example:
     {"token":"abc"}
 
-    2. To create admin:
-    POST /admins
-    Query parameters:
+    2. To create admin:  
+    POST /admins  
+    Query parameters:  
     - create_admin_key TXT (max50char)
     - password TXT (max50char)
     - first_name TXT (max50char)
@@ -117,7 +117,7 @@ Methods:
     
     Json answer example:
     {"token":"abc"}
-    
+
     3. To get user:
            GET /users/INT(user_id)
            Json answer example:
