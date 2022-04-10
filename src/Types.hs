@@ -45,25 +45,11 @@ type Table = String
 
 type JoinTable = String
 
-type DbParamKey = String
-
 type DbKey = String
 
 type DbReturnKey = DbKey
 
 type Predicate = String
-
-type DbReturnParamKey = DbParamKey
-
-type DbCheckParamKey = DbParamKey
-
-type DbSelectParamKey = DbParamKey
-
-type DbInsertParamKey = DbParamKey
-
-type DbParamValue = Text
-
-type DbNumValue = Integer
 
 type ToUpdate = String
 
@@ -84,14 +70,6 @@ type Limit = Int
 type AdminBool = Bool
 
 type TokenKey = String
-
---type WhereMap = Map.Map DbParamKey DbParamValue
-
-type LogKey = String
-
-type LogValue = String
-
-type LogPair = (LogKey, LogValue)
 
 type DbTxtValue = Text
 

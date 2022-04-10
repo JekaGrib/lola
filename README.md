@@ -406,7 +406,7 @@ Methods:
         
         {"comment_id":1001,"comment_text":"cool","post_id":16,"user_id":27}
 
-    5. deleteComment. 
+    5. To deleteComment. 
     DELETE /comments/comment_id INT  
     User should be admin or comment/post author.  
     Query parameters:
@@ -423,3 +423,56 @@ There are 4 logging levels from lowest to highest:
 4. ERROR
 
 The logging level is specified in [Configuration](#2-configuration). The log will only display entries of this level and levels above.
+
+# Project structure
+
+Description of project sections:
+1. App - module with main app functionality. Here actions are selected depending on the request. Has handler.
+2. Methods - section, that contain modules with handlers from all methods. Module "Methods.hs" has handler, that combines all methods.  
+    1. General methods handlers:
+        1. Admin
+        1. Author
+        1. Category
+        1. Comment
+        1. Draft
+        1. Picture
+        1. Post
+        1. Tag
+        1. User  
+
+    1. Common methods handlers(can be used in several general methods handlers):
+        1. Auth
+        1. Exist
+        1. DeleteMany
+        1. MakeCatResp
+3. Psql - folder for work with database:
+    1. "ToQuery" section - parsing db requests
+    1. "Selecty.hs" - parsing db responses
+    1. "Methods" folder - all IO methods for corresponding handlers.
+3. Api - response and request parsing.
+5. Conf - configuratuion parsing and db connection.
+5. Logger - logging.
+5. Oops - work with exceptions.
+5. TryRead - some more parsing functions.
+5. Types - some more project types.
+
+# Tests
+
+You can test app with:
+
+    $ stack test
+
+Modules, which has handlers, have unit-tests:
+1. General methods handlers:
+        1. Admin
+        1. Author
+        1. Category
+        1. Comment
+        1. Draft
+        1. Picture
+        1. Post
+        1. Tag
+        1. User  
+1. Common methods handlers:
+        1. Auth
+        1. MakeCatResp
