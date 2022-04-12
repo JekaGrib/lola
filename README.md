@@ -481,3 +481,7 @@ Modules, which has handlers, have unit-tests:
 1. Common methods handlers:
     1. Auth
     1. MakeCatResp
+
+All database wrong answers (multiple,emty) are tested at Tag and Picture modules. In other modules only success and some local errors are tested.
+
+For E2E tests with database you can use folder "scripts".
