@@ -110,6 +110,9 @@ selectPostsForDraftTest dId = do
   return [7]
 
 selectAuthorsForUserTest :: UserId -> StateT [MockAction] IO [Author]
+selectAuthorsForUserTest 25 = do
+  modify (DraftMock (SelectAuthorsForUser 25) :)
+  return []
 selectAuthorsForUserTest uId = do
   modify (DraftMock (SelectAuthorsForUser uId) :)
   return [Author 7 "author" uId]

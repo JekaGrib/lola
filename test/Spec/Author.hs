@@ -22,12 +22,12 @@ import Spec.DeleteMany.Types
 import Spec.Exist.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
+import Oops (ReqError(..))
 
 testAuthor :: IO ()
 testAuthor = hspec $ do
-  describe "createAuthor"
-    $ it "work with valid DB answer"
-    $ do
+  describe "createAuthor" $ do
+    it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ createAuthor handle (CreateAuthor 3 "author")) []
       reverse state
         `shouldBe` [ AuthorMock (IsUserAuthor 3),
@@ -36,6 +36,10 @@ testAuthor = hspec $ do
       eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 3 "author")) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
+    it "throw Bad Request Error if user already author" $ do
+      eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 25 "author")) []
+      eitherResp
+        `shouldBe` Left (BadReqError "User is already author.")
   describe "getAuthor"
     $ it "work with valid DB answer"
     $ do
@@ -47,14 +51,17 @@ testAuthor = hspec $ do
         `shouldBe` ( Right $ ResponseInfo status200 [jsonHeader] $ encode $
                        AuthorResponse 4 "author" 3
                    )
-  describe "updateAuthor"
-    $ it "work with valid DB answer"
-    $ do
+  describe "updateAuthor" $ do
+    it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateAuthor handle 4 (UpdateAuthor 3 "author")) []
       reverse state
         `shouldBe` [ AuthorMock (SelectAuthorsForUser 3),
                      AuthorMock (UpdateDbAuthor 3 "author" 4)
                    ]
+    it "throw Bad Request Error if user already other author" $ do
+      eitherResp <- evalStateT (runExceptT $ updateAuthor handle 4 (UpdateAuthor 25 "author")) []
+      eitherResp
+        `shouldBe` Left (BadReqError "User_id: 25 is already other author")
   describe "deleteAuthor"
     $ it "work with valid DB answer"
     $ do

@@ -47,6 +47,9 @@ selectDraftsForAuthorTest aId = do
   return [2, 5]
 
 selectAuthorsForUserTest :: UserId -> StateT [MockAction] IO [AuthorId]
+selectAuthorsForUserTest 25 = do
+  modify (AuthorMock (SelectAuthorsForUser 25) :)
+  return [7]
 selectAuthorsForUserTest uId = do
   modify (AuthorMock (SelectAuthorsForUser uId) :)
   return []
@@ -69,6 +72,9 @@ deleteDbAuthorTest aId =
   modify (AuthorMock (DeleteDbAuthor aId) :)
 
 isUserAuthorTest :: UserId -> StateT [MockAction] IO Bool
+isUserAuthorTest 25 = do
+  modify (AuthorMock (IsUserAuthor 25) :)
+  return True
 isUserAuthorTest uId = do
   modify (AuthorMock (IsUserAuthor uId) :)
   return False

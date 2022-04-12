@@ -24,6 +24,7 @@ import Spec.Exist.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types
+import Oops (ReqError(..))
 
 testComm :: IO ()
 testComm = hspec $ do
@@ -54,15 +55,18 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ getComments handle (GetComments 7 1)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3, CommentIdTextUserResponse 2 "ok" 4, CommentIdTextUserResponse 3 "yes" 5]))
-  describe "updateComment"
-    $ it "work with valid DB answer"
-    $ do
+  describe "updateComment" $ do
+    it "work with valid DB answer"  $ do
       state <- execStateT (runExceptT $ updateComment handle 3 2 (UpdateComment "yes")) []
       reverse state
         `shouldBe` [ CommMock (SelectUsersForComm 2),
                      CommMock (UpdateDbComm "yes" 2),
                      CommMock (SelectPostsForComm 2)
                    ]
+    it "throw Forbidden Error if user not comment author"  $ do
+      eitherResp <- evalStateT (runExceptT $ updateComment handle 25 2 (UpdateComment "yes")) []
+      eitherResp
+        `shouldBe` Left (ForbiddenError "user_id: 25 is not author of comment_id: 2")
   describe "deleteComment" $ do
     it "work with valid DB answer in UserMode" $ do
       state <- execStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
@@ -75,6 +79,10 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
+    it "throw Forbidden Error in UserMode if user not author of comment or post" $ do
+      eitherResp <- evalStateT (runExceptT $ deleteComment handle 25 UserMode 7) []
+      eitherResp
+        `shouldBe` Left (ForbiddenError "user_id: 25 is not author of comment_id: 7 and not author of post_id: 7")
     it "work with valid DB answer in AdminMode" $ do
       state <- execStateT (runExceptT $ deleteComment handle 3 AdminMode 7) []
       reverse state

@@ -88,10 +88,14 @@ Success answers:
     *  Status 204 No Data
 
 Fail answers:
-* Status 404 (resourse or resourse entity doesn`t exist)
 * Status 400 BadRequest with JSON body {«ok»:«false»,«info»:«Some error info»}
 * Status 401 Unauthorized with JSON body {«ok»:«false»,«info»:«Some error info»}
+* Status 404 (resourse or resourse entity doesn`t exist)
+* Status 413 Request Body Too Large
+* Status 414 Request-URI Too Long
 * Status 500 Internal server error
+* Status 501 Not implemented with JSON body {«ok»:«false»,«info»:«Some error info»}
+
 
 Methods:
 1. User methods :
@@ -439,7 +443,6 @@ Description of project sections:
         1. Post
         1. Tag
         1. User  
-
     1. Common methods handlers(can be used in several general methods handlers):
         1. Auth
         1. Exist
@@ -464,15 +467,15 @@ You can test app with:
 
 Modules, which has handlers, have unit-tests:
 1. General methods handlers:
-        1. Admin
-        1. Author
-        1. Category
-        1. Comment
-        1. Draft
-        1. Picture
-        1. Post
-        1. Tag
-        1. User  
+    1. Admin
+    1. Author
+    1. Category
+    1. Comment
+    1. Draft
+    1. Picture
+    1. Post
+    1. Tag
+    1. User  
 1. Common methods handlers:
-        1. Auth
-        1. MakeCatResp
+    1. Auth
+    1. MakeCatResp

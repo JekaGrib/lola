@@ -22,6 +22,7 @@ import Spec.Exist.Types
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
+import Oops (ReqError(..))
 
 testCat :: IO ()
 testCat = hspec $ do
@@ -77,6 +78,14 @@ testCat = hspec $ do
                      MakeCatRMock (SelectCats 1),
                      MakeCatRMock (SelectSubCats 1)
                    ]
+    it "throw Bad Request Error if category id equal super category id" $ do
+      eitherResp <- evalStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" (Just 4))) []
+      eitherResp
+        `shouldBe` Left (BadReqError "super_category_id: 4 equal to category_id.")
+    it "throw Bad Request Error if super category id is sub category" $ do
+      eitherResp <- evalStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" (Just 12))) []
+      eitherResp
+        `shouldBe` Left (BadReqError "super_category_id: 12 is subCategory of category_id: 4")
   describe "deleteCategory"
     $ it "work with valid DB answer"
     $ do
