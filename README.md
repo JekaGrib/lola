@@ -44,6 +44,8 @@ Application has several default db entities:
 
 You can create yours default entities or use folder "migrations" with migrations examples.
 
+For all example migrations you can use file "COMMAND for all migrations with dbStructure" for psql.
+
 Aftеr creating entities enter ids in [Configuration](#2-configuration)
 
 ## 3. Configuration
