@@ -16,6 +16,7 @@ import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Draft
 import Network.HTTP.Types (status200, status201, status204)
+import Oops (ReqError (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.DeleteMany.Types
@@ -28,7 +29,6 @@ import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types
-import Oops (ReqError(..))
 
 testDraft :: IO ()
 testDraft = hspec $ do
@@ -136,7 +136,7 @@ testDraft = hspec $ do
     it "throw Forbidden Error if user not author of draft" $ do
       eitherResp <- evalStateT (runExceptT $ updateDraft handle 25 14 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
       eitherResp
-        `shouldBe` Left (ForbiddenError "user_id: 25 is not author of draft_id: 14")  
+        `shouldBe` Left (ForbiddenError "user_id: 25 is not author of draft_id: 14")
   describe "deleteDraft" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteDraft handle 3 7) []
@@ -227,19 +227,19 @@ testDraft = hspec $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
-    it "throw Bad Request Error on wrong request body(id not a number)" $ do    
+    it "throw Bad Request Error on wrong request body(id not a number)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json2) []
       eitherResp
         `shouldBe` Left (BadReqError "Can`t parse parameter: draft_category_id. It should be number")
-    it "throw Bad Request Error on wrong request body(draft_text is a number)" $ do    
+    it "throw Bad Request Error on wrong request body(draft_text is a number)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json3) []
       eitherResp
         `shouldBe` Left (BadReqError "Can`t parse parameter: draft_text. It should be text")
-    it "throw Bad Request Error on wrong request body(draft_tags_ids not a number list)" $ do    
+    it "throw Bad Request Error on wrong request body(draft_tags_ids not a number list)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json4) []
       eitherResp
         `shouldBe` Left (BadReqError "Can`t parse parameter: draft_tags_ids. It should be number array. Example: [1,5,8]")
-    it "throw Bad Request Error on wrong request body(draft_text missing)" $ do    
+    it "throw Bad Request Error on wrong request body(draft_text missing)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json5) []
       eitherResp
         `shouldBe` Left (BadReqError "Can`t find parameter: draft_text")

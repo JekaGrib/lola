@@ -14,6 +14,7 @@ import Methods.Category
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (status200, status201, status204)
+import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Category.Handlers
 import Spec.Category.QStrExample
@@ -22,7 +23,6 @@ import Spec.Exist.Types
 import Spec.MakeCatResp.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
-import Oops (ReqError(..))
 
 testCat :: IO ()
 testCat = hspec $ do

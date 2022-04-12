@@ -15,6 +15,7 @@ import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Auth (AccessMode (..))
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (status200, status201, status204)
+import Oops (ReqError (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.Comment.Handlers
@@ -24,7 +25,6 @@ import Spec.Exist.Types
 import Spec.Types (MockAction (..))
 import Test.Hspec (describe, hspec, it, shouldBe)
 import Types
-import Oops (ReqError(..))
 
 testComm :: IO ()
 testComm = hspec $ do
@@ -56,14 +56,14 @@ testComm = hspec $ do
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3, CommentIdTextUserResponse 2 "ok" 4, CommentIdTextUserResponse 3 "yes" 5]))
   describe "updateComment" $ do
-    it "work with valid DB answer"  $ do
+    it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateComment handle 3 2 (UpdateComment "yes")) []
       reverse state
         `shouldBe` [ CommMock (SelectUsersForComm 2),
                      CommMock (UpdateDbComm "yes" 2),
                      CommMock (SelectPostsForComm 2)
                    ]
-    it "throw Forbidden Error if user not comment author"  $ do
+    it "throw Forbidden Error if user not comment author" $ do
       eitherResp <- evalStateT (runExceptT $ updateComment handle 25 2 (UpdateComment "yes")) []
       eitherResp
         `shouldBe` Left (ForbiddenError "user_id: 25 is not author of comment_id: 2")
