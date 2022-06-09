@@ -53,10 +53,6 @@ application config handleLog req send = do
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseLBS s h b
 
-{-logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
-logLeftResponse logH respE = case respE of
-  Left err -> logWarning logH $ show err
-  _ -> return ()-}
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE respE = case respE of
