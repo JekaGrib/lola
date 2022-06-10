@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Oops (MigrationException (..), ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
+module Error (MigrationException (..), ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)

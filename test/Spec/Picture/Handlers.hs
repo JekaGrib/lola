@@ -13,7 +13,7 @@ import Data.Text (Text)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
 import Methods.Picture
 import Network.HTTP.Simple (HttpException (InvalidUrlException))
-import Oops (UnexpectedDbOutPutException (..))
+import Error (UnexpectedDbOutPutException (..))
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)

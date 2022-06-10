@@ -17,7 +17,7 @@ import Logger
 import Methods.Common
 import qualified Methods.Common.Exist (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..), hideErr)
+import Error (ReqError (..), hideErr)
 import Psql.Methods.Admin
 import Types
 

@@ -20,7 +20,7 @@ import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (getZonedTime, localDay, zonedTimeToLocalTime)
 import Logger
 import Network.HTTP.Types (Header, ResponseHeaders, Status, hLocation, status200, status201, status204)
-import Oops (ReqError (..), catchDbErr)
+import Error (ReqError (..), catchDbErr)
 import Psql.Selecty (Comment (..), Tag (..))
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types

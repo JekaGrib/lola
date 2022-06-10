@@ -31,7 +31,7 @@ import Methods.Tag (workWithTags)
 import Methods.User (workWithLogIn, workWithUsers)
 import Network.HTTP.Types (QueryText, StdMethod, parseMethod, queryToQueryText, status400, status401, status403, status404, status413, status414, status500, status501)
 import Network.Wai (Request, RequestBodyLength (..), Response, ResponseReceived, getRequestBodyChunk, pathInfo, queryString, requestBodyLength, requestMethod, responseLBS)
-import Oops (ReqError (..), logOnErr)
+import Error (ReqError (..), logOnErr)
 
 data Handle m = Handle
   { hLog :: LogHandle m,
@@ -53,10 +53,6 @@ application config handleLog req send = do
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseLBS s h b
 
-{-logLeftResponse :: LogHandle IO -> Either ReqError ResponseInfo -> IO ()
-logLeftResponse logH respE = case respE of
-  Left err -> logWarning logH $ show err
-  _ -> return ()-}
 
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE respE = case respE of
@@ -161,31 +157,3 @@ checkLengthReqBody req =
     ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"
     _ -> return ()
 
-{-getBodyAndCheck :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m DraftRequest
-getBodyAndCheck h req = do
-  json <- lift $ getBody h req
-  body <- checkDraftReqJson json
-
-parseQueryStrAndLog :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> ExceptT ReqError m a
-parseQueryStrAndLog h req = do
-  queStr <- parseQueryStr req
-  lift $ logInfo (hLog h) $ "Query string parsed to: " ++ show queStr
-  return queStr
-
-preParseQueryStr :: (MonadCatch m, ParseQueryStr a) => Handle m -> Request -> (a -> ExceptT ReqError m ResponseInfo) -> ExceptT ReqError m ResponseInfo
-preParseQueryStr h req foo = do
-  queStr <- parseQueryStrAndLog h req
-  foo queStr
-
-getBodyAndCheckUserToken :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m (UserId, DraftRequest)
-getBodyAndCheckUserToken h req = do
-  json <- lift $ getBody h req
-  tokenParam <- pullTokenDraftReqJson json
-  (usIdNum, _) <- checkUserTokenParam (hAuth . hMeth $ h) tokenParam
-  body <- checkDraftReqJson json
-  return (usIdNum, body)
-
-checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
-checkReqLength req = case splitAt 20 $ queryString req of
-  (_, []) -> return ()
-  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"-}

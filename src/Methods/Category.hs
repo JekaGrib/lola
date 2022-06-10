@@ -25,7 +25,7 @@ import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (findOneLevelSubCats, makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Psql.Methods.Category
 import Types
 

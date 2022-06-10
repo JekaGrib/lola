@@ -31,7 +31,7 @@ import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Psql.Methods.Draft
 import Psql.Selecty (Author (..), Draft (..), Tag (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))

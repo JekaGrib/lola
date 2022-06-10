@@ -25,7 +25,7 @@ import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..), catchDbErr)
+import Error (ReqError (..), catchDbErr)
 import Psql.Methods.Author
 import Psql.Selecty (Author (..))
 import Types

@@ -12,7 +12,7 @@ import Methods.Common (ResponseInfo (..), textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Picture
 import Network.HTTP.Types (status200, status201)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Picture.Handlers

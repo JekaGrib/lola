@@ -10,7 +10,7 @@ import Control.Monad.Trans.Except (ExceptT, catchE, throwE)
 import Data.Text (Text, pack, unpack)
 import qualified Data.Text as T
 import Data.Time.Calendar (Day, fromGregorianValid)
-import Oops
+import Error
 import Types
 
 tryReadInteger :: (Monad m) => QueryParamKey -> Text -> ExceptT ReqError m Integer
@@ -87,13 +87,4 @@ getTxtstart txt = case splitAt 20 (unpack txt) of
   (str, []) -> str
   (str, _) -> str ++ "... "
 
-{-checkIdLength :: (Monad m) => Text -> ExceptT ReqError m ()
-checkIdLength leng txt = case splitAt 20 (unpack txt) of
-  (_, []) -> return ()
-  _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
 
-tryReadNum :: (Monad m) => Text -> ExceptT ReqError m Integer
-tryReadNum "" = throwE $ SimpleError "Can`t parse parameter. Empty input."
-tryReadNum xs = case reads . unpack $ xs of
-  [(a,"")] -> return a
-  _        -> throwE $ SimpleError $ "Can`t parse value: " ++ unpack xs ++ ". It must be number"-}

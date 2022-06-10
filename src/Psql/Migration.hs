@@ -5,7 +5,7 @@ module Psql.Migration where
 import Control.Exception (SomeException, catch, throw)
 import Database.PostgreSQL.Simple (Connection, execute_, withTransaction)
 import Database.PostgreSQL.Simple.Migration (MigrationCommand (MigrationDirectory, MigrationInitialization, MigrationScript, MigrationValidation), MigrationContext (MigrationContext), MigrationResult (..), runMigration, runMigrations)
-import Oops (MigrationException (..))
+import Error (MigrationException (..))
 
 data Migrate = Migrate | NotMigrate
   deriving (Eq, Show)

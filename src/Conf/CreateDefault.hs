@@ -87,7 +87,3 @@ createDefaultCategory conn = do
   [Only catId] <- query_ conn "INSERT INTO categories (category_name) VALUES ( 'NONE' ) RETURNING category_id"
   return catId
 
-{-addCreateAdminKey :: Connection -> IO ()
-addCreateAdminKey conn = do
-  _ <- execute_ conn "INSERT INTO key (create_admin_key) VALUES ( 'lola' ) "
-  return ()-}

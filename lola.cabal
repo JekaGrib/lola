@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 53abd3ec7f348bfd230a63006515c00dc3d5490eaa9c5130ad947d05b531a6e2
+-- hash: dce7d566ec802341e15fc7cd21ec9fbabb743bed5e6eff75defb50880e43cff8
 
 name:           lola
 version:        0.1.0.0
@@ -35,6 +35,7 @@ library
       Conf
       Conf.ConnectDB
       Conf.CreateDefault
+      Error
       Logger
       Methods
       Methods.Admin
@@ -53,7 +54,6 @@ library
       Methods.Post.LimitArg
       Methods.Tag
       Methods.User
-      Oops
       Psql.Methods.Admin
       Psql.Methods.Author
       Psql.Methods.Category

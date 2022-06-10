@@ -15,7 +15,7 @@ import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Tag
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Tag.Handlers

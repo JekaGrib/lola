@@ -13,7 +13,7 @@ import Data.Time.Calendar (Day)
 import Methods.Common.Exist (CheckExist (..), Handle)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types.URI (QueryText)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import TryRead (tryReadDay, tryReadId, tryReadIdArray, tryReadPage, tryReadSortOrd)
 import Types
 

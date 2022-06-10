@@ -15,7 +15,7 @@ import Data.Text (Text, unpack)
 import qualified Data.Vector as V
 import Methods.Common.Exist (CheckExist (..), Handle)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Types
 
 data DraftRequest = DraftRequest

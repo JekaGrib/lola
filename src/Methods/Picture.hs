@@ -25,7 +25,7 @@ import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import qualified Network.HTTP.Simple as HT
 import Network.HTTP.Types (QueryText, status200)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Psql.Methods.Picture
 import Types
 

@@ -44,6 +44,8 @@ If you want execute some PostgreSQL migrations before start application you can 
 
 For E2E tests you can use SQL scripts from folder "testMigrations" and put them to "migrations". 
 
+If you don`t need to execute migrations at app start you can leave the folder "migration" empty.
+
 ## 3. Add default entities to db
 Application has several default db entities:
 1. default picture  - picture of deleted user
@@ -465,7 +467,7 @@ Description of project sections:
 3. Api - response and request parsing.
 5. Conf - configuratuion parsing and db connection.
 5. Logger - logging.
-5. Oops - work with exceptions.
+5. Error - work with exceptions.
 5. TryRead - some more parsing functions.
 5. Types - some more project types.
 

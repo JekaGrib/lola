@@ -30,7 +30,7 @@ import qualified Methods.Draft (Handle, makeH)
 import Methods.Draft (insertReturnAllDraft, isUserAuthorE_)
 import Methods.Post.LimitArg (LimitArg (..), chooseArgs, isDateASC)
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..))
+import Error (ReqError (..))
 import Psql.Methods.Post
 import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
 import Psql.ToQuery.SelectLimit (Filter, OrderBy (..))

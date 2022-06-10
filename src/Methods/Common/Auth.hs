@@ -14,7 +14,7 @@ import Data.Text (Text, pack, unpack)
 import Logger
 import Methods.Common
 import Network.HTTP.Types.URI (QueryText)
-import Oops (ReqError (..), hideErr, hideTokenErr)
+import Error (ReqError (..), hideErr, hideTokenErr)
 import Psql.Methods.Common.Auth
 import TryRead (tryReadId)
 import Types

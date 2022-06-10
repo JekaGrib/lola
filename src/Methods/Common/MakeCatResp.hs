@@ -11,7 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
 import Logger (LogHandle (..))
 import Methods.Common
-import Oops (ReqError)
+import Error (ReqError)
 import Psql.Methods.Common.MakeCatResp
 import Psql.Selecty (Cat (..))
 import Types
