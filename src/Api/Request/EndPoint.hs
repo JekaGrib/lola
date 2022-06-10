@@ -61,6 +61,7 @@ toEP (stdMeth, resourses) = case (stdMeth, resourses) of
   (GET, [PictureIdR iD]) -> return $ PictureEP (ToGet iD)
   (POST, [PostIdR iD, DraftR]) -> return $ PostEP (ToPostId iD)
   (GET, [PostIdR iD]) -> return $ PostEP (ToGet iD)
+  (GET, [PostR]) -> return $ PostEP ToGetAll
   (PUT, [PostIdR iD]) -> return $ PostEP (ToPut iD)
   (DELETE, [PostIdR iD]) -> return $ PostEP (ToDelete iD)
   (POST, [TagR]) -> return $ TagEP ToPost

@@ -45,7 +45,7 @@ selectDaysForPost' conn postId = do
 
 selectLimDraftsForAuthor' :: Connection -> AuthorId -> OrderBy -> Page -> Limit -> IO [Draft]
 selectLimDraftsForAuthor' conn auId orderBy page limit = do
-  let wh = WherePair "author_id=?" (Id auId)
+  let wh = WherePair "drafts.author_id=?" (Id auId)
   selectLimit' conn $
     SelectLim
       ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
