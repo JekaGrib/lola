@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Conf.ConnectDB (tryConnect, ConnDB (..), ConnectInfo (..), inputString, inputNum) where
 
 import qualified Control.Exception as E

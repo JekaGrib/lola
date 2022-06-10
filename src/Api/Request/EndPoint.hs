@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Api.Request.EndPoint where
 
 import Control.Monad.Catch (MonadCatch)

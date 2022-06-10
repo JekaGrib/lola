@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Picture.Handlers where
 
 import Codec.Picture (PixelRGB8 (..), encodePng, generateImage)

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Conf.CreateDefault (createNewDefPic, createNewDefUser, createNewDefAuthor, createNewDefCat) where
 
 import Codec.Picture (decodeImage)

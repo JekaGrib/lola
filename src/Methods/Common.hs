@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Common where
 
 import Api.Response (CommentIdTextUserResponse (..), PicIdUrl (..), TagResponse (..))

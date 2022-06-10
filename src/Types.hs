@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Types where
 
 import Data.ByteString (ByteString)

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Api.Response where
 
 import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), object, pairs)

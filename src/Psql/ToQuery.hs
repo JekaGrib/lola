@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Psql.ToQuery where
 
 import Data.String (fromString)

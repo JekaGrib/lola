@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Post.LimitArg (LimitArg (..), chooseArgs, isDateASC) where
 
 import Api.Request.QueryStr (GetPosts (..), GetPostsF (..), GetPostsOrd (..))

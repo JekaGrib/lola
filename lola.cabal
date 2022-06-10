@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: dce7d566ec802341e15fc7cd21ec9fbabb743bed5e6eff75defb50880e43cff8
+-- hash: 15e2b4ff864633cfd2dd382e092ac9fe72e33209ecb94ae33eb647a8c23179bc
 
 name:           lola
 version:        0.1.0.0
@@ -83,6 +83,8 @@ library
       Paths_lola
   hs-source-dirs:
       src
+  default-extensions: OverloadedStrings RecordWildCards
+  ghc-options: -Wall -Werror
   build-depends:
       JuicyPixels
     , aeson
@@ -116,6 +118,7 @@ executable lola-exe
       Paths_lola
   hs-source-dirs:
       app
+  default-extensions: OverloadedStrings RecordWildCards
   ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
@@ -203,7 +206,8 @@ test-suite lola-test
       Paths_lola
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  default-extensions: OverloadedStrings RecordWildCards
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
     , aeson

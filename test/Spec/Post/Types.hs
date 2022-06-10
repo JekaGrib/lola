@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Post.Types where
 
 import Psql.ToQuery.SelectLimit (Filter (..), OrderBy (..))
