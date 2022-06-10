@@ -93,30 +93,3 @@ toDateOrd (sortOrd, n) = (ByPostDate sortOrd, n)
 isDateASC :: [OrderBy] -> Bool
 isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ASC) || cont) False
 
-{-type SortPriority = Int
-
-defDateSort :: SortDate
-defDateSort = DateDESC-}
-
-{-checkReqLength :: (Monad m) => Request -> ExceptT ReqError m ()
-checkReqLength req = case splitAt 20 $ queryString req of
-  (_, []) -> return ()
-  _ -> throwE $ SimpleError "There is should be less then 20 query string parameters"
-
-sortArsInOrder :: [Maybe SortArgPriority] -> [SortArg]
-sortArsInOrder = map sortArgSAP . sortBy (compare `on` sortPrioSAP) . concatMap toList
-
-addSortPriority :: Request -> QueryParamKey -> Maybe SortArg -> Maybe SortArgPriority
-addSortPriority req paramKey maybeSortArg = do
-  sortArg <- maybeSortArg
-  num <- findParamIndex req paramKey
-  return $ SortArgPriority sortArg num
-
-findParam :: Request -> Text -> Maybe (Maybe Text)
-findParam req txt = lookup txt . queryToQueryText $ queryString req
-
-isExistParam :: Request -> Text -> Bool
-isExistParam req txt = case findParam req txt of
-  Just _ -> True
-  Nothing -> False
--}

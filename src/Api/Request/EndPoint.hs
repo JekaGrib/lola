@@ -131,16 +131,4 @@ toResourseId txt _ = throwE $ ResourseNotExistError $ getTxtstart txt
 parseResourseId :: (MonadCatch m) => ResourseName -> ResourseIdText -> ExceptT ReqError m Id
 parseResourseId resName = tryReadResourseId (append resName "_id")
 
-{-instance CheckExist Resourse where
-  checkExist h (AuthorIdR  iD) = isExistResourseE h (AuthorId   iD)
-  checkExist h (CatIdR     iD) = isExistResourseE h (CategoryId iD)
-  checkExist h (CommentIdR iD) = isExistResourseE h (CommentId  iD)
-  checkExist h (DraftIdR   iD) = isExistResourseE h (DraftId    iD)
-  checkExist h (PictureIdR iD) = isExistResourseE h (PictureId  iD)
-  checkExist h (PostIdR    iD) = isExistResourseE h (PostId     iD)
-  checkExist h (TagIdR     iD) = isExistResourseE h (TagId      iD)
-  checkExist h (UserIdR    iD) = isExistResourseE h (UserId     iD)
-  checkExist _ _ = return ()
 
-instance CheckExist [Resourse] where
-  checkExist h xs = mapM_ (checkExist h) xs-}
