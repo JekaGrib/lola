@@ -56,7 +56,7 @@ createNewDefUser conn picId = do
 createDefaultUser :: Connection -> PictureId -> IO UserId
 createDefaultUser conn picId = do
   day <- getDay
-  [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin) VALUES ( '12345678','DELETED','DELETED',?,?, false ) RETURNING user_id" [pack (show picId), pack day]
+  [Only userId] <- query conn "INSERT INTO users ( password, first_name , last_name , user_pic_id , user_create_date, admin,token_key) VALUES ( '12345678','DELETED','DELETED',?,?, false, 'lolalola' ) RETURNING user_id" [pack (show picId), pack day]
   return userId
 
 getDay :: IO String

@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Werror #-}
 
-module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
+module Oops (MigrationException (..), ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)
@@ -27,6 +27,11 @@ data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | Unexpected
   deriving (Eq, Show)
 
 instance Exception UnexpectedDbOutPutException
+
+newtype MigrationException = MigrationException String
+  deriving (Eq, Show)
+
+instance Exception MigrationException
 
 logOnErr :: (MonadCatch m) => LogHandle m -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr logH m =

@@ -34,21 +34,28 @@ There is database diagram
 ![](https://github.com/JekaGrib/lola/raw/master/other/pic/dbDiagram.png)
 
 To create database structure you can use file "dbStructure.sql"
+Psql command:
 
-## 2. Add default entities to db
+    $ \i ./dbStructure.sql;
+
+
+## 2. Migrations
+If you want execute some PostgreSQL migrations before start application you can put your SQL scripts in folder "migrations" (program will execute them automatically at startup), they will execute in alphabetical order. Or you can do it directly in psql by yourself (file "COMMAND for all migrations with dbStructure" can help you).
+
+For E2E tests you can use SQL scripts from folder "testMigrations" and put them to "migrations". 
+
+## 3. Add default entities to db
 Application has several default db entities:
 1. default picture  - picture of deleted user
 2. default user     - deleted user
 2. default author   - deleted author
 2. default category - deleted category
 
-You can create yours default entities or use folder "migrations" with migrations examples.
-
-For all example migrations you can use file "COMMAND for all migrations with dbStructure" for psql.
+You can create yours default entities or use folder "testMigrations" with migrations examples.
 
 Aftеr creating entities enter ids in [Configuration](#2-configuration)
 
-## 3. Configuration
+## 4. Configuration
 Before start, you should rename "example.config" to "postApp.config". 
 Then you should make changes in this file.
 
@@ -70,7 +77,7 @@ There is table with descriptions of each values in configuration file, that shou
 |LimitNumbers | postNumberLimit      | The number of posts given in the response at a time |
 |log          | logLevel             | The logging level is specified here. The log will only display entries of this level and levels above. It can be one of four levels: DEBUG,INFO,WARNING,ERROR. More information [here](#logging)  |
 
-## 4. Run
+## 5. Run
 You can run App with:
 
     $ stack exec lola-exe 
@@ -454,6 +461,7 @@ Description of project sections:
     1. "ToQuery" section - parsing db requests
     1. "Selecty.hs" - parsing db responses
     1. "Methods" folder - all IO methods for corresponding handlers.
+    5. "Migration.hs" - work with psql migrations.
 3. Api - response and request parsing.
 5. Conf - configuratuion parsing and db connection.
 5. Logger - logging.
@@ -484,4 +492,4 @@ Modules, which has handlers, have unit-tests:
 
 All database wrong answers (multiple,emty) are tested at Tag and Picture modules. In other modules only success and some local errors are tested.
 
-For E2E tests with database you can use folder "scripts".
+For E2E tests with database you can use folder "scripts". Also you can use SQL scripts from folder "testMigrations" and put them to "migrations"(program will execute them automatically at startup).

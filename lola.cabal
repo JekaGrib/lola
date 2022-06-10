@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 524251be5e5c36e8140068cc07e285da9fda4b4f3bdbfa14ccb2806fba0cda30
+-- hash: 53abd3ec7f348bfd230a63006515c00dc3d5490eaa9c5130ad947d05b531a6e2
 
 name:           lola
 version:        0.1.0.0
@@ -68,6 +68,7 @@ library
       Psql.Methods.Post
       Psql.Methods.Tag
       Psql.Methods.User
+      Psql.Migration
       Psql.Selecty
       Psql.ToQuery
       Psql.ToQuery.Delete
@@ -97,6 +98,7 @@ library
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
     , scientific
     , text
@@ -131,6 +133,7 @@ executable lola-exe
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
     , scientific
     , text
@@ -217,6 +220,7 @@ test-suite lola-test
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
     , scientific
     , text
