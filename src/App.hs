@@ -56,27 +56,27 @@ fromE respE = case respE of
     ResponseInfo
       status400
       [jsonHeader]
-      (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+      (encode $ OkInfoResponse {okOI = False, infoOI = pack str})
   Left (SecretLogInError _) ->
     ResponseInfo
       status401
       [jsonHeader]
-      (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID password or user_id"})
+      (encode $ OkInfoResponse {okOI = False, infoOI = "INVALID password or user_id"})
   Left (SecretTokenError _) ->
     ResponseInfo
       status401
       [jsonHeader]
-      (encode $ OkInfoResponse {ok7 = False, info7 = "INVALID token"})
+      (encode $ OkInfoResponse {okOI = False, infoOI = "INVALID token"})
   Left (NotImplementedError _) ->
     ResponseInfo
       status501
       [jsonHeader]
-      (encode $ OkInfoResponse {ok7 = False, info7 = "Unknown method"})
+      (encode $ OkInfoResponse {okOI = False, infoOI = "Unknown method"})
   Left (ForbiddenError str) ->
     ResponseInfo
       status403
       [jsonHeader]
-      (encode $ OkInfoResponse {ok7 = False, info7 = pack str})
+      (encode $ OkInfoResponse {okOI = False, infoOI = pack str})
   Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [textHeader] "Status 413 Request Body Too Large"
   Left (UriTooLongError _) -> ResponseInfo status414 [textHeader] "Status 414 Request-URI Too Long"
   Left (ResourseNotExistError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"

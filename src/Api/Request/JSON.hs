@@ -1,9 +1,11 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Api.Request.JSON where
 
 import Api.Request.QueryStr (checkLength)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Aeson ((.:), FromJSON (parseJSON), Object, Value (..), decodeStrict, withObject)
+import Data.Aeson (FromJSON (parseJSON), Object, Value (..), decodeStrict,genericParseJSON)
 import Data.ByteString (ByteString)
 import Data.HashMap.Strict (toList)
 import Data.Scientific (Scientific, toBoundedInteger)
@@ -13,26 +15,21 @@ import Methods.Common.Exist (CheckExist (..), Handle)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Error (ReqError (..))
 import Types
+import Api.AesonOption (optionsSnakeCase)
+import GHC.Generics (Generic)
 
 data DraftRequest = DraftRequest
-  { draft_name :: Text,
-    draft_cat_id :: CategoryId,
-    draft_textDR :: Text,
-    draft_main_pic_id :: PictureId,
-    draft_pics_ids :: [PictureId],
-    draft_tags_ids :: [TagId]
+  { draftName :: Text,
+    draftCategoryId :: CategoryId,
+    draftText :: Text,
+    draftMainPicId :: PictureId,
+    draftPicsIds :: [PictureId],
+    draftTagsIds :: [TagId]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance FromJSON DraftRequest where
-  parseJSON = withObject "DraftRequest" $ \v ->
-    DraftRequest
-      <$> v .: "draft_name"
-      <*> v .: "draft_category_id"
-      <*> v .: "draft_text"
-      <*> v .: "draft_main_pic_id"
-      <*> v .: "draft_pics_ids"
-      <*> v .: "draft_tags_ids"
+  parseJSON = genericParseJSON optionsSnakeCase
 
 checkDraftReqJson :: (MonadCatch m) => Handle m -> ByteString -> ExceptT ReqError m DraftRequest
 checkDraftReqJson h json =

@@ -5,7 +5,7 @@ module Methods.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..), checkDraftReqJson)
 import Api.Request.QueryStr (GetDrafts (..), checkQStr)
-import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (pic_idPU), PostIdOrNull (..), PostResponse (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (picIdPU), PostIdOrNull (..), PostResponse (..), TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
@@ -148,8 +148,8 @@ getDrafts h@Handle {..} usId (GetDrafts pageNum) = do
   lift $ logInfo hLog $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response"
   okHelper $
     DraftsResponse
-      { page9 = pageNum,
-        drafts9 = draftsResps
+      { page = pageNum,
+        drafts = draftsResps
       }
 
 updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -> ExceptT ReqError m ResponseInfo
@@ -164,7 +164,7 @@ updateDraft h@Handle {..} usId draftId drReq@(DraftRequest nameParam catIdParam 
     insertManyDraftsPics (zip (repeat draftId) picsIds)
     insertManyDraftsTags (zip (repeat draftId) tagsIds)
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " updated"
-  okHelper $ DraftResponse {draft_id2 = draftId, post_id2 = isNULL postId, author2 = auResp, draft_name2 = nameParam, draft_cat2 = catResp, draft_text2 = txtParam, draft_main_pic_id2 = picId, draft_main_pic_url2 = makeMyPicUrl hConf picId, draft_tags2 = tagResps, draft_pics2 = fmap (inPicIdUrl hConf) picsIds}
+  okHelper $ DraftResponse {draftIdD = draftId, postIdD = isNULL postId, authorD = auResp, draftNameD = nameParam, draftCategoryD = catResp, draftTextD = txtParam, draftMainPicIdD = picId, draftMainPicUrlD = makeMyPicUrl hConf picId, draftTagsD = tagResps, draftPicsD = fmap (inPicIdUrl hConf) picsIds}
 
 deleteDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 deleteDraft h@Handle {..} usId draftId = do
@@ -183,8 +183,8 @@ publishDraft h@Handle {..} usId draftId = do
       postId <- withTransactionDBE h $ do
         let insPost = InsertPost auId draftName day (fromCatResp catResp) draftTxt mPicId
         postId <- insertReturnPost insPost
-        insertManyPostsPics (zip (repeat postId) (fmap pic_idPU picIdUrls))
-        insertManyPostsTags (zip (repeat postId) (fmap tag_idTR tagResps))
+        insertManyPostsPics (zip (repeat postId) (fmap picIdPU picIdUrls))
+        insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
         return postId
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       ok201Helper hConf $ "posts/" ++ show postId
@@ -194,10 +194,10 @@ publishDraft h@Handle {..} usId draftId = do
         let updPost = UpdateDbPost draftName (fromCatResp catResp) draftTxt mPicId
         updateDbPost postId updPost
         deletePicsTagsForPost hDelMany postId
-        insertManyPostsPics (zip (repeat postId) (fmap pic_idPU picIdUrls))
-        insertManyPostsTags (zip (repeat postId) (fmap tag_idTR tagResps))
+        insertManyPostsPics (zip (repeat postId) (fmap picIdPU picIdUrls))
+        insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      okHelper $ PostResponse {post_id = postId, author4 = auResp, post_name = draftName, post_create_date = day, post_cat = catResp, post_text = draftTxt, post_main_pic_id = mPicId, post_main_pic_url = mPicUrl, post_pics = picIdUrls, post_tags = tagResps}
+      okHelper $ PostResponse {postIdP = postId, authorP = auResp, postNameP = draftName, postCreateDateP = day, postCategoryP = catResp, postTextP = draftTxt, postMainPicIdP = mPicId, postMainPicUrlP = mPicUrl, postPicsP = picIdUrls, postTagsP = tagResps}
 
 selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
 selectDraftAndMakeResp h@Handle {..} usId draftId = do
@@ -211,7 +211,7 @@ makeDraftResp Handle {..} usId auId (Draft drId auInfo draftPostId draftName dra
   picsIds <- catchSelE hLog $ selectPicsForDraft drId
   tagS <- catchSelE hLog $ selectTagsForDraft drId
   catResp <- makeCatResp hCatResp draftCatId
-  return DraftResponse {draft_id2 = drId, post_id2 = isNULL draftPostId, author2 = AuthorResponse auId auInfo usId, draft_name2 = draftName, draft_cat2 = catResp, draft_text2 = draftTxt, draft_main_pic_id2 = mPicId, draft_main_pic_url2 = makeMyPicUrl hConf mPicId, draft_tags2 = fmap inTagResp tagS, draft_pics2 = fmap (inPicIdUrl hConf) picsIds}
+  return DraftResponse {draftIdD = drId, postIdD = isNULL draftPostId, authorD = AuthorResponse auId auInfo usId, draftNameD = draftName, draftCategoryD = catResp, draftTextD = draftTxt, draftMainPicIdD = mPicId, draftMainPicUrlD = makeMyPicUrl hConf mPicId, draftTagsD = fmap inTagResp tagS, draftPicsD = fmap (inPicIdUrl hConf) picsIds}
 
 data DraftInfo = DraftInfo AuthorResponse [TagResponse] CatResponse
 

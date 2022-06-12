@@ -124,7 +124,7 @@ createUser Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 getUser Handle {..} usId = do
   User fName lName picId usCreateDate <- catchOneSelE hLog $ selectUsers usId
-  okHelper $ UserResponse {user_id = usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl hConf picId, user_create_date = usCreateDate}
+  okHelper $ UserResponse {userId = usId, firstName = fName, lastName = lName, userPicId = picId, userPicUrl = makeMyPicUrl hConf picId, userCreateDate = usCreateDate}
 
 deleteUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 deleteUser h@Handle {..} usId = do

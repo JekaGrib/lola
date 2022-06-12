@@ -2,7 +2,7 @@ module Spec.Category where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..))
-import Api.Response (CatResponse (..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -49,7 +49,7 @@ testCat = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ getCategory handle 4) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11, 12] $ CatResponse 1 "a" [4, 5, 6]))
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]))
   describe "updateCategory" $ do
     it "work with valid DB answer, without super category" $ do
       state <- execStateT (runExceptT $ updateCategory handle 4 (UpdateCategory "food" Nothing)) []
@@ -132,7 +132,7 @@ testCat = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithCats handle [] (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ SubCatResponse 4 "d" [11, 12] $ CatResponse 1 "a" [4, 5, 6]))
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]))
   describe "workWithCats (ToPut)" $ do
     it "work with valid DB answer, without super category" $ do
       state <- execStateT (runExceptT $ workWithCats handle qStr2 (ToPut 4)) []

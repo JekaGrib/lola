@@ -1,98 +1,97 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+
 module Api.Response where
 
-import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), object, pairs)
+import Data.Aeson (ToJSON (toEncoding, toJSON),genericToJSON,genericToEncoding)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
 import Types
+import Api.AesonOption (optionsEraseSuffix, optionsSnakeCase, optionsSnakeCasePreEraseSuffix)
+import GHC.Generics (Generic)
 
 data UserResponse = UserResponse
-  { user_id :: UserId,
-    first_name :: Text,
-    last_name :: Text,
-    user_pic_id :: PictureId,
-    user_pic_url :: Text,
-    user_create_date :: Day
+  { userId :: UserId,
+    firstName :: Text,
+    lastName :: Text,
+    userPicId :: PictureId,
+    userPicUrl :: Text,
+    userCreateDate :: Day
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON UserResponse where
-  toJSON (UserResponse a b c d e f) =
-    object ["user_id" .= a, "first_name" .= b, "last_name" .= c, "user_pic_id" .= d, "user_pic_url" .= e, "user_create_date" .= f]
-  toEncoding (UserResponse a b c d e f) =
-    pairs ("user_id" .= a <> "first_name" .= b <> "last_name" .= c <> "user_pic_id" .= d <> "user_pic_url" .= e <> "user_create_date" .= f)
+  toJSON = genericToJSON optionsSnakeCase
+  toEncoding = genericToEncoding optionsSnakeCase
 
 data UserTokenResponse = UserTokenResponse
   { tokenUTR :: Text,
-    user_idUTR :: UserId,
-    first_nameUTR :: Text,
-    last_nameUTR :: Text,
-    user_pic_idUTR :: PictureId,
-    user_pic_urlUTR :: Text,
-    user_create_dateUTR :: Day
+    userIdUTR :: UserId,
+    firstNameUTR :: Text,
+    lastNameUTR :: Text,
+    userPicIdUTR :: PictureId,
+    userPicUrlUTR :: Text,
+    userCreateDateUTR :: Day
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON UserTokenResponse where
-  toJSON (UserTokenResponse a b c d e f g) =
-    object ["token" .= a, "user_id" .= b, "first_name" .= c, "last_name" .= d, "user_pic_id" .= e, "user_pic_url" .= f, "user_create_date" .= g]
-  toEncoding (UserTokenResponse a b c d e f g) =
-    pairs ("token" .= a <> "user_id" .= b <> "first_name" .= c <> "last_name" .= d <> "user_pic_id" .= e <> "user_pic_url" .= f <> "user_create_date" .= g)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "UTR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "UTR"
 
-newtype TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq, Show)
+newtype TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq, Show, Generic)
 
 instance ToJSON TokenResponse where
-  toJSON (TokenResponse a) =
-    object ["token" .= a]
-  toEncoding (TokenResponse a) =
-    pairs ("token" .= a)
+  toJSON = genericToJSON $ optionsEraseSuffix "TR"
+  toEncoding = genericToEncoding $ optionsEraseSuffix "TR"
 
-data OkInfoResponse = OkInfoResponse {ok7 :: Bool, info7 :: Text} deriving (Eq, Show)
+data OkInfoResponse = OkInfoResponse {okOI :: Bool, infoOI :: Text} deriving (Eq, Show, Generic)
 
 instance ToJSON OkInfoResponse where
-  toJSON (OkInfoResponse a b) =
-    object ["ok" .= a, "info" .= b]
-  toEncoding (OkInfoResponse a b) =
-    pairs ("ok" .= a <> "info" .= b)
+  toJSON = genericToJSON $ optionsEraseSuffix "OI"
+  toEncoding = genericToEncoding $ optionsEraseSuffix "OI"
 
 data AuthorResponse = AuthorResponse
-  { author_id :: AuthorId,
-    author_info :: Text,
-    auth_user_id :: UserId
+  { authorIdA :: AuthorId,
+    authorInfoA :: Text,
+    userIdA :: UserId
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON AuthorResponse where
-  toJSON (AuthorResponse a b c) =
-    object ["author_id" .= a, "author_info" .= b, "user_id" .= c]
-  toEncoding (AuthorResponse a b c) =
-    pairs ("author_id" .= a <> "author_info" .= b <> "user_id" .= c)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "A"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "A"
 
-data CatResponse
+data CatResponse = Sub SubCatResponse | Super SuperCatResponse
+  deriving (Eq, Show, Generic, ToJSON)
+
+data SubCatResponse
   = SubCatResponse
-      { subCat_id :: CategoryId,
-        subCat_name :: Text,
-        one_level_sub_categories :: [CategoryId],
-        super_category :: CatResponse
+      { categoryIdSCATR :: CategoryId,
+        categoryNameSCATR :: Text,
+        subCategoriesSCATR :: [CategoryId],
+        superCategorySCATR :: CatResponse
       }
-  | CatResponse
-      { cat_id :: CategoryId,
-        cat_name :: Text,
-        one_level_sub_cats :: [CategoryId]
-      }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
-instance ToJSON CatResponse where
-  toJSON (CatResponse a b c) =
-    object ["category_id" .= a, "category_name" .= b, "sub_categories" .= c]
-  toJSON (SubCatResponse a b c d) =
-    object ["category_id" .= a, "category_name" .= b, "sub_categories" .= c, "super_category" .= d]
-  toEncoding (CatResponse a b c) =
-    pairs ("category_id" .= a <> "category_name" .= b <> "sub_categories" .= c)
-  toEncoding (SubCatResponse a b c d) =
-    pairs ("category_id" .= a <> "category_name" .= b <> "sub_categories" .= c <> "super_category" .= d)
+instance ToJSON SubCatResponse where
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "SCATR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "SCATR"
+
+data SuperCatResponse 
+  = SuperCatResponse
+      { categoryIdCATR :: CategoryId,
+        categoryNameCATR :: Text,
+        subCategoriesCATR :: [CategoryId]
+      }
+  deriving (Eq, Show, Generic)
+
+instance ToJSON SuperCatResponse where
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "CATR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "CATR"
 
 data PostIdOrNull = PostIdExist PostId | PostIdNull
-  deriving (Eq)
+  deriving (Eq, Generic)
 
 instance Show PostIdOrNull where
   show (PostIdExist a) = show a
@@ -103,129 +102,107 @@ instance ToJSON PostIdOrNull where
   toJSON PostIdNull = toJSON ("NULL" :: Text)
 
 data DraftResponse = DraftResponse
-  { draft_id2 :: DraftId,
-    post_id2 :: PostIdOrNull,
-    author2 :: AuthorResponse,
-    draft_name2 :: Text,
-    draft_cat2 :: CatResponse,
-    draft_text2 :: Text,
-    draft_main_pic_id2 :: PictureId,
-    draft_main_pic_url2 :: Text,
-    draft_pics2 :: [PicIdUrl],
-    draft_tags2 :: [TagResponse]
+  { draftIdD :: DraftId,
+    postIdD :: PostIdOrNull,
+    authorD :: AuthorResponse,
+    draftNameD :: Text,
+    draftCategoryD :: CatResponse,
+    draftTextD :: Text,
+    draftMainPicIdD :: PictureId,
+    draftMainPicUrlD :: Text,
+    draftPicsD :: [PicIdUrl],
+    draftTagsD :: [TagResponse]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON DraftResponse where
-  toJSON (DraftResponse a b c d e f g h i j) =
-    object ["draft_id" .= a, "post_id" .= b, "author" .= c, "draft_name" .= d, "draft_category" .= e, "draft_text" .= f, "draft_main_pic_id" .= g, "draft_main_pic_url" .= h, "draft_pics" .= i, "draft_tags" .= j]
-  toEncoding (DraftResponse a b c d e f g h i j) =
-    pairs ("draft_id" .= a <> "post_id" .= b <> "author" .= c <> "draft_name" .= d <> "draft_category" .= e <> "draft_text" .= f <> "draft_main_pic_id" .= g <> "draft_main_pic_url" .= h <> "draft_pics" .= i <> "draft_tags" .= j)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "D"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "D"
 
 data PicIdUrl = PicIdUrl
-  { pic_idPU :: PictureId,
-    pic_urlPU :: Text
+  { picIdPU :: PictureId,
+    picUrlPU :: Text
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON PicIdUrl where
-  toJSON (PicIdUrl a b) =
-    object ["pic_id" .= a, "pic_url" .= b]
-  toEncoding (PicIdUrl a b) =
-    pairs ("pic_id" .= a <> "pic_url" .= b)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "PU"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "PU"
 
 data DraftsResponse = DraftsResponse
-  { page9 :: Page,
-    drafts9 :: [DraftResponse]
+  { page :: Page,
+    drafts :: [DraftResponse]
   }
-  deriving (Eq, Show)
-
-instance ToJSON DraftsResponse where
-  toJSON (DraftsResponse a b) =
-    object ["page" .= a, "drafts" .= b]
-  toEncoding (DraftsResponse a b) =
-    pairs ("page" .= a <> "drafts" .= b)
+  deriving (Eq, Show, ToJSON, Generic)
 
 data PostResponse = PostResponse
-  { post_id :: PostId,
-    author4 :: AuthorResponse,
-    post_name :: Text,
-    post_create_date :: Day,
-    post_cat :: CatResponse,
-    post_text :: Text,
-    post_main_pic_id :: PictureId,
-    post_main_pic_url :: Text,
-    post_pics :: [PicIdUrl],
-    post_tags :: [TagResponse]
+  { postIdP :: PostId,
+    authorP :: AuthorResponse,
+    postNameP :: Text,
+    postCreateDateP :: Day,
+    postCategoryP :: CatResponse,
+    postTextP :: Text,
+    postMainPicIdP :: PictureId,
+    postMainPicUrlP :: Text,
+    postPicsP :: [PicIdUrl],
+    postTagsP :: [TagResponse]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON PostResponse where
-  toJSON (PostResponse a b c d e f g h i j) =
-    object ["post_id" .= a, "author" .= b, "post_name" .= c, "post_create_date" .= d, "post_category" .= e, "post_text" .= f, "post_main_pic_id" .= g, "post_main_pic_url" .= h, "post_pics" .= i, "post_tags" .= j]
-  toEncoding (PostResponse a b c d e f g h i j) =
-    pairs ("post_id" .= a <> "author" .= b <> "post_name" .= c <> "post_create_date" .= d <> "post_category" .= e <> "post_text" .= f <> "post_main_pic_id" .= g <> "post_main_pic_url" .= h <> "post_pics" .= i <> "post_tags" .= j)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "P"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "P"
 
 data PostsResponse = PostsResponse
-  { page10 :: Page,
-    posts10 :: [PostResponse]
+  { pageP :: Page,
+    postsP :: [PostResponse]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON PostsResponse where
-  toJSON (PostsResponse a b) =
-    object ["page" .= a, "posts" .= b]
-  toEncoding (PostsResponse a b) =
-    pairs ("page" .= a <> "posts" .= b)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "P"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "P"
 
 data TagResponse = TagResponse
-  { tag_idTR :: TagId,
-    tag_nameTR :: Text
+  { tagIdTR :: TagId,
+    tagNameTR :: Text
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON TagResponse where
-  toJSON (TagResponse a b) =
-    object ["tag_id" .= a, "tag_name" .= b]
-  toEncoding (TagResponse a b) =
-    pairs ("tag_id" .= a <> "tag_name" .= b)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "TR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "TR"
 
 data CommentResponse = CommentResponse
-  { comment_idCR :: CommentId,
-    comment_textCR :: Text,
-    user_idCR :: UserId,
-    post_idCR :: PostId
+  { commentIdCR :: CommentId,
+    commentTextCR :: Text,
+    userIdCR :: UserId,
+    postIdCR :: PostId
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON CommentResponse where
-  toJSON (CommentResponse a b c d) =
-    object ["comment_id" .= a, "comment_text" .= b, "user_id" .= c, "post_id" .= d]
-  toEncoding (CommentResponse a b c d) =
-    pairs ("comment_id" .= a <> "comment_text" .= b <> "user_id" .= c <> "post_id" .= d)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "CR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "CR"
 
 data CommentIdTextUserResponse = CommentIdTextUserResponse
-  { comment_id8 :: CommentId,
-    comment_text8 :: Text,
-    user_id8 :: UserId
+  { commentIdCTR :: CommentId,
+    commentTextCTR :: Text,
+    userIdCTR :: UserId
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON CommentIdTextUserResponse where
-  toJSON (CommentIdTextUserResponse a b c) =
-    object ["comment_id" .= a, "comment_text" .= b, "user_id" .= c]
-  toEncoding (CommentIdTextUserResponse a b c) =
-    pairs ("comment_id" .= a <> "comment_text" .= b <> "user_id" .= c)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "CTR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "CTR"
 
 data CommentsResponse = CommentsResponse
-  { pageCR :: Page,
-    post_id9 :: PostId,
-    comments :: [CommentIdTextUserResponse]
+  { pageCSR :: Page,
+    postIdCSR :: PostId,
+    commentsCSR :: [CommentIdTextUserResponse]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic)
 
 instance ToJSON CommentsResponse where
-  toJSON (CommentsResponse a b c) =
-    object ["page" .= a, "post_id" .= b, "comments" .= c]
-  toEncoding (CommentsResponse a b c) =
-    pairs ("page" .= a <> "post_id" .= b <> "comments" .= c)
+  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "CSR"
+  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "CSR"

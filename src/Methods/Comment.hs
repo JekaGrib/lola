@@ -90,14 +90,14 @@ getComment :: (MonadCatch m) => Handle m -> CommentId -> ExceptT ReqError m Resp
 getComment Handle {..} commId = do
   Comment _ usId txt postId <- catchOneSelE hLog $ selectComm commId
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " sending in response"
-  okHelper $ CommentResponse {comment_idCR = commId, comment_textCR = txt, user_idCR = usId, post_idCR = postId}
+  okHelper $ CommentResponse {commentIdCR = commId, commentTextCR = txt, userIdCR = usId, postIdCR = postId}
 
 getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m ResponseInfo
 getComments Handle {..} (GetComments postIdParam pageNum) = do
   let orderBy = ByCommId DESC
   comms <- catchSelE hLog $ selectLimCommsForPost postIdParam orderBy pageNum (cCommLimit hConf)
   lift $ logInfo hLog $ "Comments_id: " ++ show (fmap comment_idC comms) ++ " sending in response"
-  okHelper $ CommentsResponse {pageCR = pageNum, post_id9 = postIdParam, comments = fmap inCommResp comms}
+  okHelper $ CommentsResponse {pageCSR = pageNum, postIdCSR = postIdParam, commentsCSR = fmap inCommResp comms}
 
 updateComment :: (MonadCatch m) => Handle m -> UserId -> CommentId -> UpdateComment -> ExceptT ReqError m ResponseInfo
 updateComment h@Handle {..} usId commId (UpdateComment txtParam) = do
@@ -105,7 +105,7 @@ updateComment h@Handle {..} usId commId (UpdateComment txtParam) = do
   catchUpdE hLog $ updateDbComm txtParam commId
   postId <- catchOneSelE hLog $ selectPostsForComm commId
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " updated"
-  okHelper $ CommentResponse {comment_idCR = commId, comment_textCR = txtParam, post_idCR = postId, user_idCR = usId}
+  okHelper $ CommentResponse {commentIdCR = commId, commentTextCR = txtParam, postIdCR = postId, userIdCR = usId}
 
 deleteComment :: (MonadCatch m) => Handle m -> UserId -> AccessMode -> CommentId -> ExceptT ReqError m ResponseInfo
 deleteComment h@Handle {..} usId accessMode commId = do

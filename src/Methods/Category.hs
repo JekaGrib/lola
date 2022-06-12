@@ -4,7 +4,7 @@ module Methods.Category where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..), checkQStr)
-import Api.Response (CatResponse (..))
+import Api.Response (CatResponse (..), SuperCatResponse (..), SubCatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)
@@ -141,8 +141,8 @@ findAllSubCats h@Handle {..} catId = do
       return $ catsIds ++ Prelude.concat subCatsIds
 
 fromCatResp :: CatResponse -> CategoryId
-fromCatResp (SubCatResponse a _ _ _) = a
-fromCatResp (CatResponse a _ _) = a
+fromCatResp (Sub (SubCatResponse iD _ _ _)) = iD
+fromCatResp (Super (SuperCatResponse iD _ _)) = iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h

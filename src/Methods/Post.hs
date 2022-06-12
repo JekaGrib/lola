@@ -105,7 +105,7 @@ getPosts h@Handle {..} gP@(GetPosts page _ _) = do
   posts <- catchSelE hLog $ selectLimPosts filterArgs orderBy page (cPostsLimit hConf)
   resps <- mapM (makePostResponse h) posts
   lift $ logInfo hLog $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response"
-  okHelper $ PostsResponse {page10 = page, posts10 = resps}
+  okHelper $ PostsResponse {pageP = page, postsP = resps}
 
 createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> PostId -> ExceptT ReqError m ResponseInfo
 createPostsDraft h@Handle {..} usId postId = do
@@ -131,7 +131,7 @@ makePostResponse Handle {..} (Post pId auId auInfo usId pName pDate pCatId pText
   picsIds <- catchSelE hLog $ selectPicsForPost pId
   tagS <- catchSelE hLog $ selectTagsForPost pId
   catResp <- makeCatResp hCatResp pCatId
-  return $ PostResponse {post_id = pId, author4 = AuthorResponse auId auInfo usId, post_name = pName, post_create_date = pDate, post_cat = catResp, post_text = pText, post_main_pic_id = picId, post_main_pic_url = makeMyPicUrl hConf picId, post_pics = fmap (inPicIdUrl hConf) picsIds, post_tags = fmap inTagResp tagS}
+  return $ PostResponse {postIdP = pId, authorP = AuthorResponse auId auInfo usId, postNameP = pName, postCreateDateP = pDate, postCategoryP = catResp, postTextP = pText, postMainPicIdP = picId, postMainPicUrlP = makeMyPicUrl hConf picId, postPicsP = fmap (inPicIdUrl hConf) picsIds, postTagsP = fmap inTagResp tagS}
 
 isPostAuthor :: (MonadCatch m) => Handle m -> PostId -> UserId -> ExceptT ReqError m ()
 isPostAuthor Handle {..} postId usId = do

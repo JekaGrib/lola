@@ -3,7 +3,7 @@ module Spec.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..))
 import Api.Request.QueryStr (GetDrafts (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -404,28 +404,28 @@ toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
 
 draftResp0 :: DraftResponse
 draftResp0 =
-  let catResp = SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 4 (PostIdExist 7) (AuthorResponse 7 "author" 3) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
 
 draftResp1 :: DraftResponse
 draftResp1 =
-  let catResp = SubCatResponse 15 "o" [19, 20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $  SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 1 (PostIdExist 7) (AuthorResponse 7 "author" 4) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
 
 draftResp2 :: DraftResponse
 draftResp2 =
-  let catResp = SubCatResponse 24 "u" [] $ SubCatResponse 20 "t" [] $ SubCatResponse 15 "o" [19, 20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 24 "u" [] $ Sub $ SubCatResponse 20 "t" [] $ Sub $  SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 5 PostIdNull (AuthorResponse 7 "author" 4) "draft5" catResp "lalala" 4 (toPicUrl 4) picsResps tagsResps
 
 draftResp3 :: DraftResponse
 draftResp3 =
-  let catResp = SubCatResponse 17 "q" [] $ SubCatResponse 12 "l" [16, 17] $ SubCatResponse 4 "d" [11, 12] $ CatResponse 1 "a" [4, 5, 6]
+  let catResp = Sub $ SubCatResponse 17 "q" [] $ Sub $  SubCatResponse 12 "l" [16, 17] $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 12 PostIdNull (AuthorResponse 7 "author" 4) "draft12" catResp "lalala" 13 (toPicUrl 13) picsResps tagsResps

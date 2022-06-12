@@ -97,14 +97,14 @@ getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m Respon
 getAuthor Handle {..} authId = do
   Author auId auInfo usId <- catchOneSelE hLog $ selectAuthors authId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
+  okHelper $ AuthorResponse {authorIdA = auId, userIdA = usId, authorInfoA = auInfo}
 
 updateAuthor :: (MonadCatch m) => Handle m -> AuthorId -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
 updateAuthor h@Handle {..} auId (UpdateAuthor usIdParam auInfoParam) = do
   isntUserOtherAuthor h usIdParam auId
   catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " updated."
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
+  okHelper $ AuthorResponse {authorIdA = auId, userIdA = usIdParam, authorInfoA = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 deleteAuthor h@Handle {..} auId = do
