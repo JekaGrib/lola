@@ -59,7 +59,7 @@ instance CheckExist CreateUser where
   checkExist h (CreateUser _ _ _ picId) =
     checkExist h (PictureId picId)
 
-data CreateAdminKey = CreateAdminKey {key :: Text}
+newtype CreateAdminKey = CreateAdminKey {key :: Text}
   deriving (Show)
 
 instance ParseQueryStr CreateAdminKey where
