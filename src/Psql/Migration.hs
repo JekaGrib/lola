@@ -7,7 +7,8 @@ import Error (MigrationException (..))
 import Control.Exception.Safe (throwString)
 import Data.Char (toLower)
 import System.Environment (getArgs)
-
+import System.Directory (getDirectoryContents)
+import Data.List (isPrefixOf, sort)
 
 data Migrate = Migrate | NotMigrate
   deriving (Eq, Show)
@@ -19,7 +20,9 @@ migrate conn = catchMigrationEx $ do
     MigrationError err -> do
       dropTableShemaMigrations conn
       throw $ MigrationException err
-    _ -> dropTableShemaMigrations conn
+    _ -> do
+      scriptsInDirectory "./migrations" >>= mapM_ (putStrLn . ("Execute migrations: " ++ ))
+      dropTableShemaMigrations conn
   where
     cmds =
       [ MigrationInitialization,
@@ -51,3 +54,8 @@ parseArg :: String -> Arg
 parseArg arg = case map toLower arg of
   "migrate" -> MigrateArg
   _ -> UnknownArg arg
+
+scriptsInDirectory :: FilePath -> IO [String]
+scriptsInDirectory dir =
+    fmap (sort . filter (\x -> not $ "." `isPrefixOf` x))
+        (getDirectoryContents dir)

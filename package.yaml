@@ -49,6 +49,7 @@ dependencies:
 - scientific
 - postgresql-simple-migration
 - safe-exceptions
+- directory
 
 
 library:

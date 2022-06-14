@@ -1,6 +1,6 @@
 module Methods.Admin where
 
-import Api.Request.QueryStr (CreateAdmin (..), checkQStr)
+import Api.Request.QueryStr (CreateUser (..), CreateAdminKey (..), checkQStr, parseQueryStr)
 import Api.Response (TokenResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
@@ -39,15 +39,13 @@ makeH conf logH =
         (Methods.Common.Exist.makeH conf)
 
 workWithAdmin :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
-workWithAdmin h@Handle {..} qStr = hideErr $ do
-  lift $ logInfo hLog "Create admin command"
+workWithAdmin h@Handle {..} qStr = do
+  hideErr $ lift $ logInfo hLog "Create admin command"
+  checkAdminKey h qStr
   checkQStr hExist qStr >>= createAdmin h
 
-createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
-createAdmin Handle {..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) = do
-  keys <- catchSelE hLog selectKeys
-  key <- getLastKey keys
-  checkKeyE keyParam key
+createAdmin :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
+createAdmin Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   day <- lift getDay
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
   tokenKey <- lift generateTokenKey
@@ -57,8 +55,15 @@ createAdmin Handle {..} (CreateAdmin keyParam pwdParam fNameParam lNameParam pic
   lift $ logInfo hLog $ "User_id: " ++ show admId ++ " created as admin"
   ok201JsonHelper hConf ("users/" ++ show admId) $ TokenResponse {tokenTR = usToken}
 
-checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
-checkKeyE keyParam key
+checkAdminKey :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ()
+checkAdminKey Handle {..} qStr = hideErr $ do 
+  CreateAdminKey keyParam <- parseQueryStr qStr
+  keys <- catchSelE hLog selectKeys
+  key <- getLastKey keys
+  compareKeysE keyParam key
+
+compareKeysE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
+compareKeysE keyParam key
   | keyParam == key = return ()
   | otherwise = throwE $ BadReqError "Invalid create_admin_key"
 

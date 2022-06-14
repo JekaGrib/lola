@@ -59,21 +59,14 @@ instance CheckExist CreateUser where
   checkExist h (CreateUser _ _ _ picId) =
     checkExist h (PictureId picId)
 
-data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId}
+data CreateAdminKey = CreateAdminKey {key :: Text}
   deriving (Show)
 
-instance ParseQueryStr CreateAdmin where
+instance ParseQueryStr CreateAdminKey where
   parseQueryStr qStr =
-    CreateAdmin
+    CreateAdminKey
       <$> parseTxtParam qStr 50 "create_admin_key"
-      <*> parseTxtParam qStr 50 "password"
-      <*> parseTxtParam qStr 50 "first_name"
-      <*> parseTxtParam qStr 50 "last_name"
-      <*> parseIdParam qStr "user_pic_id"
 
-instance CheckExist CreateAdmin where
-  checkExist h (CreateAdmin _ _ _ _ picId) =
-    checkExist h (PictureId picId)
 
 data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
   deriving (Show)

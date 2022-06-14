@@ -1,6 +1,6 @@
 module Spec.Admin where
 
-import Api.Request.QueryStr (CreateAdmin (..))
+import Api.Request.QueryStr (CreateUser (..))
 import Api.Response (TokenResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
@@ -23,14 +23,13 @@ testAdmin = hspec $ do
   describe "createAdmin"
     $ it "work with valid DB answer"
     $ do
-      state <- execStateT (runExceptT $ createAdmin handle (CreateAdmin "lola" "pwd" "fName" "lName" 6)) []
+      state <- execStateT (runExceptT $ createAdmin handle (CreateUser "pwd" "fName" "lName" 6)) []
       reverse state
-        `shouldBe` [ AdminMock SelectKeys,
-                     AdminMock GetDay,
+        `shouldBe` [ AdminMock GetDay,
                      AdminMock GenerateTokenKey,
                      AdminMock (InsertReturnUser (InsertUser "37fa265330ad83eaa879efb1e2db6380896cf639" "fName" "lName" 6 dayExample True "lilu"))
                    ]
-      eitherResp <- evalStateT (runExceptT $ createAdmin handle (CreateAdmin "lola" "pwd" "fName" "lName" 6)) []
+      eitherResp <- evalStateT (runExceptT $ createAdmin handle (CreateUser "pwd" "fName" "lName" 6)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.hij." ++ strSha1 "hijlilu")))
   describe "workWithAdmin "
@@ -38,8 +37,8 @@ testAdmin = hspec $ do
     $ do
       state <- execStateT (runExceptT $ workWithAdmin handle qStr1) []
       reverse state
-        `shouldBe` [ ExistMock (IsExist (PictureId 6)),
-                     AdminMock SelectKeys,
+        `shouldBe` [ AdminMock SelectKeys,
+                     ExistMock (IsExist (PictureId 6)),
                      AdminMock GetDay,
                      AdminMock GenerateTokenKey,
                      AdminMock (InsertReturnUser (InsertUser "37fa265330ad83eaa879efb1e2db6380896cf639" "fName" "lName" 6 dayExample True "lilu"))
