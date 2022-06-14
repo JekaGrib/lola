@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 230f53d7e0f711b3e3b8b971676ef8fe020d2f48a3d9cc7ac9dc56ef3b3b56c2
+-- hash: 7a99dac991111d3a0e6518cb830a964f4d5d52c31093bf8f33fe72e741684ab1
 
 name:           lola
 version:        0.1.0.0
@@ -103,6 +103,7 @@ library
     , postgresql-simple
     , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time
@@ -139,6 +140,7 @@ executable lola-exe
     , postgresql-simple
     , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time
@@ -227,6 +229,7 @@ test-suite lola-test
     , postgresql-simple
     , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time

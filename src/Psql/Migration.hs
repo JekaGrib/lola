@@ -4,6 +4,10 @@ import Control.Exception (SomeException, catch, throw)
 import Database.PostgreSQL.Simple (Connection, execute_, withTransaction)
 import Database.PostgreSQL.Simple.Migration (MigrationCommand (MigrationDirectory, MigrationInitialization), MigrationResult (..), runMigrations)
 import Error (MigrationException (..))
+import Control.Exception.Safe (throwString)
+import Data.Char (toLower)
+import System.Environment (getArgs)
+
 
 data Migrate = Migrate | NotMigrate
   deriving (Eq, Show)
@@ -29,3 +33,21 @@ dropTableShemaMigrations conn = catchMigrationEx $ do
 
 catchMigrationEx :: IO () -> IO ()
 catchMigrationEx m = m `catch` (\e -> throw $ MigrationException (show (e :: SomeException)))
+
+readMigrateArg :: IO Migrate
+readMigrateArg = do
+  args <- getArgs
+  case map parseArg args of
+    (MigrateArg : _) -> return Migrate
+    [] -> return NotMigrate
+    (UnknownArg arg : _) -> throwString $ unKnownArgErrMsg arg
+
+unKnownArgErrMsg :: String -> String
+unKnownArgErrMsg str = "Error. Unknown argument in program's command line: \"" ++ str ++ "\".\nIf you want execute migrations, use argument - <migrate>"
+
+data Arg = MigrateArg | UnknownArg String
+
+parseArg :: String -> Arg
+parseArg arg = case map toLower arg of
+  "migrate" -> MigrateArg
+  _ -> UnknownArg arg

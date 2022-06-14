@@ -48,6 +48,7 @@ dependencies:
 - random
 - scientific
 - postgresql-simple-migration
+- safe-exceptions
 
 
 library:

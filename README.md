@@ -33,18 +33,24 @@ Before start using app you should create new database and enter details in [Conf
 There is database diagram
 ![](https://github.com/JekaGrib/lola/raw/master/other/pic/dbDiagram.png)
 
-To create database structure you can use file "dbStructure.sql"
+To create database structure you can use file "dbStructure.sql" or use [migrations](#2-migrations)
 Psql command:
 
     $ \i ./dbStructure.sql;
 
 
 ## 2. Migrations
-If you want execute some PostgreSQL migrations before start application you can put your SQL scripts in folder "migrations" (program will execute them automatically at startup), they will execute in alphabetical order. Or you can do it directly in psql by yourself (file "COMMAND for all migrations with dbStructure" can help you).
+If you want execute some PostgreSQL migrations before start application you shold use "migrate" argument when [run](#5-run) application: 
+
+    stack exec lola-exe migrate
+
+Program will execute automatically all SQL scripts from folder "migrations" at startup.
+
+By default, "migrations" folder contains "dbStructure.sql" SQL script with database structure. But if it is necessary, you can add other sql scripts, they will execute in alphabetical order.
+
+Or you can do migrations directly in psql by yourself (file "COMMAND for all migrations with dbStructure" can help you). 
 
 For E2E tests you can use SQL scripts from folder "testMigrations" and put them to "migrations". 
-
-If you don`t need to execute migrations at app start you can leave the folder "migration" empty.
 
 ## 3. Add default entities to db
 Application has several default db entities:
@@ -80,9 +86,14 @@ There is table with descriptions of each values in configuration file, that shou
 |log          | logLevel             | The logging level is specified here. The log will only display entries of this level and levels above. It can be one of four levels: DEBUG,INFO,WARNING,ERROR. More information [here](#logging)  |
 
 ## 5. Run
-You can run App with:
+You can run App WITHOUT [migrations](#2-migrations):
 
     $ stack exec lola-exe 
+
+You can run App WITH [migrations](#2-migrations):
+
+    $ stack exec lola-exe migrate
+
 
 # Api
 

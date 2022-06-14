@@ -53,7 +53,7 @@ reConnectDB oldConf = do
   return $ oldConf {cConnDB = connDB}
 
 parseConfAnd :: Migrate -> IO Config
-parseConfAnd mig = do
+parseConfAnd migrateArg = do
   conf <- pullConfig
   servHost <- parseConfServHost conf
   servPort <- parseConfServPort conf
@@ -63,7 +63,7 @@ parseConfAnd mig = do
   dbName <- parseConfDBname conf
   pwdDB <- parseConfDBpwd conf
   connDB@(ConnDB conn _) <- tryConnect (ConnectInfo hostDB portDB userDB pwdDB dbName)
-  when (mig == Migrate) $ migrate conn
+  when (migrateArg == Migrate) $ migrate conn
   defPicId <- parseConfDefPicId conf conn
   defUsId <- parseConfDefUsId conf conn defPicId
   defAuthId <- parseConfDefAuthId conf conn defUsId
