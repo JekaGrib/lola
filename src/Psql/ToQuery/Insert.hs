@@ -41,4 +41,4 @@ instance ToStr InsertMany where
 data InsertManyPair = InsertManyPair {insManyKey :: (DbKey, DbKey), insManyVal :: [(Id, Id)]}
 
 instance ToStr InsertManyPair where
-  toStr (InsertManyPair (k1, k2) _) = " (" ++ k1 ++ "," ++ k2 ++ ") VALUES (?,?)"
+  toStr (InsertManyPair (key, val) _) = " (" ++ key ++ "," ++ val ++ ") VALUES (?,?)"

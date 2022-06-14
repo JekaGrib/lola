@@ -56,8 +56,8 @@ deleteDbComm' conn commId = do
 
 insertReturnComm' :: Connection -> CommentText -> PostId -> UserId -> IO CommentId
 insertReturnComm' conn commTxt postId usId = do
-  let insPair1 = InsertPair "comment_text" (Txt commTxt)
-  let insPair2 = InsertPair "post_id" (Id postId)
-  let insPair3 = InsertPair "user_id" (Id usId)
-  let insPairs = [insPair1, insPair2, insPair3]
+  let insPairTxt = InsertPair "comment_text" (Txt commTxt)
+      insPairPost = InsertPair "post_id" (Id postId)
+      insPairUser = InsertPair "user_id" (Id usId)
+      insPairs = [insPairTxt, insPairPost, insPairUser]
   insertReturn' conn (InsertRet "comments" insPairs "comment_id")

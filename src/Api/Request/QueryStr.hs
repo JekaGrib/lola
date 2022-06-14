@@ -344,8 +344,8 @@ checkMaybeParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m
 checkMaybeParam qStr paramKey = case lookup paramKey qStr of
   Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
   Just (Just txt) -> do
-    txt1 <- checkSingleParam qStr paramKey txt
-    return (Just txt1)
+    checkedTxt <- checkSingleParam qStr paramKey txt
+    return (Just checkedTxt)
   Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
   Nothing -> return Nothing
 

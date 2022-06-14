@@ -16,10 +16,10 @@ updateDbCat' conn catName catId = do
 
 updateDbSubCat' :: Connection -> CatName -> SuperCatId -> CategoryId -> IO ()
 updateDbSubCat' conn catName superCatId catId = do
-  let set1 = SetPair "category_name=?" (Txt catName)
-  let set2 = SetPair "super_category_id=?" (Id superCatId)
-  let wh = WherePair "category_id=?" (Id catId)
-  updateInDb' conn (Update "categories" [set1, set2] wh)
+  let setName = SetPair "category_name=?" (Txt catName)
+      setCat = SetPair "super_category_id=?" (Id superCatId)
+      wh = WherePair "category_id=?" (Id catId)
+  updateInDb' conn (Update "categories" [setName, setCat] wh)
 
 updateDbCatsForPosts' :: Connection -> CategoryId -> [CategoryId] -> IO ()
 updateDbCatsForPosts' conn newCatId catIds = do
@@ -48,6 +48,6 @@ insertReturnCat' conn catName = do
 
 insertReturnSubCat' :: Connection -> CatName -> SuperCatId -> IO CategoryId
 insertReturnSubCat' conn catName superCatId = do
-  let insPair1 = InsertPair "category_name" (Txt catName)
-  let insPair2 = InsertPair "super_category_id" (Id superCatId)
-  insertReturn' conn (InsertRet "categories" [insPair1, insPair2] "category_id")
+  let insPairName = InsertPair "category_name" (Txt catName)
+  let insPairCat = InsertPair "super_category_id" (Id superCatId)
+  insertReturn' conn (InsertRet "categories" [insPairName, insPairCat] "category_id")

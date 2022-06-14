@@ -90,21 +90,21 @@ selectAuthorsForUser' conn usId = do
 
 updateDbDraft' :: Connection -> DraftId -> UpdateDbDraft -> IO ()
 updateDbDraft' conn drId (UpdateDbDraft name catId txt picId) = do
-  let set1 = SetPair "draft_name=?" (Txt name)
-  let set2 = SetPair "draft_category_id=?" (Id catId)
-  let set3 = SetPair "draft_text=?" (Txt txt)
-  let set4 = SetPair "draft_main_pic_id=?" (Id picId)
-  let wh = WherePair "draft_id=?" (Id drId)
-  updateInDb' conn (Update "drafts" [set1, set2, set3, set4] wh)
+  let setName = SetPair "draft_name=?" (Txt name)
+      setCat = SetPair "draft_category_id=?" (Id catId)
+      setTxt = SetPair "draft_text=?" (Txt txt)
+      setPic = SetPair "draft_main_pic_id=?" (Id picId)
+      wh = WherePair "draft_id=?" (Id drId)
+  updateInDb' conn (Update "drafts" [setName, setCat, setTxt, setPic] wh)
 
 updateDbPost' :: Connection -> PostId -> UpdateDbPost -> IO ()
 updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
-  let set1 = SetPair "post_name=?" (Txt name)
-  let set2 = SetPair "post_category_id=?" (Id catId)
-  let set3 = SetPair "post_text=?" (Txt txt)
-  let set4 = SetPair "post_main_pic_id=?" (Id picId)
-  let wh = WherePair "post_id=?" (Id postId)
-  updateInDb' conn (Update "posts" [set1, set2, set3, set4] wh)
+  let setName = SetPair "post_name=?" (Txt name)
+      setCat = SetPair "post_category_id=?" (Id catId)
+      setTxt = SetPair "post_text=?" (Txt txt)
+      setPic = SetPair "post_main_pic_id=?" (Id picId)
+      wh = WherePair "post_id=?" (Id postId)
+  updateInDb' conn (Update "posts" [setName, setCat, setTxt, setPic] wh)
 
 insertReturnDraft' :: Connection -> InsertDraft -> IO DraftId
 insertReturnDraft' conn insDraft = do
@@ -113,16 +113,17 @@ insertReturnDraft' conn insDraft = do
 
 insDraftToInsPairs :: InsertDraft -> [InsertPair]
 insDraftToInsPairs (InsertDraft maybePostId auId drName catId drTxt picId) =
-  let insPair1 = InsertPair "author_id" (Id auId)
-      insPair2 = InsertPair "draft_name" (Txt drName)
-      insPair3 = InsertPair "draft_category_id" (Id catId)
-      insPair4 = InsertPair "draft_text" (Txt drTxt)
-      insPair5 = InsertPair "draft_main_pic_id" (Id picId)
-   in case maybePostId of
-        Nothing -> [insPair1, insPair2, insPair3, insPair4, insPair5]
-        Just postId -> [insPair1, insPair2, insPair3, insPair4, insPair5, insPair6]
+  let insPairAuthor = InsertPair "author_id" (Id auId)
+      insPairName = InsertPair "draft_name" (Txt drName)
+      insPairCat = InsertPair "draft_category_id" (Id catId)
+      insPairTxt = InsertPair "draft_text" (Txt drTxt)
+      insPairPic = InsertPair "draft_main_pic_id" (Id picId)
+      insPairsList = [insPairAuthor, insPairName, insPairCat, insPairTxt, insPairPic]
+  in case maybePostId of
+        Nothing -> insPairsList
+        Just postId -> insPairPostId : insPairsList 
           where
-            insPair6 = InsertPair "post_id" (Id postId)
+            insPairPostId = InsertPair "post_id" (Id postId)
 
 insertManyDraftsPics' :: Connection -> [(DraftId, PictureId)] -> IO ()
 insertManyDraftsPics' conn xs = do
@@ -136,13 +137,13 @@ insertManyDraftsTags' conn xs = do
 
 insertReturnPost' :: Connection -> InsertPost -> IO PostId
 insertReturnPost' conn (InsertPost auId name day catId txt picId) = do
-  let insPair1 = InsertPair "author_id" (Id auId)
-  let insPair2 = InsertPair "post_name" (Txt name)
-  let insPair3 = InsertPair "post_create_date" (Day day)
-  let insPair4 = InsertPair "post_category_id" (Id catId)
-  let insPair5 = InsertPair "post_text" (Txt txt)
-  let insPair6 = InsertPair "post_main_pic_id" (Id picId)
-  let insPairs = [insPair1, insPair2, insPair3, insPair4, insPair5, insPair6]
+  let insPairAuthor = InsertPair "author_id" (Id auId)
+      insPairName = InsertPair "post_name" (Txt name)
+      insPairDay = InsertPair "post_create_date" (Day day)
+      insPairCat = InsertPair "post_category_id" (Id catId)
+      insPairTxt = InsertPair "post_text" (Txt txt)
+      insPairPic = InsertPair "post_main_pic_id" (Id picId)
+      insPairs = [insPairAuthor, insPairName, insPairDay, insPairCat, insPairTxt, insPairPic]
   insertReturn' conn (InsertRet "posts" insPairs "post_id")
 
 insertManyPostsPics' :: Connection -> [(PostId, PictureId)] -> IO ()

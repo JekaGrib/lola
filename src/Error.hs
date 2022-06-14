@@ -51,7 +51,7 @@ hideResourseNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT Req
 hideResourseNotExistErr m = m `catchE` (throwE . badReqToResNotExistError)
 
 addToBadReqErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
-addToBadReqErr str2 (BadReqError str1) = throwE $ BadReqError $ str1 ++ str2
+addToBadReqErr addStr (BadReqError str) = throwE $ BadReqError $ str ++ addStr
 addToBadReqErr _ e = throwE e
 
 catchDbErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a

@@ -12,12 +12,12 @@ selectKeys' conn =
 
 insertReturnUser' :: Connection -> InsertUser -> IO UserId
 insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
-  let insPair1 = InsertPair "password" (Txt pwd)
-  let insPair2 = InsertPair "first_name" (Txt fName)
-  let insPair3 = InsertPair "last_name" (Txt lName)
-  let insPair4 = InsertPair "user_pic_id" (Id picId)
-  let insPair5 = InsertPair "user_create_date" (Day day)
-  let insPair6 = InsertPair "admin" (Bool bool)
-  let insPair7 = InsertPair "token_key" (Str tokenKey)
-  let insPairs = [insPair1, insPair2, insPair3, insPair4, insPair5, insPair6, insPair7]
+  let insPairPwd = InsertPair "password" (Txt pwd)
+      insPairFirstName = InsertPair "first_name" (Txt fName)
+      insPairLastName = InsertPair "last_name" (Txt lName)
+      insPairPic = InsertPair "user_pic_id" (Id picId)
+      insPairDay = InsertPair "user_create_date" (Day day)
+      insPairAdmin = InsertPair "admin" (Bool bool)
+      insPairKey = InsertPair "token_key" (Str tokenKey)
+      insPairs = [insPairPwd, insPairFirstName, insPairLastName, insPairPic, insPairDay, insPairAdmin, insPairKey]
   insertReturn' conn (InsertRet "users" insPairs "user_id")
