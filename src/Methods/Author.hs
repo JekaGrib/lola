@@ -91,7 +91,7 @@ createAuthor h@Handle {..} (CreateAuthor usIdParam auInfoParam) = do
   isNotAlreadyAuthor h usIdParam
   auId <- catchInsRetE hLog $ insertReturnAuthor usIdParam auInfoParam
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
-  ok201Helper hConf $ "authors/" ++ show auId
+  ok201Helper hConf "author" auId
 
 getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 getAuthor Handle {..} authId = do

@@ -2,9 +2,11 @@ module Spec.Picture where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (LoadPicture (..))
+import Api.Response (Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
-import Methods.Common (ResponseInfo (..), textHeader)
+import Data.Aeson (encode)
+import Methods.Common (ResponseInfo (..), jsonHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Picture
 import Network.HTTP.Types (status200, status201)
@@ -55,7 +57,7 @@ testPic = hspec $ do
         `shouldBe` [PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
       eitherResp <- evalStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/pictures/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/pictures/14")] $ encode $ Created 14 "picture")
     it "throw BadReq Error to invalid picture in url" $ do
       state <- execStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
       reverse state
@@ -91,7 +93,7 @@ testPic = hspec $ do
         `shouldBe` [AuthMock (SelectTokenKeyForUser 152), PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/pictures/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/pictures/14")] $ encode $ Created 14 "picture")
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr1 ToPost) []
       reverse state

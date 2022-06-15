@@ -2,7 +2,7 @@ module Spec.Author where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..))
-import Api.Response (AuthorResponse (..))
+import Api.Response (AuthorResponse (..), Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -31,7 +31,7 @@ testAuthor = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 3 "author")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/authors/14")] $ encode $ Created 14 "author" )
     it "throw Bad Request Error if user already author" $ do
       eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 25 "author")) []
       eitherResp
@@ -87,7 +87,7 @@ testAuthor = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithAuthors handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/authors/14")] $ encode $ Created 14 "author" )
   describe "workWithAuthors (ToGet)"
     $ it "work with valid DB answer"
     $ do

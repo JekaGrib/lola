@@ -1,6 +1,6 @@
 module Methods.Common where
 
-import Api.Response (CommentIdTextUserResponse (..), PicIdUrl (..), TagResponse (..))
+import Api.Response (CommentIdTextUserResponse (..), PicIdUrl (..), TagResponse (..),Created(..),CreatedUser(..))
 import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -38,15 +38,18 @@ textHeader = ("Content-Type", "text/html")
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [jsonHeader] $ encode toJ
 
-ok201Helper :: (MonadCatch m) => Config -> String -> ExceptT ReqError m ResponseInfo
-ok201Helper conf str = return $ ResponseInfo status201 [textHeader, (hLocation, url)] "Status 201 Created"
-  where
-    url = makeMyUrl conf str
+ok201Helper :: (MonadCatch m) => Config -> String -> Id -> ExceptT ReqError m ResponseInfo
+ok201Helper conf entity iD = 
+  return $ ResponseInfo status201 [jsonHeader, (hLocation, url entity iD)] $ encode $ Created iD entity
+    where
+      url name number = makeMyUrl conf (toPlural name ++ "/" ++ show number)
 
-ok201JsonHelper :: (MonadCatch m, ToJSON a) => Config -> String -> a -> ExceptT ReqError m ResponseInfo
-ok201JsonHelper conf str toJ = return $ ResponseInfo status201 [jsonHeader, (hLocation, url)] $ encode toJ
-  where
-    url = makeMyUrl conf str
+ok201UserHelper :: (MonadCatch m) => Config -> Text -> Id -> ExceptT ReqError m ResponseInfo
+ok201UserHelper conf token iD = 
+  return $ ResponseInfo status201 [jsonHeader, (hLocation, url iD)] $ encode $ CreatedUser iD token
+    where
+      url number = makeMyUrl conf ("users/" ++ show number)
+
 
 ok204Helper :: (MonadCatch m) => ExceptT ReqError m ResponseInfo
 ok204Helper = return $ ResponseInfo status204 [textHeader] "Status 204 No data"
@@ -147,3 +150,8 @@ numToTxt = pack . show
 
 makeMyUrl :: Config -> String -> ByteString
 makeMyUrl conf str = fromString $ "http://" ++ cServHost conf ++ ":" ++ show (cServPort conf) ++ "/" ++ str
+
+toPlural :: String -> String
+toPlural "category" = "categories"
+toPlural entity = entity ++ "s"
+ 

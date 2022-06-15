@@ -2,7 +2,7 @@ module Spec.Tag where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateTag (..), UpdateTag (..))
-import Api.Response (TagResponse (..))
+import Api.Response (TagResponse (..), Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -29,7 +29,7 @@ testTag = hspec $ do
         `shouldBe` [LOG DEBUG, TagMock (InsertReturnTag "cats"), LOG INFO, LOG INFO]
       eitherResp <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/tags/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/tags/14")] $ encode $ Created 14 "tag")
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ createTag handle3 (CreateTag "cats")) []
       reverse state
@@ -117,7 +117,7 @@ testTag = hspec $ do
         `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, LOG DEBUG, TagMock (InsertReturnTag "dogs"), LOG INFO, LOG INFO]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/tags/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/tags/14")] $ encode $ Created 14 "tag")
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 ToPost) []
       reverse state

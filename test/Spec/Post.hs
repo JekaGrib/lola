@@ -2,7 +2,7 @@ module Spec.Post where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (GetPosts (..), GetPostsF (..), GetPostsOrd (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), PicIdUrl (..), PostResponse (..), PostsResponse (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), PicIdUrl (..), PostResponse (..), PostsResponse (..), TagResponse (..), Created(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -44,7 +44,7 @@ testPost = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ createPostsDraft handle 3 7) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/drafts/14")] $ encode $ Created 14 "draft")
   describe "getPost"
     $ it "work with valid DB answer"
     $ do
@@ -148,7 +148,7 @@ testPost = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/drafts/14")] $ encode $ Created 14 "draft")
   describe "workWithPosts (ToGet)"
     $ it "work with valid DB answer"
     $ do

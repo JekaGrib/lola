@@ -84,7 +84,7 @@ createComment :: (MonadCatch m) => Handle m -> UserId -> CreateComment -> Except
 createComment Handle {..} usIdNum (CreateComment postIdParam txtParam) = do
   commId <- catchInsRetE hLog $ insertReturnComm txtParam postIdParam usIdNum
   lift $ logInfo hLog $ "Comment_id: " ++ show commId ++ " created"
-  ok201Helper hConf $ "comments/" ++ show commId
+  ok201Helper hConf "comment" commId
 
 getComment :: (MonadCatch m) => Handle m -> CommentId -> ExceptT ReqError m ResponseInfo
 getComment Handle {..} commId = do

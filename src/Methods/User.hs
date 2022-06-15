@@ -119,7 +119,7 @@ createUser Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = 
   lift $ logDebug hLog $ "DB return user_id:" ++ show usId ++ "and token key"
   lift $ logInfo hLog $ "User_id: " ++ show usId ++ " created"
   let usToken = pack $ show usId ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-  ok201JsonHelper hConf ("users/" ++ show usId) $ TokenResponse {tokenTR = usToken}
+  ok201UserHelper hConf usToken usId 
 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 getUser Handle {..} usId = do

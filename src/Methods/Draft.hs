@@ -131,7 +131,7 @@ createNewDraft h@Handle {..} usId (DraftRequest nameParam catIdParam txtParam pi
   let insDr = InsertDraft Nothing auId nameParam catIdParam txtParam picId
   draftId <- insertReturnAllDraft h picsIds tagsIds insDr
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created"
-  ok201Helper hConf $ "drafts/" ++ show draftId
+  ok201Helper hConf "draft" draftId
 
 getDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 getDraft h@Handle {..} usId draftId = do
@@ -187,7 +187,7 @@ publishDraft h@Handle {..} usId draftId = do
         insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
         return postId
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      ok201Helper hConf $ "posts/" ++ show postId
+      ok201Helper hConf "post" postId
     PostIdExist postId -> do
       day <- catchOneSelE hLog $ selectDaysForPost postId
       withTransactionDBE h $ do

@@ -2,7 +2,7 @@ module Spec.Category where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..))
-import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..), Created(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -29,14 +29,14 @@ testCat = hspec $ do
         `shouldBe` [CatMock (InsertReturnCat "food")]
       eitherResp <- evalStateT (runExceptT $ createCategory handle (CreateCategory "food" Nothing)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/categories/14")] $ encode $ Created 14 "category")
     it "work with valid DB answer, with super category" $ do
       state <- execStateT (runExceptT $ createCategory handle (CreateCategory "food" (Just 4))) []
       reverse state
         `shouldBe` [CatMock (InsertReturnSubCat "food" 4)]
       eitherResp <- evalStateT (runExceptT $ createCategory handle (CreateCategory "food" (Just 4))) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/categories/14")] $ encode $ Created 14 "category")
   describe "getCategory"
     $ it "work with valid DB answer"
     $ do
@@ -108,7 +108,7 @@ testCat = hspec $ do
         `shouldBe` [AuthMock (SelectTokenKeyForUser 152), CatMock (InsertReturnCat "dogs")]
       eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/categories/14")] $ encode $ Created 14 "category")
     it "work with valid DB answer, with super category" $ do
       state <- execStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
       reverse state
@@ -118,7 +118,7 @@ testCat = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithCats handle qStr3 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/categories/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/categories/14")] $ encode $ Created 14 "category")
   describe "workWithCats (ToGet)"
     $ it "work with valid DB answer"
     $ do

@@ -103,7 +103,7 @@ Success answers:
 1. For endpoint GET :
     *  Status 200 OK with resourse entity in request body.
 2. For endpoint POST :
-    *  Status 201 Created with Location of created entity in Headers.
+    *  Status 201 Created with Location of created entity in Headers and with created id in request body.
 3. For endpoint PUT (Put only update resourse, NOT create new ) :
     *  Status 200 OK with entity of resourse in request body.
 4. For endpoint DELETE :

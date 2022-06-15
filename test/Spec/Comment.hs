@@ -2,7 +2,7 @@ module Spec.Comment where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..))
-import Api.Response (CommentIdTextUserResponse (..), CommentResponse (..), CommentsResponse (..))
+import Api.Response (CommentIdTextUserResponse (..), CommentResponse (..), CommentsResponse (..), Created(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -32,7 +32,7 @@ testComm = hspec $ do
         `shouldBe` [CommMock (InsertReturnComm "cool" 7 3)]
       eitherResp <- evalStateT (runExceptT $ createComment handle 3 (CreateComment 7 "cool")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/comments/14")] $ encode $ Created 14 "comment")
   describe "getComment"
     $ it "work with valid DB answer"
     $ do
@@ -97,7 +97,7 @@ testComm = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/comments/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/comments/14")] $ encode $ Created 14 "comment")
   describe "workWithComms (ToGet id)"
     $ it "work with valid DB answer"
     $ do

@@ -3,7 +3,7 @@ module Spec.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..))
 import Api.Request.QueryStr (GetDrafts (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..), Created(..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -41,7 +41,7 @@ testDraft = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ createNewDraft handle 4 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/drafts/14")] $ encode $ Created 14 "draft")
     it "throw Forbidden Error if user not author" $ do
       eitherResp <- evalStateT (runExceptT $ createNewDraft handle 25 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
       eitherResp
@@ -195,7 +195,7 @@ testDraft = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 3 25) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/posts/20")] $ encode $ Created 20 "post")
     it "throw Forbidden Error if user not author" $ do
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 25 7) []
       eitherResp
@@ -222,7 +222,7 @@ testDraft = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/drafts/14")] $ encode $ Created 14 "draft")
     it "throw Bad Request Error on wrong request body(id not a number)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json2) []
       eitherResp
@@ -286,7 +286,7 @@ testDraft = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/posts/20")] $ encode $ Created 20 "post")
   describe "workWithDrafts (ToGet)"
     $ it "work with valid DB answer"
     $ do

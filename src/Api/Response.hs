@@ -3,12 +3,13 @@
 
 module Api.Response where
 
-import Data.Aeson (ToJSON (toEncoding, toJSON),genericToJSON,genericToEncoding)
+import Data.Aeson (ToJSON (toEncoding, toJSON),genericToJSON,genericToEncoding,(.=),object)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
 import Types
 import Api.AesonOption (optionsEraseSuffix, optionsSnakeCase, optionsSnakeCasePreEraseSuffix)
 import GHC.Generics (Generic)
+import Data.String (fromString)
 
 data UserResponse = UserResponse
   { userId :: UserId,
@@ -23,21 +24,6 @@ data UserResponse = UserResponse
 instance ToJSON UserResponse where
   toJSON = genericToJSON optionsSnakeCase
   toEncoding = genericToEncoding optionsSnakeCase
-
-data UserTokenResponse = UserTokenResponse
-  { tokenUTR :: Text,
-    userIdUTR :: UserId,
-    firstNameUTR :: Text,
-    lastNameUTR :: Text,
-    userPicIdUTR :: PictureId,
-    userPicUrlUTR :: Text,
-    userCreateDateUTR :: Day
-  }
-  deriving (Eq, Show, Generic)
-
-instance ToJSON UserTokenResponse where
-  toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "UTR"
-  toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "UTR"
 
 newtype TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq, Show, Generic)
 
@@ -210,3 +196,23 @@ data CommentsResponse = CommentsResponse
 instance ToJSON CommentsResponse where
   toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "CSR"
   toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "CSR"
+
+data Created = Created
+  { createdId :: Id,
+    entity :: String    
+  }
+  deriving (Eq, Show)
+
+instance ToJSON Created where
+  toJSON Created {..} =
+      object ["status" .= ("created" :: Text), (fromString entity <> "_id") .= createdId]
+
+data CreatedUser = CreatedUser
+  { createdUsId :: Id,
+    token :: Text
+  }
+  deriving (Eq, Show)
+
+instance ToJSON CreatedUser where
+  toJSON CreatedUser {..} =
+      object ["status" .= ("created" :: Text) , "user_id" .= createdUsId , "token" .= token]

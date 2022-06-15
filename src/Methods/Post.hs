@@ -118,7 +118,7 @@ createPostsDraft h@Handle {..} usId postId = do
   let insDr = InsertDraft (Just postId) auId postName postCatId postTxt mPicId
   draftId <- insertReturnAllDraft hDr picsIds tagsIds insDr
   lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postId
-  ok201Helper hConf $ "drafts/" ++ show draftId
+  ok201Helper hConf "draft" draftId
 
 deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
 deletePost h@Handle {..} postId = do

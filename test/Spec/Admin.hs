@@ -1,7 +1,7 @@
 module Spec.Admin where
 
 import Api.Request.QueryStr (CreateUser (..))
-import Api.Response (TokenResponse (..))
+import Api.Response (CreatedUser (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -30,8 +30,8 @@ testAdmin = hspec $ do
                      AdminMock (InsertReturnUser (InsertUser "37fa265330ad83eaa879efb1e2db6380896cf639" "fName" "lName" 6 dayExample True "lilu"))
                    ]
       eitherResp <- evalStateT (runExceptT $ createAdmin handle (CreateUser "pwd" "fName" "lName" 6)) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.hij." ++ strSha1 "hijlilu")))
+      eitherResp 
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ CreatedUser 14 $ pack ("14.hij." ++ strSha1 "hijlilu")))
   describe "workWithAdmin "
     $ it "work with valid DB answer"
     $ do
@@ -45,4 +45,4 @@ testAdmin = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithAdmin handle qStr1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.hij." ++ strSha1 "hijlilu")))
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ CreatedUser 14 $ pack ("14.hij." ++ strSha1 "hijlilu")))

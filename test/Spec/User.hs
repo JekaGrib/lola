@@ -2,7 +2,7 @@ module Spec.User where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateUser (..), LogIn (..))
-import Api.Response (TokenResponse (..), UserResponse (..))
+import Api.Response (TokenResponse (..), UserResponse (..), CreatedUser (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -76,7 +76,7 @@ testUser = hspec $ do
         `shouldBe` [UserMock GetDay, UserMock GenerateTokenKey, UserMock (InsertReturnUser (InsertUser (txtSha1 "pwd") "fName" "lName" 4 dayExample False "lilu"))]
       eitherResp <- evalStateT (runExceptT $ createUser handle (CreateUser "pwd" "fName" "lName" 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.stu." ++ strSha1 "stulilu")))
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ CreatedUser 14 $ pack ("14.stu." ++ strSha1 "stulilu")))
   describe "getUser"
     $ it "work with valid DB answer"
     $ do
@@ -113,7 +113,7 @@ testUser = hspec $ do
         `shouldBe` [ExistMock (IsExist (PictureId 4)), UserMock GetDay, UserMock GenerateTokenKey, UserMock (InsertReturnUser (InsertUser (txtSha1 "pwd") "fName" "lName" 4 dayExample False "lilu"))]
       eitherResp <- evalStateT (runExceptT $ workWithUsers handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ TokenResponse $ pack ("14.stu." ++ strSha1 "stulilu")))
+        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ CreatedUser 14 $ pack ("14.stu." ++ strSha1 "stulilu")))
     it "throw BadReq Error to not exist picture" $ do
       state <- execStateT (runExceptT $ workWithUsers handle qStr5 ToPost) []
       reverse state
