@@ -63,7 +63,11 @@ instance ToJSON AuthorResponse where
   toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "A"
 
 data CatResponse = Sub SubCatResponse | Super SuperCatResponse
-  deriving (Eq, Show, Generic, ToJSON)
+  deriving (Eq, Show, Generic)
+
+instance ToJSON CatResponse where
+  toJSON (Sub cat) = toJSON cat
+  toJSON (Super cat) = toJSON cat
 
 data SubCatResponse
   = SubCatResponse
