@@ -119,9 +119,9 @@ insDraftToInsPairs (InsertDraft maybePostId auId drName catId drTxt picId) =
       insPairTxt = InsertPair "draft_text" (Txt drTxt)
       insPairPic = InsertPair "draft_main_pic_id" (Id picId)
       insPairsList = [insPairAuthor, insPairName, insPairCat, insPairTxt, insPairPic]
-  in case maybePostId of
+   in case maybePostId of
         Nothing -> insPairsList
-        Just postId -> insPairPostId : insPairsList 
+        Just postId -> insPairPostId : insPairsList
           where
             insPairPostId = InsertPair "post_id" (Id postId)
 

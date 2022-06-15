@@ -2,9 +2,9 @@ module Spec.Auth where
 
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
+import Error (ReqError (..))
 import Logger (Priority (..))
 import Methods.Common.Auth
-import Error (ReqError (..))
 import Spec.Auth.Handlers
 import Spec.Auth.QStrExample
 import Spec.Auth.Types

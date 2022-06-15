@@ -18,18 +18,19 @@ import Psql.Migration (Migrate (..), migrate)
 import Psql.ToQuery
 import Psql.ToQuery.Exists
 import Psql.ToQuery.Select
+import Text.Read (readMaybe)
 import Types
 
 data Config = Config
-  { cServHost :: String,
-    cServPort :: Int,
+  { cServerHost :: String,
+    cServerPort :: Int,
     cConnDB :: ConnDB,
     cPriority :: Priority,
     cDefPicId :: PictureId,
     cDefUsId :: UserId,
     cDefAuthId :: AuthorId,
     cDefCatId :: CategoryId,
-    cCommLimit :: Limit,
+    cCommentLimit :: Limit,
     cDraftsLimit :: Limit,
     cPostsLimit :: Limit
   }
@@ -42,9 +43,9 @@ extractConn conf = let ConnDB conn _ = cConnDB conf in conn
 
 extractSettings :: Config -> Settings
 extractSettings conf =
-  let port = cServPort conf
-      servH = fromString . cServHost $ conf
-   in setHost servH . setPort port $ defaultSettings
+  let port = cServerPort conf
+      serverH = fromString . cServerHost $ conf
+   in setHost serverH . setPort port $ defaultSettings
 
 reConnectDB :: Config -> IO Config
 reConnectDB oldConf = do
@@ -55,8 +56,8 @@ reConnectDB oldConf = do
 parseConfAnd :: Migrate -> IO Config
 parseConfAnd migrateArg = do
   conf <- pullConfig
-  servHost <- parseConfServHost conf
-  servPort <- parseConfServPort conf
+  serverHost <- parseConfServerHost conf
+  serverPort <- parseConfServerPort conf
   hostDB <- parseConfDBHost conf
   portDB <- parseConfDBport conf
   userDB <- parseConfDBUser conf
@@ -68,11 +69,11 @@ parseConfAnd migrateArg = do
   defUsId <- parseConfDefUsId conf conn defPicId
   defAuthId <- parseConfDefAuthId conf conn defUsId
   defCatId <- parseConfDefCatId conf conn
-  commNumLimit <- parseConfCommLimit conf
+  commentNumLimit <- parseConfCommentLimit conf
   draftsNumLimit <- parseConfDraftsLimit conf
   postsNumLimit <- parseConfPostsLimit conf
   prio <- parseConfPrio conf
-  return $ Config (fromString servHost) servPort connDB prio defPicId defUsId defAuthId defCatId commNumLimit draftsNumLimit postsNumLimit
+  return $ Config (fromString serverHost) serverPort connDB prio defPicId defUsId defAuthId defCatId commentNumLimit draftsNumLimit postsNumLimit
 
 pullConfig :: IO C.Config
 pullConfig =
@@ -81,8 +82,8 @@ pullConfig =
     `E.catch` (\e -> print (e :: C.KeyError) >> return C.empty)
     `E.catch` (\e -> print (e :: E.IOException) >> return C.empty)
 
-parseConfServHost :: C.Config -> IO String
-parseConfServHost conf = do
+parseConfServerHost :: C.Config -> IO String
+parseConfServerHost conf = do
   str <-
     (C.lookup conf "Server.host" :: IO (Maybe String))
       `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
@@ -91,8 +92,8 @@ parseConfServHost conf = do
     Nothing -> inputString "Server.host"
     Just x -> return x
 
-parseConfServPort :: C.Config -> IO Port
-parseConfServPort conf = do
+parseConfServerPort :: C.Config -> IO Port
+parseConfServerPort conf = do
   str <-
     (C.lookup conf "Server.port" :: IO (Maybe Port))
       `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Port))
@@ -151,8 +152,8 @@ parseConfDBpwd conf = do
     Nothing -> inputString "DataBase.password"
     Just x -> return x
 
-parseConfCommLimit :: C.Config -> IO Limit
-parseConfCommLimit conf = do
+parseConfCommentLimit :: C.Config -> IO Limit
+parseConfCommentLimit conf = do
   str <-
     (C.lookup conf "LimitNumbers.commentNumberLimit" :: IO (Maybe Integer))
       `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
@@ -193,23 +194,16 @@ parseConfPrio conf = do
     (C.lookup conf "log.logLevel" :: IO (Maybe String))
       `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
       `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputLogLevel
-    Just "DEBUG" -> return DEBUG
-    Just "INFO" -> return INFO
-    Just "WARNING" -> return WARNING
-    Just "ERROR" -> return ERROR
-    Just _ -> inputLogLevel
+  case fmap (map toUpper) str >>= readMaybe of
+    Just p -> pure p
+    _ -> inputLogLevel
 
 inputLogLevel :: IO Priority
 inputLogLevel = do
   putStrLn "Can`t parse value \"logLevel\" from configuration file or command line\nPlease, enter logging level (logs of this level and higher will be recorded)\nAvailable levels: DEBUG ; INFO ; WARNING ; ERROR (without quotes)"
   input <- getLine
-  case map toUpper input of
-    "DEBUG" -> return DEBUG
-    "INFO" -> return INFO
-    "WARNING" -> return WARNING
-    "ERROR" -> return ERROR
+  case readMaybe (map toUpper input) of
+    Just p -> pure p
     _ -> inputLogLevel
 
 inputIdOr :: String -> IO Id -> IO Id

@@ -13,18 +13,18 @@ data SelectLim
   = SelectLim [DbKey] Table Where [Filter] OrderBy Page Limit
 
 instance ToStr SelectLim where
-  toStr (SelectLim keys t wh filterArgs ord _ _) =
-    let table = t ++ addJoinTable ord ++ addJoinTable filterArgs
-     in "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table
+  toStr (SelectLim keys table where' filterArgs ord _ _) =
+    let fullTable = table ++ addJoinTable ord ++ addJoinTable filterArgs
+     in "SELECT " ++ intercalate ", " keys ++ " FROM " ++ fullTable
           ++ " WHERE "
-          ++ toStr wh
+          ++ toStr where'
           ++ " ORDER BY "
           ++ toStr ord
           ++ " OFFSET ? LIMIT ?"
 
 instance ToVal SelectLim where
-  toVal (SelectLim _ _ wh _ _ page limit) =
-    toVal wh ++ [Num ((page - 1) * limit), Num (page * limit)]
+  toVal (SelectLim _ _ where' _ _ page limit) =
+    toVal where' ++ [Num ((page - 1) * limit), Num (page * limit)]
 
 data OrderBy
   = ByPostPicsNumb SortOrd
@@ -32,7 +32,7 @@ data OrderBy
   | ByPostAuthor SortOrd
   | ByPostDate SortOrd
   | ByPostId SortOrd
-  | ByCommId SortOrd
+  | ByCommentId SortOrd
   | ByDraftId SortOrd
   | OrderList [OrderBy]
   deriving (Eq, Show)
@@ -43,7 +43,7 @@ instance ToStr OrderBy where
   toStr (ByPostAuthor sOrd) = "u.first_name " ++ show sOrd
   toStr (ByPostDate sOrd) = "post_create_date " ++ show sOrd
   toStr (ByPostId sOrd) = "posts.post_id " ++ show sOrd
-  toStr (ByCommId sOrd) = "comment_id " ++ show sOrd
+  toStr (ByCommentId sOrd) = "comment_id " ++ show sOrd
   toStr (ByDraftId sOrd) = "draft_id " ++ show sOrd
   toStr (OrderList xs) = intercalate "," . map toStr $ xs
 

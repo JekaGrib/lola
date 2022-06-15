@@ -2,7 +2,7 @@ module Spec.Post where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (GetPosts (..), GetPostsF (..), GetPostsOrd (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), PicIdUrl (..), PostResponse (..), PostsResponse (..), TagResponse (..), Created(..))
+import Api.Response (AuthorResponse (..), CatResponse (..), Created (..), PicIdUrl (..), PostResponse (..), PostsResponse (..), SubCatResponse (..), SuperCatResponse (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)

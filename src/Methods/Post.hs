@@ -11,6 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..))
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -26,7 +27,6 @@ import qualified Methods.Draft (Handle, makeH)
 import Methods.Draft (insertReturnAllDraft, isUserAuthorE_)
 import Methods.Post.LimitArg (LimitArg (..), chooseArgs, isDateASC)
 import Network.HTTP.Types (QueryText)
-import Error (ReqError (..))
 import Psql.Methods.Post
 import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
 import Psql.ToQuery.SelectLimit (Filter, OrderBy (..))
@@ -92,7 +92,7 @@ workWithPosts h@Handle {..} qStr meth =
 
 getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
 getPost h@Handle {..} postId = do
-  post <- catchOneSelE hLog $ selectPosts postId
+  post <- catchOneSelectE hLog $ selectPosts postId
   resp <- makePostResponse h post
   lift $ logInfo hLog $ "Post_id: " ++ show postId ++ " sending in response"
   okHelper resp
@@ -110,7 +110,7 @@ getPosts h@Handle {..} gP@(GetPosts page _ _) = do
 createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> PostId -> ExceptT ReqError m ResponseInfo
 createPostsDraft h@Handle {..} usId postId = do
   isUserAuthorE_ hDr usId
-  PostInfo auId _ postName postCatId postTxt mPicId <- catchOneSelE hLog $ selectPostInfos postId
+  PostInfo auId _ postName postCatId postTxt mPicId <- catchOneSelectE hLog $ selectPostInfos postId
   isPostAuthor h postId usId
   picsIds <- catchSelE hLog $ selectPicsForPost postId
   tagS <- catchSelE hLog $ selectTagsForPost postId
@@ -135,11 +135,11 @@ makePostResponse Handle {..} (Post pId auId auInfo usId pName pDate pCatId pText
 
 isPostAuthor :: (MonadCatch m) => Handle m -> PostId -> UserId -> ExceptT ReqError m ()
 isPostAuthor Handle {..} postId usId = do
-  usPostId <- catchOneSelE hLog $ selectUsersForPost postId
+  usPostId <- catchOneSelectE hLog $ selectUsersForPost postId
   unless (usPostId == usId)
     $ throwE
     $ ForbiddenError
     $ "user_id: " ++ show usId ++ " is not author of post_id: " ++ show postId
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

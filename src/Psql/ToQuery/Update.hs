@@ -11,11 +11,11 @@ data Update
   = Update Table [Set] Where
 
 instance ToStr Update where
-  toStr (Update t sets wh) =
-    "UPDATE " ++ t ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr wh
+  toStr (Update table sets where') =
+    "UPDATE " ++ table ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr where'
 
 instance ToVal Update where
-  toVal (Update _ set wh) = toVal set ++ toVal wh
+  toVal (Update _ set where') = toVal set ++ toVal where'
 
 data Set
   = SetPair Predicate DbValue

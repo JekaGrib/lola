@@ -16,22 +16,22 @@ import Psql.ToQuery.Update (Update)
 import Types
 
 select' :: (Selecty a) => Connection -> Select -> IO [a]
-select' conn sel =
-  query conn (toQ sel) (toVal sel)
+select' conn select =
+  query conn (toQ select) (toVal select)
 
 selectOnly' :: (FromField a) => Connection -> Select -> IO [a]
-selectOnly' conn sel = do
-  xs <- query conn (toQ sel) (toVal sel)
+selectOnly' conn select = do
+  xs <- query conn (toQ select) (toVal select)
   return $ fmap fromOnly xs
 
 selectBS' :: Connection -> Select -> IO [ByteString]
-selectBS' conn sel = do
-  xs <- query conn (toQ sel) (toVal sel)
+selectBS' conn select = do
+  xs <- query conn (toQ select) (toVal select)
   return $ fmap (fromBinary . fromOnly) xs
 
 selectLimit' :: (Selecty a) => Connection -> SelectLim -> IO [a]
-selectLimit' conn sel =
-  query conn (toQ sel) (toVal sel)
+selectLimit' conn select =
+  query conn (toQ select) (toVal select)
 
 updateInDb' :: Connection -> Update -> IO ()
 updateInDb' conn upd = do
@@ -44,20 +44,20 @@ deleteFromDb' conn del = do
   return ()
 
 isExistInDb' :: Connection -> Exists -> IO Bool
-isExistInDb' conn exi = do
-  onlyChecks <- query conn (toQ exi) (toVal exi)
+isExistInDb' conn exist = do
+  onlyChecks <- query conn (toQ exist) (toVal exist)
   Only isExist <- checkOneM onlyChecks
   return isExist
 
 insertReturn' :: Connection -> InsertRet -> IO Id
-insertReturn' conn insRet = do
-  onlyXs <- query conn (toQ insRet) (toVal insRet)
+insertReturn' conn insertReturn = do
+  onlyXs <- query conn (toQ insertReturn) (toVal insertReturn)
   Only num <- checkOneM onlyXs
   return num
 
 insertMany' :: Connection -> InsertMany -> IO ()
-insertMany' conn insMany@(InsertMany _ pair) = do
-  _ <- executeMany conn (toQ insMany) (insManyVal pair)
+insertMany' conn insertMany@(InsertMany _ pair) = do
+  _ <- executeMany conn (toQ insertMany) (insManyVal pair)
   return ()
 
 checkOneM :: (MonadCatch m) => [a] -> m a

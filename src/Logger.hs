@@ -17,17 +17,17 @@ data Priority
   | INFO
   | WARNING
   | ERROR
-  deriving (Ord, Eq, Show)
+  deriving (Ord, Eq, Show, Read)
 
 logger :: String -> Priority -> String -> IO ()
-logger logPath currP str = do
-  putStrLn (show currP ++ ": " ++ str)
-  appendFile logPath (show currP ++ ": " ++ str ++ "\n")
+logger logPath currentPrio str = do
+  putStrLn (show currentPrio ++ ": " ++ str)
+  appendFile logPath (show currentPrio ++ ": " ++ str ++ "\n")
 
 checkPrioAndLog :: (Applicative m) => LogHandle m -> Priority -> String -> m ()
-checkPrioAndLog h prio = when (prio >= configP) . log h prio
+checkPrioAndLog h prio = when (prio >= configPrio) . log h prio
   where
-    configP = cLogLevel (hLogConf h)
+    configPrio = cLogLevel (hLogConf h)
 
 logDebug, logInfo, logWarning, logError :: (Applicative m) => LogHandle m -> String -> m ()
 logDebug h = checkPrioAndLog h DEBUG

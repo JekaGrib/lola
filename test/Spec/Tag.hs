@@ -2,16 +2,16 @@ module Spec.Tag where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateTag (..), UpdateTag (..))
-import Api.Response (TagResponse (..), Created (..))
+import Api.Response (Created (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Tag
 import Network.HTTP.Types (status200, status201, status204)
-import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Tag.Handlers

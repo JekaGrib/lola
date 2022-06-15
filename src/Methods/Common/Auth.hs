@@ -6,10 +6,10 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
+import Error (ReqError (..), hideErr, hideTokenErr)
 import Logger
 import Methods.Common
 import Network.HTTP.Types.URI (QueryText)
-import Error (ReqError (..), hideErr, hideTokenErr)
 import Psql.Methods.Common.Auth
 import TryRead (tryReadId)
 import Types
@@ -44,7 +44,7 @@ checkAdminTokenParam Handle {..} tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- catchMaybeOneSelE hLog $ selectTokenKeysForUser usIdNum
+      maybeTokenKey <- catchMaybeOneSelectE hLog $ selectTokenKeysForUser usIdNum
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ tokenKey) == xs
@@ -66,7 +66,7 @@ checkUserTokenParam Handle {..} tokenParam =
   case break (== '.') . unpack $ tokenParam of
     (usIdParam, '.' : 'h' : 'i' : 'j' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- catchMaybeOneSelE hLog $ selectTokenKeysForUser usIdNum
+      maybeTokenKey <- catchMaybeOneSelectE hLog $ selectTokenKeysForUser usIdNum
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("hij" ++ tokenKey) == xs
@@ -77,7 +77,7 @@ checkUserTokenParam Handle {..} tokenParam =
         Nothing -> throwE . SecretTokenError $ "INVALID token. User doesn`t exist"
     (usIdParam, '.' : 's' : 't' : 'u' : '.' : xs) -> do
       usIdNum <- tryReadId "user_id" (pack usIdParam)
-      maybeTokenKey <- catchMaybeOneSelE hLog $ selectTokenKeysForUser usIdNum
+      maybeTokenKey <- catchMaybeOneSelectE hLog $ selectTokenKeysForUser usIdNum
       case maybeTokenKey of
         Just tokenKey ->
           if strSha1 ("stu" ++ tokenKey) == xs

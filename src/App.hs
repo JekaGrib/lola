@@ -11,13 +11,14 @@ import Data.Aeson (encode)
 import Data.ByteString (ByteString)
 import Data.List (genericLength)
 import Data.Text (Text, pack, unpack)
+import Error (ReqError (..), logOnErr)
 import Logger
 import qualified Methods (Handle, makeH)
 import Methods (hAdm, hAu, hCat, hCom, hDr, hPic, hPost, hTag, hUs)
 import Methods.Admin (workWithAdmin)
 import Methods.Author (workWithAuthors)
 import Methods.Category (workWithCats)
-import Methods.Comment (workWithComms)
+import Methods.Comment (workWithComments)
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Draft (workWithDrafts)
 import Methods.Picture (workWithPics)
@@ -26,7 +27,6 @@ import Methods.Tag (workWithTags)
 import Methods.User (workWithLogIn, workWithUsers)
 import Network.HTTP.Types (QueryText, StdMethod, parseMethod, queryToQueryText, status400, status401, status403, status404, status413, status414, status500, status501)
 import Network.Wai (Request, RequestBodyLength (..), Response, ResponseReceived, getRequestBodyChunk, pathInfo, queryString, requestBodyLength, requestMethod, responseLBS)
-import Error (ReqError (..), logOnErr)
 
 data Handle m = Handle
   { hLog :: LogHandle m,
@@ -37,20 +37,19 @@ data Handle m = Handle
 application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 application config handleLog req send = do
   newConfig <- reConnectDB config
-  let methH = Methods.makeH newConfig handleLog
-  let h = Handle handleLog methH getRequestBodyChunk
+  let methodH = Methods.makeH newConfig handleLog
+  let h = Handle handleLog methodH getRequestBodyChunk
   logDebug (hLog h) "Connect to DB"
-  respE <- runExceptT $ logOnErr (hLog h) $ chooseRespEx h req
-  let resInfo = fromE respE
-  logDebug (hLog h) $ "Output response: " ++ show resInfo
-  send (responseFromInfo resInfo)
+  responseE <- runExceptT $ logOnErr (hLog h) $ chooseResponseEx h req
+  let responseInfo = fromE responseE
+  logDebug (hLog h) $ "Output response: " ++ show responseInfo
+  send (responseFromInfo responseInfo)
 
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseLBS s h b
 
-
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
-fromE respE = case respE of
+fromE responseE = case responseE of
   Right a -> a
   Left (BadReqError str) ->
     ResponseInfo
@@ -83,8 +82,8 @@ fromE respE = case respE of
   Left (SecretError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
   Left (DatabaseError _) -> ResponseInfo status500 [textHeader] "Internal server error"
 
-chooseRespEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
-chooseRespEx h@Handle {..} req = do
+chooseResponseEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
+chooseResponseEx h@Handle {..} req = do
   lift $ logDebug hLog "Incoming request"
   stdMeth <- pullStdMethod req
   let path = pathInfo req
@@ -99,7 +98,7 @@ chooseRespEx h@Handle {..} req = do
     UserEP meth -> workWithUsers (hUs hMeth) qStr meth
     AuthorEP meth -> workWithAuthors (hAu hMeth) qStr meth
     CatEP meth -> workWithCats (hCat hMeth) qStr meth
-    CommentEP meth -> workWithComms (hCom hMeth) qStr meth
+    CommentEP meth -> workWithComments (hCom hMeth) qStr meth
     TagEP meth -> workWithTags (hTag hMeth) qStr meth
     DraftEP ToPost -> do
       body <- pullReqBody h req
@@ -151,4 +150,3 @@ checkLengthReqBody req =
   case requestBodyLength req of
     ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"
     _ -> return ()
-

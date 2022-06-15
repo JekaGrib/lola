@@ -2,15 +2,15 @@ module Spec.Category where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..))
-import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..), Created(..))
+import Api.Response (CatResponse (..), Created (..), SubCatResponse (..), SuperCatResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Methods.Category
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (status200, status201, status204)
-import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.Category.Handlers
 import Spec.Category.QStrExample

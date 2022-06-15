@@ -6,9 +6,9 @@ import Conf (Config (..), extractConn)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
+import Error (ReqError (..))
 import Methods.Common
 import Methods.Common.Exist.UncheckedExId
-import Error (ReqError (..))
 import Psql.Methods.Common.Exist
 
 data Handle m = Handle
@@ -51,5 +51,3 @@ instance CheckExist [UncheckedExId] where
 instance CheckExist a => CheckExist (Maybe a) where
   checkExist _ Nothing = return ()
   checkExist h (Just iD) = checkExist h iD
-
-

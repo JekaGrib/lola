@@ -30,7 +30,7 @@ testAdmin = hspec $ do
                      AdminMock (InsertReturnUser (InsertUser "37fa265330ad83eaa879efb1e2db6380896cf639" "fName" "lName" 6 dayExample True "lilu"))
                    ]
       eitherResp <- evalStateT (runExceptT $ createAdmin handle (CreateUser "pwd" "fName" "lName" 6)) []
-      eitherResp 
+      eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/users/14")] (encode $ CreatedUser 14 $ pack ("14.hij." ++ strSha1 "hijlilu")))
   describe "workWithAdmin "
     $ it "work with valid DB answer"

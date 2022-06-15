@@ -1,15 +1,15 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Api.Response where
 
-import Data.Aeson (ToJSON (toEncoding, toJSON),genericToJSON,genericToEncoding,(.=),object)
+import Api.AesonOption (optionsEraseSuffix, optionsSnakeCase, optionsSnakeCasePreEraseSuffix)
+import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), genericToEncoding, genericToJSON, object)
+import Data.String (fromString)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
-import Types
-import Api.AesonOption (optionsEraseSuffix, optionsSnakeCase, optionsSnakeCasePreEraseSuffix)
 import GHC.Generics (Generic)
-import Data.String (fromString)
+import Types
 
 data UserResponse = UserResponse
   { userId :: UserId,
@@ -55,25 +55,23 @@ instance ToJSON CatResponse where
   toJSON (Sub cat) = toJSON cat
   toJSON (Super cat) = toJSON cat
 
-data SubCatResponse
-  = SubCatResponse
-      { categoryIdSCATR :: CategoryId,
-        categoryNameSCATR :: Text,
-        subCategoriesSCATR :: [CategoryId],
-        superCategorySCATR :: CatResponse
-      }
+data SubCatResponse = SubCatResponse
+  { categoryIdSCATR :: CategoryId,
+    categoryNameSCATR :: Text,
+    subCategoriesSCATR :: [CategoryId],
+    superCategorySCATR :: CatResponse
+  }
   deriving (Eq, Show, Generic)
 
 instance ToJSON SubCatResponse where
   toJSON = genericToJSON $ optionsSnakeCasePreEraseSuffix "SCATR"
   toEncoding = genericToEncoding $ optionsSnakeCasePreEraseSuffix "SCATR"
 
-data SuperCatResponse 
-  = SuperCatResponse
-      { categoryIdCATR :: CategoryId,
-        categoryNameCATR :: Text,
-        subCategoriesCATR :: [CategoryId]
-      }
+data SuperCatResponse = SuperCatResponse
+  { categoryIdCATR :: CategoryId,
+    categoryNameCATR :: Text,
+    subCategoriesCATR :: [CategoryId]
+  }
   deriving (Eq, Show, Generic)
 
 instance ToJSON SuperCatResponse where
@@ -199,13 +197,13 @@ instance ToJSON CommentsResponse where
 
 data Created = Created
   { createdId :: Id,
-    entity :: String    
+    entity :: String
   }
   deriving (Eq, Show)
 
 instance ToJSON Created where
   toJSON Created {..} =
-      object ["status" .= ("created" :: Text), (fromString entity <> "_id") .= createdId]
+    object ["status" .= ("created" :: Text), (fromString entity <> "_id") .= createdId]
 
 data CreatedUser = CreatedUser
   { createdUsId :: Id,
@@ -215,4 +213,4 @@ data CreatedUser = CreatedUser
 
 instance ToJSON CreatedUser where
   toJSON CreatedUser {..} =
-      object ["status" .= ("created" :: Text) , "user_id" .= createdUsId , "token" .= token]
+    object ["status" .= ("created" :: Text), "user_id" .= createdUsId, "token" .= token]

@@ -7,9 +7,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Text (Text)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
+import Error (UnexpectedDbOutPutException (..))
 import Methods.Picture
 import Network.HTTP.Simple (HttpException (InvalidUrlException))
-import Error (UnexpectedDbOutPutException (..))
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)

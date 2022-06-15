@@ -14,6 +14,7 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.ByteString (ByteString)
 import Data.Time.Calendar (Day)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..))
 import Logger
 import Methods.Category (fromCatResp)
 import Methods.Common
@@ -27,7 +28,6 @@ import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Error (ReqError (..))
 import Psql.Methods.Draft
 import Psql.Selecty (Author (..), Draft (..), Tag (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
@@ -156,7 +156,7 @@ updateDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> DraftRequest -
 updateDraft h@Handle {..} usId draftId drReq@(DraftRequest nameParam catIdParam txtParam picId picsIds tagsIds) = do
   isDraftAuthor h draftId usId
   DraftInfo auResp tagResps catResp <- getDraftInfo h usId drReq
-  postId <- catchOneSelE hLog $ selectPostsForDraft draftId
+  postId <- catchOneSelectE hLog $ selectPostsForDraft draftId
   withTransactionDBE h $ do
     deletePicsTagsForDrafts hDelMany [draftId]
     let updDr = UpdateDbDraft nameParam catIdParam txtParam picId
@@ -189,7 +189,7 @@ publishDraft h@Handle {..} usId draftId = do
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       ok201Helper hConf "post" postId
     PostIdExist postId -> do
-      day <- catchOneSelE hLog $ selectDaysForPost postId
+      day <- catchOneSelectE hLog $ selectDaysForPost postId
       withTransactionDBE h $ do
         let updPost = UpdateDbPost draftName (fromCatResp catResp) draftTxt mPicId
         updateDbPost postId updPost
@@ -203,7 +203,7 @@ selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> Exc
 selectDraftAndMakeResp h@Handle {..} usId draftId = do
   Author auId _ _ <- isUserAuthorE h usId
   isDraftAuthor h draftId usId
-  draft <- catchOneSelE hLog $ selectDrafts draftId
+  draft <- catchOneSelectE hLog $ selectDrafts draftId
   makeDraftResp h usId auId draft
 
 makeDraftResp :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> Draft -> ExceptT ReqError m DraftResponse
@@ -231,7 +231,7 @@ insertReturnAllDraft h@Handle {..} picsIds tagsIds insDr = withTransactionDBE h 
 
 isDraftAuthor :: (MonadCatch m) => Handle m -> DraftId -> UserId -> ExceptT ReqError m ()
 isDraftAuthor Handle {..} draftId usId = do
-  usDraftId <- catchOneSelE hLog $ selectUsersForDraft draftId
+  usDraftId <- catchOneSelectE hLog $ selectUsersForDraft draftId
   unless (usDraftId == usId)
     $ throwE
     $ ForbiddenError
@@ -240,7 +240,7 @@ isDraftAuthor Handle {..} draftId usId = do
 isUserAuthorE :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m Author
 isUserAuthorE Handle {..} usId = do
   lift $ logDebug hLog "Checking in DB is user author"
-  maybeAu <- catchMaybeOneSelE hLog $ selectAuthorsForUser usId
+  maybeAu <- catchMaybeOneSelectE hLog $ selectAuthorsForUser usId
   case maybeAu of
     Nothing -> throwE $ ForbiddenError $ "user_id: " ++ show usId ++ " isn`t author"
     Just author -> return author
@@ -255,4 +255,4 @@ isNULL 0 = PostIdNull
 isNULL postId = PostIdExist postId
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

@@ -33,8 +33,8 @@ selectDraftsForAuthor' conn auId = do
   let wh = WherePair "author_id=?" (Id auId)
   selectOnly' conn $ Select ["draft_id"] "drafts" wh
 
-updateDbUserForComms' :: Connection -> UserId -> UserId -> IO ()
-updateDbUserForComms' conn newUsId usId = do
+updateDbUserForComments' :: Connection -> UserId -> UserId -> IO ()
+updateDbUserForComments' conn newUsId usId = do
   let set = SetPair "user_id=?" (Id newUsId)
   let wh = WherePair "user_id=?" (Id usId)
   updateInDb' conn (Update "comments" [set] wh)

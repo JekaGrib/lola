@@ -3,8 +3,8 @@ module Spec.Tag.Handlers where
 import Control.Monad.Catch (throwM)
 import Control.Monad.State (StateT (..), modify)
 import Database.PostgreSQL.Simple (ExecStatus (FatalError), SqlError (..))
-import Methods.Tag
 import Error (UnexpectedDbOutPutException (..))
+import Methods.Tag
 import qualified Spec.Auth.Handlers (handle0)
 import Spec.Conf (defConf)
 import qualified Spec.Exist.Handlers (handle)

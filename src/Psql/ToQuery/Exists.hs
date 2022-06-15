@@ -8,8 +8,8 @@ data Exists
   = Exists Table Where
 
 instance ToStr Exists where
-  toStr (Exists t wh) =
-    "SELECT EXISTS (SELECT 1 FROM " ++ t ++ " WHERE " ++ toStr wh ++ ")"
+  toStr (Exists table where') =
+    "SELECT EXISTS (SELECT 1 FROM " ++ table ++ " WHERE " ++ toStr where' ++ ")"
 
 instance ToVal Exists where
-  toVal (Exists _ wh) = toVal wh
+  toVal (Exists _ where') = toVal where'

@@ -6,11 +6,11 @@ import Api.Response (Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Methods.Common (ResponseInfo (..), jsonHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Picture
 import Network.HTTP.Types (status200, status201)
-import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Picture.Handlers

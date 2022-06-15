@@ -1,14 +1,14 @@
 module Psql.Migration where
 
 import Control.Exception (SomeException, catch, throw)
+import Control.Exception.Safe (throwString)
+import Data.Char (toLower)
+import Data.List (isPrefixOf, sort)
 import Database.PostgreSQL.Simple (Connection, execute_, withTransaction)
 import Database.PostgreSQL.Simple.Migration (MigrationCommand (MigrationDirectory, MigrationInitialization), MigrationResult (..), runMigrations)
 import Error (MigrationException (..))
-import Control.Exception.Safe (throwString)
-import Data.Char (toLower)
-import System.Environment (getArgs)
 import System.Directory (getDirectoryContents)
-import Data.List (isPrefixOf, sort)
+import System.Environment (getArgs)
 
 data Migrate = Migrate | NotMigrate
   deriving (Eq, Show)
@@ -21,7 +21,7 @@ migrate conn = catchMigrationEx $ do
       dropTableShemaMigrations conn
       throw $ MigrationException err
     _ -> do
-      scriptsInDirectory "./migrations" >>= mapM_ (putStrLn . ("Execute migrations: " ++ ))
+      scriptsInDirectory "./migrations" >>= mapM_ (putStrLn . ("Execute migrations: " ++))
       dropTableShemaMigrations conn
   where
     cmds =
@@ -57,5 +57,6 @@ parseArg arg = case map toLower arg of
 
 scriptsInDirectory :: FilePath -> IO [String]
 scriptsInDirectory dir =
-    fmap (sort . filter (\x -> not $ "." `isPrefixOf` x))
-        (getDirectoryContents dir)
+  fmap
+    (sort . filter (\x -> not $ "." `isPrefixOf` x))
+    (getDirectoryContents dir)

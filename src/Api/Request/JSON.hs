@@ -2,21 +2,22 @@
 
 module Api.Request.JSON where
 
+import Api.AesonOption (optionsSnakeCase)
 import Api.Request.QueryStr (checkLength)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
-import Data.Aeson (FromJSON (parseJSON), Object, Value (..), decodeStrict,genericParseJSON)
+import Data.Aeson (FromJSON (parseJSON), Object, Value (..), decodeStrict, genericParseJSON)
 import Data.ByteString (ByteString)
 import Data.HashMap.Strict (toList)
 import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Text (Text, unpack)
 import qualified Data.Vector as V
+import Error (ReqError (..))
+import GHC.Generics (Generic)
 import Methods.Common.Exist (CheckExist (..), Handle)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
-import Error (ReqError (..))
 import Types
-import Api.AesonOption (optionsSnakeCase)
-import GHC.Generics (Generic)
+import Prelude hiding (length)
 
 data DraftRequest = DraftRequest
   { draftName :: Text,
@@ -58,7 +59,7 @@ whyBadDraftReq json =
     Just obj -> do
       mapM_ (checkTxt obj) ["draft_name", "draft_text"]
       mapM_ (checkId obj) ["draft_category_id", "draft_main_pic_id"]
-      mapM_ (checkIdArr obj) ["draft_tags_ids", "draft_pics_ids"]
+      mapM_ (checkIdArray obj) ["draft_tags_ids", "draft_pics_ids"]
       throwE $ BadReqError "Invalid request body"
     Nothing -> throwE $ BadReqError "Invalid request body"
 
@@ -68,10 +69,10 @@ checkId obj paramKey = do
   _ <- checkNumVal paramKey val >>= checkScientific paramKey >>= checkNatural paramKey
   return ()
 
-checkIdArr :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
-checkIdArr obj paramKey = do
+checkIdArray :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m ()
+checkIdArray obj paramKey = do
   val <- isExistInObj obj paramKey
-  checkNumArrVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM_ (checkNatural paramKey)
+  checkNumArrayVal paramKey val >>= mapM (checkScientific paramKey) >>= mapM_ (checkNatural paramKey)
 
 checkTxt :: (MonadCatch m) => Object -> JsonParamKey -> ExceptT ReqError m Text
 checkTxt obj paramKey = do
@@ -102,8 +103,8 @@ checkTxtVal paramKey val =
     String txt -> return txt
     _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be text"
 
-checkNumArrVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m [Scientific]
-checkNumArrVal paramKey values =
+checkNumArrayVal :: (MonadCatch m) => JsonParamKey -> Value -> ExceptT ReqError m [Scientific]
+checkNumArrayVal paramKey values =
   case values of
     Array arr -> checkNumListVal paramKey (V.toList arr)
     _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
@@ -117,9 +118,9 @@ checkNumListVal paramKey xs = case xs of
   _ -> throwE $ BadReqError $ "Can`t parse parameter: " ++ unpack paramKey ++ ". It should be number array. Example: [1,5,8]"
 
 checkTokenLength :: (Monad m) => Int -> Text -> ExceptT ReqError m ()
-checkTokenLength leng txt = case splitAt leng (unpack txt) of
+checkTokenLength length txt = case splitAt length (unpack txt) of
   (_, []) -> return ()
-  _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show leng
+  _ -> throwE $ SecretTokenError $ "Token too long. Maximum length should be: " ++ show length
 
 checkNatural :: (Monad m) => QueryParamKey -> Id -> ExceptT ReqError m Id
 checkNatural paramKey num

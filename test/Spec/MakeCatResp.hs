@@ -1,6 +1,6 @@
 module Spec.MakeCatResp where
 
-import Api.Response (CatResponse (..), SuperCatResponse (..), SubCatResponse (..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Methods.Common.MakeCatResp

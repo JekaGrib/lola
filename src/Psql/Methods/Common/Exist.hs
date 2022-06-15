@@ -14,8 +14,8 @@ isExist' conn (AuthorId auId) = do
 isExist' conn (CategoryId catId) = do
   let wh = WherePair "category_id=?" (Id catId)
   isExistInDb' conn (Exists "categories" wh)
-isExist' conn (CommentId commId) = do
-  let wh = WherePair "comment_id=?" (Id commId)
+isExist' conn (CommentId commentId) = do
+  let wh = WherePair "comment_id=?" (Id commentId)
   isExistInDb' conn (Exists "comments" wh)
 isExist' conn (DraftId drId) = do
   let wh = WherePair "draft_id=?" (Id drId)

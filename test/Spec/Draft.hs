@@ -3,16 +3,16 @@ module Spec.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..))
 import Api.Request.QueryStr (GetDrafts (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), SubCatResponse (..), SuperCatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..), Created(..))
+import Api.Response (AuthorResponse (..), CatResponse (..), Created (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), SubCatResponse (..), SuperCatResponse (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
 import Data.Text (Text, pack)
+import Error (ReqError (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Draft
 import Network.HTTP.Types (status200, status201, status204)
-import Error (ReqError (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.DeleteMany.Types
@@ -411,21 +411,21 @@ draftResp0 =
 
 draftResp1 :: DraftResponse
 draftResp1 =
-  let catResp = Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $  SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 1 (PostIdExist 7) (AuthorResponse 7 "author" 4) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
 
 draftResp2 :: DraftResponse
 draftResp2 =
-  let catResp = Sub $ SubCatResponse 24 "u" [] $ Sub $ SubCatResponse 20 "t" [] $ Sub $  SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 24 "u" [] $ Sub $ SubCatResponse 20 "t" [] $ Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 5 PostIdNull (AuthorResponse 7 "author" 4) "draft5" catResp "lalala" 4 (toPicUrl 4) picsResps tagsResps
 
 draftResp3 :: DraftResponse
 draftResp3 =
-  let catResp = Sub $ SubCatResponse 17 "q" [] $ Sub $  SubCatResponse 12 "l" [16, 17] $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]
+  let catResp = Sub $ SubCatResponse 17 "q" [] $ Sub $ SubCatResponse 12 "l" [16, 17] $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
    in DraftResponse 12 PostIdNull (AuthorResponse 7 "author" 4) "draft12" catResp "lalala" 13 (toPicUrl 13) picsResps tagsResps

@@ -88,5 +88,3 @@ toDateOrd (sortOrd, n) = (ByPostDate sortOrd, n)
 
 isDateASC :: [OrderBy] -> Bool
 isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ASC) || cont) False
-
-

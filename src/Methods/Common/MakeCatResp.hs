@@ -1,12 +1,12 @@
 module Methods.Common.MakeCatResp where
 
-import Api.Response (CatResponse (..),SubCatResponse(..),SuperCatResponse(..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
+import Error (ReqError)
 import Logger (LogHandle (..))
 import Methods.Common
-import Error (ReqError)
 import Psql.Methods.Common.MakeCatResp
 import Psql.Selecty (Cat (..))
 import Types
@@ -29,7 +29,7 @@ makeH conf logH =
 
 makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
 makeCatResp h@Handle {..} catId = do
-  Cat catName superCatId <- catchOneSelE hLog $ selectCats catId
+  Cat catName superCatId <- catchOneSelectE hLog $ selectCats catId
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
     0 -> return $ Super $ SuperCatResponse {categoryIdCATR = catId, categoryNameCATR = catName, subCategoriesCATR = subCatsIds}

@@ -3,8 +3,8 @@ module Api.Request.EndPoint where
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, append)
-import Network.HTTP.Types (StdMethod (..))
 import Error (ReqError (..))
+import Network.HTTP.Types (StdMethod (..))
 import TryRead (getTxtstart, tryReadResourseId)
 import Types
 
@@ -127,4 +127,3 @@ toResourseId txt _ = throwE $ ResourseNotExistError $ getTxtstart txt
 
 parseResourseId :: (MonadCatch m) => ResourseName -> ResourseIdText -> ExceptT ReqError m Id
 parseResourseId resName = tryReadResourseId (append resName "_id")
-

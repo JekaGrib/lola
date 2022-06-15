@@ -82,4 +82,3 @@ createDefaultCategory :: Connection -> IO CategoryId
 createDefaultCategory conn = do
   [Only catId] <- query_ conn "INSERT INTO categories (category_name) VALUES ( 'NONE' ) RETURNING category_id"
   return catId
-

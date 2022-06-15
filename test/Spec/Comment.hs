@@ -2,16 +2,16 @@ module Spec.Comment where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateComment (..), GetComments (..), UpdateComment (..))
-import Api.Response (CommentIdTextUserResponse (..), CommentResponse (..), CommentsResponse (..), Created(..))
+import Api.Response (CommentIdTextUserResponse (..), CommentResponse (..), CommentsResponse (..), Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Methods.Comment
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Auth (AccessMode (..))
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (status200, status201, status204)
-import Error (ReqError (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.Comment.Handlers
@@ -47,7 +47,7 @@ testComm = hspec $ do
     $ do
       state <- execStateT (runExceptT $ getComments handle (GetComments 7 1)) []
       reverse state
-        `shouldBe` [CommMock (SelectLimCommsForPost 7 (ByCommId DESC) 1 20)]
+        `shouldBe` [CommMock (SelectLimCommsForPost 7 (ByCommentId DESC) 1 20)]
       eitherResp <- evalStateT (runExceptT $ getComments handle (GetComments 7 1)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3, CommentIdTextUserResponse 2 "ok" 4, CommentIdTextUserResponse 3 "yes" 5]))
@@ -86,56 +86,56 @@ testComm = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deleteComment handle 3 UserMode 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
-  describe "workWithComms (ToPost)"
+  describe "workWithComments (ToPost)"
     $ it "work with valid DB answer"
     $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
+      state <- execStateT (runExceptT $ workWithComments handle qStr2 ToPost) []
       reverse state
         `shouldBe` [ AuthMock (SelectTokenKeyForUser 152),
                      ExistMock (IsExist (PostId 7)),
                      CommMock (InsertReturnComm "yes" 7 152)
                    ]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr2 ToPost) []
+      eitherResp <- evalStateT (runExceptT $ workWithComments handle qStr2 ToPost) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/comments/14")] $ encode $ Created 14 "comment")
-  describe "workWithComms (ToGet id)"
+  describe "workWithComments (ToGet id)"
     $ it "work with valid DB answer"
     $ do
-      state <- execStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
+      state <- execStateT (runExceptT $ workWithComments handle [] (ToGet 4)) []
       reverse state
         `shouldBe` [ ExistMock (IsExist (CommentId 4)),
                      CommMock (SelectComm 4)
                    ]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle [] (ToGet 4)) []
+      eitherResp <- evalStateT (runExceptT $ workWithComments handle [] (ToGet 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentResponse 4 "cool" 3 7))
-  describe "workWithComms (ToGetAll)"
+  describe "workWithComments (ToGetAll)"
     $ it "work with valid DB answer"
     $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+      state <- execStateT (runExceptT $ workWithComments handle qStr4 ToGetAll) []
       reverse state
-        `shouldBe` [ExistMock (IsExist (PostId 7)), CommMock (SelectLimCommsForPost 7 (ByCommId DESC) 1 20)]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr4 ToGetAll) []
+        `shouldBe` [ExistMock (IsExist (PostId 7)), CommMock (SelectLimCommsForPost 7 (ByCommentId DESC) 1 20)]
+      eitherResp <- evalStateT (runExceptT $ workWithComments handle qStr4 ToGetAll) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ CommentsResponse 1 7 [CommentIdTextUserResponse 1 "cool" 3, CommentIdTextUserResponse 2 "ok" 4, CommentIdTextUserResponse 3 "yes" 5]))
-  describe "workWithComms (ToPut)"
+  describe "workWithComments (ToPut)"
     $ it "work with valid DB answer, without super category"
     $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr3 (ToPut 4)) []
+      state <- execStateT (runExceptT $ workWithComments handle qStr3 (ToPut 4)) []
       reverse state
         `shouldBe` [ AuthMock (SelectTokenKeyForUser 152),
                      ExistMock (IsExist (CommentId 4)),
                      CommMock (SelectUsersForComm 4)
                    ]
-  describe "workWithComms (ToDelete)"
+  describe "workWithComments (ToDelete)"
     $ it "work with valid DB answer"
     $ do
-      state <- execStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
+      state <- execStateT (runExceptT $ workWithComments handle qStr1 (ToDelete 4)) []
       reverse state
         `shouldBe` [ AuthMock (SelectTokenKeyForUser 152),
                      ExistMock (IsExist (CommentId 4)),
                      CommMock (DeleteDbComm 4)
                    ]
-      eitherResp <- evalStateT (runExceptT $ workWithComms handle qStr1 (ToDelete 4)) []
+      eitherResp <- evalStateT (runExceptT $ workWithComments handle qStr1 (ToDelete 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")

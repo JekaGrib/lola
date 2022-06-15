@@ -8,11 +8,11 @@ data Select
   = Select [DbKey] Table Where
 
 instance ToStr Select where
-  toStr (Select keys t wh) =
-    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ t ++ " WHERE " ++ toStr wh
+  toStr (Select keys table where') =
+    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table ++ " WHERE " ++ toStr where'
 
 instance ToVal Select where
-  toVal (Select _ _ wh) = toVal wh
+  toVal (Select _ _ where') = toVal where'
 
 class ToWhere a where
   toWhere :: a -> Where

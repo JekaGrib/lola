@@ -4,13 +4,14 @@ module Methods.Category where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateCategory (..), UpdateCategory (..), checkQStr)
-import Api.Response (CatResponse (..), SuperCatResponse (..), SubCatResponse (..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (when)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..))
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -21,7 +22,6 @@ import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (findOneLevelSubCats, makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Error (ReqError (..))
 import Psql.Methods.Category
 import Types
 
@@ -84,11 +84,11 @@ workWithCats h@Handle {..} qStr meth =
 
 createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
 createCategory Handle {..} (CreateCategory catNameParam Nothing) = do
-  catId <- catchInsRetE hLog $ insertReturnCat catNameParam
+  catId <- catchInsertReturnE hLog $ insertReturnCat catNameParam
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
   ok201Helper hConf "category" catId
 createCategory Handle {..} (CreateCategory catNameParam (Just superCatIdParam)) = do
-  catId <- catchInsRetE hLog $ insertReturnSubCat catNameParam superCatIdParam
+  catId <- catchInsertReturnE hLog $ insertReturnSubCat catNameParam superCatIdParam
   lift $ logInfo hLog $ "Sub_Category_id: " ++ show catId ++ " created"
   ok201Helper hConf "category" catId
 
@@ -145,4 +145,4 @@ fromCatResp (Sub (SubCatResponse iD _ _ _)) = iD
 fromCatResp (Super (SuperCatResponse iD _ _)) = iD
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

@@ -2,16 +2,16 @@ module Spec.User where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateUser (..), LogIn (..))
-import Api.Response (TokenResponse (..), UserResponse (..), CreatedUser (..))
+import Api.Response (CreatedUser (..), TokenResponse (..), UserResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
 import Data.Text (pack)
+import Error (ReqError (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, strSha1, textHeader, txtSha1)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.User
 import Network.HTTP.Types (status200, status201, status204)
-import Error (ReqError (..))
 import Spec.Auth.Types
 import Spec.DeleteMany.Types
 import Spec.Exist.Types

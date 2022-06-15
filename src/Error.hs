@@ -48,7 +48,7 @@ hideTokenErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideTokenErr m = m `catchE` (throwE . badReqToSecretToken)
 
 hideResourseNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideResourseNotExistErr m = m `catchE` (throwE . badReqToResNotExistError)
+hideResourseNotExistErr m = m `catchE` (throwE . badReqToResourseNotExistError)
 
 addToBadReqErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
 addToBadReqErr addStr (BadReqError str) = throwE $ BadReqError $ str ++ addStr
@@ -100,6 +100,6 @@ badReqToSecretToken :: ReqError -> ReqError
 badReqToSecretToken e@(BadReqError _) = SecretTokenError $ show e
 badReqToSecretToken e = e
 
-badReqToResNotExistError :: ReqError -> ReqError
-badReqToResNotExistError e@(BadReqError _) = ResourseNotExistError $ show e
-badReqToResNotExistError e = e
+badReqToResourseNotExistError :: ReqError -> ReqError
+badReqToResourseNotExistError e@(BadReqError _) = ResourseNotExistError $ show e
+badReqToResourseNotExistError e = e

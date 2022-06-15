@@ -11,6 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..), catchDbErr)
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -21,7 +22,6 @@ import qualified Methods.Common.Exist (Handle, makeH)
 import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
-import Error (ReqError (..), catchDbErr)
 import Psql.Methods.Author
 import Psql.Selecty (Author (..))
 import Types
@@ -89,13 +89,13 @@ workWithAuthors h@Handle {..} qStr meth =
 createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
 createAuthor h@Handle {..} (CreateAuthor usIdParam auInfoParam) = do
   isNotAlreadyAuthor h usIdParam
-  auId <- catchInsRetE hLog $ insertReturnAuthor usIdParam auInfoParam
+  auId <- catchInsertReturnE hLog $ insertReturnAuthor usIdParam auInfoParam
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
   ok201Helper hConf "author" auId
 
 getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 getAuthor Handle {..} authId = do
-  Author auId auInfo usId <- catchOneSelE hLog $ selectAuthors authId
+  Author auId auInfo usId <- catchOneSelectE hLog $ selectAuthors authId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {authorIdA = auId, userIdA = usId, authorInfoA = auInfo}
 
@@ -118,7 +118,7 @@ deleteAuthor h@Handle {..} auId = do
 
 isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
 isntUserOtherAuthor Handle {..} usId auId = do
-  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usId
+  maybeAuId <- catchMaybeOneSelectE hLog $ selectAuthorsForUser usId
   case maybeAuId of
     Just usAuId ->
       if usAuId == auId
@@ -135,4 +135,4 @@ isNotAlreadyAuthor Handle {..} usId = do
     $ BadReqError "User is already author."
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

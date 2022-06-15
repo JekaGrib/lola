@@ -11,6 +11,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BSL
 import Data.String (fromString)
 import Data.Text (Text, unpack)
+import Error (ReqError (..))
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -20,7 +21,6 @@ import Methods.Common.Exist (isExistResourseE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import qualified Network.HTTP.Simple as HT
 import Network.HTTP.Types (QueryText, status200)
-import Error (ReqError (..))
 import Psql.Methods.Picture
 import Types
 
@@ -61,7 +61,7 @@ workWithPics h@Handle {..} qStr meth =
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture Handle {..} picIdNum = do
-  bs <- catchOneSelE hLog $ selectPicBS picIdNum
+  bs <- catchOneSelectE hLog $ selectPicBS picIdNum
   let lbs = BSL.fromStrict bs
   lift $ logInfo hLog $ "Pic_id: " ++ show picIdNum ++ " sending in response"
   return $
@@ -74,7 +74,7 @@ loadPicture :: (MonadCatch m) => Handle m -> LoadPicture -> ExceptT ReqError m R
 loadPicture h@Handle {..} (LoadPicture picUrlParam) = do
   lbs <- checkPicUrlGetPic h picUrlParam
   let sbs = BSL.toStrict lbs
-  picId <- catchInsRetE hLog $ insertRetPicBS sbs
+  picId <- catchInsertReturnE hLog $ insertRetPicBS sbs
   lift $ logInfo hLog $ "Picture_id: " ++ show picId ++ " uploaded"
   ok201Helper hConf "picture" picId
 
