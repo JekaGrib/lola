@@ -40,13 +40,13 @@ Psql command:
 
 
 ## 2. Migrations
-If you want execute some PostgreSQL migrations before start application you shold use "migrate" argument when [run](#5-run) application: 
+If you want execute some PostgreSQL migrations before start application you should use "migrate" argument when [run](#5-run) application: 
 
-    stack exec lola-exe migrate
+   $ stack exec lola-exe migrate
 
 Program will execute automatically all SQL scripts from folder "migrations" at startup.
 
-By default, "migrations" folder contains "dbStructure.sql" SQL script with database structure. But if it is necessary, you can add other sql scripts, they will execute in alphabetical order.
+By default, "migrations" folder contains "01dbStructure.sql" SQL script with database structure. But if it is necessary, you can add other sql scripts, they will execute in alphabetical order.
 
 Or you can do migrations directly in psql by yourself (file "COMMAND for all migrations with dbStructure" can help you). 
 
@@ -505,4 +505,4 @@ Modules, which has handlers, have unit-tests:
 
 All database wrong answers (multiple,emty) are tested at Tag and Picture modules. In other modules only success and some local errors are tested.
 
-For E2E tests with database you can use folder "scripts". Also you can use SQL scripts from folder "testMigrations" and put them to "migrations"(program will execute them automatically at startup).
+For E2E tests with database you can use folder "scripts". Also you can use SQL [migration](#2-migrations) scripts from folder "testMigrations" and put them to folder "migrations" (program will execute them automatically at startup).
