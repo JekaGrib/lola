@@ -6,7 +6,6 @@ import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (GetPosts (..), checkQStr)
 import Api.Response (AuthorResponse (..), PostResponse (..), PostsResponse (..))
 import Conf (Config (..), extractConn)
-import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
@@ -15,7 +14,7 @@ import Error (ReqError (..))
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
-import Methods.Common.Auth (tokenAdminAuth, tokenUserAuth)
+import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutPost)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
@@ -24,11 +23,10 @@ import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
 import qualified Methods.Draft (Handle, makeH)
-import Methods.Draft (insertReturnAllDraft, isUserAuthorE_)
 import Methods.Post.LimitArg (LimitArg (..), chooseArgs, isDateASC)
 import Network.HTTP.Types (QueryText)
 import Psql.Methods.Post
-import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
+import Psql.Selecty (Post (..), Tag (..))
 import Psql.ToQuery.SelectLimit (Filter, OrderBy (..))
 import Types
 
@@ -40,7 +38,6 @@ data Handle m = Handle
     selectPicsForPost :: PostId -> m [PictureId],
     selectTagsForPost :: PostId -> m [Tag],
     selectUsersForPost :: PostId -> m [UserId],
-    selectPostInfos :: PostId -> m [PostInfo],
     withTransactionDB :: forall a. m a -> m a,
     hCatResp :: Methods.Common.MakeCatResp.Handle m,
     hDelMany :: Methods.Common.DeleteMany.Handle m,
@@ -60,7 +57,6 @@ makeH conf logH =
         (selectPicsForPost' conn)
         (selectTagsForPost' conn)
         (selectUsersForPost' conn)
-        (selectPostInfos' conn)
         (withTransaction conn)
         (Methods.Common.MakeCatResp.makeH conf logH)
         (Methods.Common.DeleteMany.makeH conf)
@@ -71,11 +67,6 @@ makeH conf logH =
 workWithPosts :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
 workWithPosts h@Handle {..} qStr meth =
   case meth of
-    ToPostId postId -> do
-      lift $ logInfo hLog "Create post`s draft command"
-      (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (PostId postId)
-      createPostsDraft h usId postId
     ToGet postId -> do
       lift $ logInfo hLog "Get post command"
       isExistResourseE hExist (PostId postId)
@@ -107,19 +98,6 @@ getPosts h@Handle {..} gP@(GetPosts page _ _) = do
   lift $ logInfo hLog $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response"
   okHelper $ PostsResponse {pageP = page, postsP = resps}
 
-createPostsDraft :: (MonadCatch m) => Handle m -> UserId -> PostId -> ExceptT ReqError m ResponseInfo
-createPostsDraft h@Handle {..} usId postId = do
-  isUserAuthorE_ hDr usId
-  PostInfo auId _ postName postCatId postTxt mPicId <- catchOneSelectE hLog $ selectPostInfos postId
-  isPostAuthor h postId usId
-  picsIds <- catchSelE hLog $ selectPicsForPost postId
-  tagS <- catchSelE hLog $ selectTagsForPost postId
-  let tagsIds = fmap tag_idT tagS
-  let insDr = InsertDraft (Just postId) auId postName postCatId postTxt mPicId
-  draftId <- insertReturnAllDraft hDr picsIds tagsIds insDr
-  lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " created for post_id: " ++ show postId
-  ok201Helper hConf "draft" draftId
-
 deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
 deletePost h@Handle {..} postId = do
   withTransactionDBE h $ deleteAllAboutPost hDelMany postId
@@ -132,14 +110,6 @@ makePostResponse Handle {..} (Post pId auId auInfo usId pName pDate pCatId pText
   tagS <- catchSelE hLog $ selectTagsForPost pId
   catResp <- makeCatResp hCatResp pCatId
   return $ PostResponse {postIdP = pId, authorP = AuthorResponse auId auInfo usId, postNameP = pName, postCreateDateP = pDate, postCategoryP = catResp, postTextP = pText, postMainPicIdP = picId, postMainPicUrlP = makeMyPicUrl hConf picId, postPicsP = fmap (inPicIdUrl hConf) picsIds, postTagsP = fmap inTagResp tagS}
-
-isPostAuthor :: (MonadCatch m) => Handle m -> PostId -> UserId -> ExceptT ReqError m ()
-isPostAuthor Handle {..} postId usId = do
-  usPostId <- catchOneSelectE hLog $ selectUsersForPost postId
-  unless (usPostId == usId)
-    $ throwE
-    $ ForbiddenError
-    $ "user_id: " ++ show usId ++ " is not author of post_id: " ++ show postId
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

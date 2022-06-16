@@ -3,7 +3,7 @@ module Spec.Post.Handlers where
 import Control.Monad.State (StateT (..), modify)
 import Data.Time.Calendar (Day, fromGregorian)
 import Methods.Post
-import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
+import Psql.Selecty (Post (..), Tag (..))
 import Psql.ToQuery.SelectLimit (Filter (..), OrderBy (..))
 import qualified Spec.Auth.Handlers (handle)
 import Spec.Conf (defConf)
@@ -26,7 +26,6 @@ handle =
     selectPicsForPostTest
     selectTagsForPostTest
     selectUsersForPostTest
-    selectPostInfosTest
     withTransactionDBTest
     Spec.MakeCatResp.Handlers.handle
     Spec.DeleteMany.Handlers.handle
@@ -73,7 +72,4 @@ selectUsersForPostTest pId = do
   modify (PostMock (SelectUsersForPost pId) :)
   return [3]
 
-selectPostInfosTest :: PostId -> StateT [MockAction] IO [PostInfo]
-selectPostInfosTest pId = do
-  modify (PostMock (SelectPostInfos pId) :)
-  return [PostInfo 7 "author" "post" 4 "lalala" 8]
+

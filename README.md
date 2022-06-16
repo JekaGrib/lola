@@ -131,7 +131,8 @@ Methods:
     
     Json answer example:
 
-        {"token":"abc"}
+        {"status":"created","user_id":7, "token":"abc"}
+
 
     2. To create admin:  
     POST /admins  
@@ -141,10 +142,10 @@ Methods:
     - first_name TXT (max50char)
     - last_name TXT (max50char)
     - user_pic_id INT
-    
+
     Json answer example:
 
-        {"token":"abc"}
+        {"status":"created","user_id":7, "token":"abc"}
 
     3. To get user:  
     GET /users/INT(user_id)  
@@ -175,7 +176,11 @@ Methods:
     - user_id INT
     - author_info TXT (max500char)
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","author_id":7}
+
     2. To get author:  
     GET /authors/INT(author_id)  
     Query parameters:
@@ -208,7 +213,11 @@ Methods:
     - category_name TXT (max50char)
     - super_category_id INT optional
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","category_id":7}
+
     2. To get category:  
     GET /categories/INT(category_id)  
 
@@ -238,7 +247,11 @@ Methods:
     Query parameters:  
     - tag_name TXT (max50char)
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","tag_id":7}
+
     2. To get tag:  
     GET /tags/INT(tag_id)  
 
@@ -288,30 +301,27 @@ Methods:
 
     Request example:
         
-        { "token": "abc",
-        "draft_name": "rock",
+        { "draft_name": "rock",
         "draft_category_id": 3,
         "draft_text": "heyhey",
         "draft_main_pic_id": 501,
         "draft_tags_ids" : [ 1, 2, 4 ],
         "draft_pics_ids": [ 5,4,3]
         }
-           
-    2. To create draft for post:  
-    POST posts/post_id INT/drafts  
-    User should be post author.  
-    Query parameters:
-    - token TXT (user/admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","draft_id":7}
+
     3. To publish draft (create post(if it is new draft) or update post(if it is post`s draft)):  
     POST drafts/draft_id INT/posts  
     User should be draft author.  
     Query parameters:
     - token TXT (user/admin token)
-           
-    Json answer example (for update post):
+    
+    Json answer example :
 
-        {"post_id":7,"author":{"author_id":2,"author_info":"info","user_id":2},"post_name":"name","post_create_date":"2018-06-26","post_category":{"category_id":16,"category_name":"odio","sub_categories":[25,26]},"post_text":"text","post_main_pic_id":164,"post_main_pic_url":"http://localhost:3000/pictures/164","post_pics":[{"pic_id":338,"pic_url":"http://localhost:3000/pictures/338"},{"pic_id":356,"pic_url":"http://localhost:3000/pictures/356"}],"post_tags":[{"tag_id":103,"tag_name":"consequat"},{"tag_id":118,"tag_name":"cum"}]}
+        {"status":"published","post_id":7}
 
     4. To get draft:  
     GET /drafts/draft_id INT  
@@ -403,7 +413,11 @@ Methods:
     Query parameters:
     - comment_text TXT (max500char)
     - token TXT (user/admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","comment_id":7}
+
     2. To get one comment:  
     GET /comments/INT(comment_id)  
 

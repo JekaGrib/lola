@@ -1,6 +1,5 @@
 module Psql.Methods.Draft where
 
-import Data.Time.Calendar (Day)
 import Database.PostgreSQL.Simple (Connection)
 import Psql.Methods.Common
 import Psql.Selecty (Author (..), Draft (..), Tag (..))
@@ -37,11 +36,6 @@ selectTags' conn tagIds = do
       ["tag_id", "tag_name"]
       "tags"
       wh
-
-selectDaysForPost' :: Connection -> PostId -> IO [Day]
-selectDaysForPost' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn (Select ["post_create_date"] "posts" wh)
 
 selectLimDraftsForAuthor' :: Connection -> AuthorId -> OrderBy -> Page -> Limit -> IO [Draft]
 selectLimDraftsForAuthor' conn auId orderBy page limit = do
@@ -105,6 +99,12 @@ updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
       setPic = SetPair "post_main_pic_id=?" (Id picId)
       wh = WherePair "post_id=?" (Id postId)
   updateInDb' conn (Update "posts" [setName, setCat, setTxt, setPic] wh)
+
+updateDbPostForDraft' :: Connection -> DraftId -> PostId -> IO () 
+updateDbPostForDraft' conn draftId postId = do
+  let set = SetPair "post_id=?" (Id postId)
+      wh = WherePair "draft_id=?" (Id draftId)
+  updateInDb' conn (Update "drafts" [set] wh)
 
 insertReturnDraft' :: Connection -> InsertDraft -> IO DraftId
 insertReturnDraft' conn insDraft = do

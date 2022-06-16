@@ -5,7 +5,7 @@ module Methods.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..), checkDraftReqJson)
 import Api.Request.QueryStr (GetDrafts (..), checkQStr)
-import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (picIdPU), PostIdOrNull (..), PostResponse (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (picIdPU), PostIdOrNull (..), TagResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
@@ -39,7 +39,6 @@ data Handle m = Handle
     selectDrafts :: DraftId -> m [Draft],
     selectUsersForDraft :: DraftId -> m [UserId],
     selectTags :: [TagId] -> m [Tag],
-    selectDaysForPost :: PostId -> m [Day],
     selectLimDraftsForAuthor :: AuthorId -> OrderBy -> Page -> Limit -> m [Draft],
     selectPicsForDraft :: PostId -> m [PictureId],
     selectTagsForDraft :: DraftId -> m [Tag],
@@ -47,6 +46,7 @@ data Handle m = Handle
     selectAuthorsForUser :: UserId -> m [Author],
     updateDbDraft :: DraftId -> UpdateDbDraft -> m (),
     updateDbPost :: PostId -> UpdateDbPost -> m (),
+    updateDbPostForDraft :: DraftId -> PostId -> m (),
     insertReturnDraft :: InsertDraft -> m DraftId,
     insertManyDraftsPics :: [(DraftId, PictureId)] -> m (),
     insertManyDraftsTags :: [(DraftId, TagId)] -> m (),
@@ -70,7 +70,6 @@ makeH conf logH =
         (selectDrafts' conn)
         (selectUsersForDraft' conn)
         (selectTags' conn)
-        (selectDaysForPost' conn)
         (selectLimDraftsForAuthor' conn)
         (selectPicsForDraft' conn)
         (selectTagsForDraft' conn)
@@ -78,6 +77,7 @@ makeH conf logH =
         (selectAuthorsForUser' conn)
         (updateDbDraft' conn)
         (updateDbPost' conn)
+        (updateDbPostForDraft' conn)
         (insertReturnDraft' conn)
         (insertManyDraftsPics' conn)
         (insertManyDraftsTags' conn)
@@ -176,7 +176,7 @@ deleteDraft h@Handle {..} usId draftId = do
 
 publishDraft :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m ResponseInfo
 publishDraft h@Handle {..} usId draftId = do
-  DraftResponse _ draftPostId auResp@(AuthorResponse auId _ _) draftName catResp draftTxt mPicId mPicUrl picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
+  DraftResponse _ draftPostId (AuthorResponse auId _ _) draftName catResp draftTxt mPicId _ picIdUrls tagResps <- selectDraftAndMakeResp h usId draftId
   case draftPostId of
     PostIdNull -> do
       day <- lift getDay
@@ -185,11 +185,11 @@ publishDraft h@Handle {..} usId draftId = do
         postId <- insertReturnPost insPost
         insertManyPostsPics (zip (repeat postId) (fmap picIdPU picIdUrls))
         insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
+        updateDbPostForDraft draftId postId
         return postId
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      ok201Helper hConf "post" postId
+      okPublishedPostHelper postId
     PostIdExist postId -> do
-      day <- catchOneSelectE hLog $ selectDaysForPost postId
       withTransactionDBE h $ do
         let updPost = UpdateDbPost draftName (fromCatResp catResp) draftTxt mPicId
         updateDbPost postId updPost
@@ -197,7 +197,8 @@ publishDraft h@Handle {..} usId draftId = do
         insertManyPostsPics (zip (repeat postId) (fmap picIdPU picIdUrls))
         insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
-      okHelper $ PostResponse {postIdP = postId, authorP = auResp, postNameP = draftName, postCreateDateP = day, postCategoryP = catResp, postTextP = draftTxt, postMainPicIdP = mPicId, postMainPicUrlP = mPicUrl, postPicsP = picIdUrls, postTagsP = tagResps}
+      okPublishedPostHelper postId
+      
 
 selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
 selectDraftAndMakeResp h@Handle {..} usId draftId = do

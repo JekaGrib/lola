@@ -1,6 +1,6 @@
 module Methods.Common where
 
-import Api.Response (CommentIdTextUserResponse (..), Created (..), CreatedUser (..), PicIdUrl (..), TagResponse (..))
+import Api.Response (CommentIdTextUserResponse (..), PublishedPost (..), Created (..), CreatedUser (..), PicIdUrl (..), TagResponse (..))
 import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -37,6 +37,10 @@ textHeader = ("Content-Type", "text/html")
 
 okHelper :: (MonadCatch m, ToJSON a) => a -> ExceptT ReqError m ResponseInfo
 okHelper toJ = return $ ResponseInfo status200 [jsonHeader] $ encode toJ
+
+okPublishedPostHelper :: (MonadCatch m) => Id -> ExceptT ReqError m ResponseInfo
+okPublishedPostHelper postId =
+  return $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost postId
 
 ok201Helper :: (MonadCatch m) => Config -> String -> Id -> ExceptT ReqError m ResponseInfo
 ok201Helper conf entity iD =

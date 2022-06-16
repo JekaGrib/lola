@@ -214,3 +214,12 @@ data CreatedUser = CreatedUser
 instance ToJSON CreatedUser where
   toJSON CreatedUser {..} =
     object ["status" .= ("created" :: Text), "user_id" .= createdUsId, "token" .= token]
+
+newtype PublishedPost = PublishedPost
+  { postIdPP :: Id
+  }
+  deriving (Eq, Show)
+
+instance ToJSON PublishedPost where
+  toJSON PublishedPost {..} =
+    object ["status" .= ("published" :: Text), "post_id" .= postIdPP]

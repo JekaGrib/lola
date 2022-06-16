@@ -23,7 +23,6 @@ handle =
     selectDraftsTest
     selectUsersForDraftTest
     selectTagsTest
-    selectDaysForPostTest
     selectLimDraftsForAuthorTest
     selectPicsForDraftTest
     selectTagsForDraftTest
@@ -31,6 +30,7 @@ handle =
     selectAuthorsForUserTest
     updateDbDraftTest
     updateDbPostTest
+    updateDbPostForDraftTest
     insertReturnDraftTest
     insertManyDraftsPicsTest
     insertManyDraftsTagsTest
@@ -77,11 +77,6 @@ selectTagsTest tIds = do
 tagsNames :: [TagName]
 tagsNames = cycle ["cats", "dogs", "birds", "cows"]
 
-selectDaysForPostTest :: PostId -> StateT [MockAction] IO [Day]
-selectDaysForPostTest pId = do
-  modify (DraftMock (SelectDaysForPost pId) :)
-  return [dayExample]
-
 dayExample :: Day
 dayExample = fromGregorian 2020 02 02
 
@@ -120,6 +115,10 @@ updateDbDraftTest dId updDr =
 updateDbPostTest :: PostId -> UpdateDbPost -> StateT [MockAction] IO ()
 updateDbPostTest pId updPs =
   modify (DraftMock (UpdatePost pId updPs) :)
+
+updateDbPostForDraftTest :: DraftId -> PostId -> StateT [MockAction] IO ()
+updateDbPostForDraftTest draftId pId =
+  modify (DraftMock (UpdatePostForDraft draftId pId) :)
 
 insertReturnDraftTest :: InsertDraft -> StateT [MockAction] IO DraftId
 insertReturnDraftTest insDr = do

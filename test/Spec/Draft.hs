@@ -3,7 +3,7 @@ module Spec.Draft where
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..))
 import Api.Request.QueryStr (GetDrafts (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), Created (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), SubCatResponse (..), SuperCatResponse (..), TagResponse (..))
+import Api.Response (AuthorResponse (..), CatResponse (..), PublishedPost (..), Created (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), SubCatResponse (..), SuperCatResponse (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -165,7 +165,6 @@ testDraft = hspec $ do
                      MakeCatRMock (SelectSubCats 9),
                      MakeCatRMock (SelectCats 3),
                      MakeCatRMock (SelectSubCats 3),
-                     DraftMock (SelectDaysForPost 7),
                      TRANSACTIONOPEN,
                      DraftMock (UpdatePost 7 (UpdateDbPost "draft" 9 "lalala" 6)),
                      DeleteManyMock (DeleteDbPicsForPost 7),
@@ -191,11 +190,12 @@ testDraft = hspec $ do
                      DraftMock (InsertReturnPost (InsertPost 7 "draft" dayExample 9 "lalala" 6)),
                      DraftMock (InsertManyPostsPics [(20, 6), (20, 9), (20, 12)]),
                      DraftMock (InsertManyPostsTags [(20, 15), (20, 18), (20, 20)]),
+                     DraftMock (UpdatePostForDraft 25 20),
                      TRANSACTIONCLOSE
                    ]
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 3 25) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/posts/20")] $ encode $ Created 20 "post")
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost 20)
     it "throw Forbidden Error if user not author" $ do
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 25 7) []
       eitherResp
@@ -254,7 +254,6 @@ testDraft = hspec $ do
                      MakeCatRMock (SelectSubCats 9),
                      MakeCatRMock (SelectCats 3),
                      MakeCatRMock (SelectSubCats 3),
-                     DraftMock (SelectDaysForPost 7),
                      TRANSACTIONOPEN,
                      DraftMock (UpdatePost 7 (UpdateDbPost "draft" 9 "lalala" 6)),
                      DeleteManyMock (DeleteDbPicsForPost 7),
@@ -282,11 +281,12 @@ testDraft = hspec $ do
                      DraftMock (InsertReturnPost (InsertPost 7 "draft" dayExample 9 "lalala" 6)),
                      DraftMock (InsertManyPostsPics [(20, 6), (20, 9), (20, 12)]),
                      DraftMock (InsertManyPostsTags [(20, 15), (20, 18), (20, 20)]),
+                     DraftMock (UpdatePostForDraft 25 20),
                      TRANSACTIONCLOSE
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/posts/20")] $ encode $ Created 20 "post")
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost 20)
   describe "workWithDrafts (ToGet)"
     $ it "work with valid DB answer"
     $ do

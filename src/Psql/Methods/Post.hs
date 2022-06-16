@@ -2,7 +2,7 @@ module Psql.Methods.Post where
 
 import Database.PostgreSQL.Simple (Connection)
 import Psql.Methods.Common
-import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
+import Psql.Selecty (Post (..), Tag (..))
 import Psql.ToQuery.Select (Select (..), Where (..), toWhere)
 import Psql.ToQuery.SelectLimit (Filter, OrderBy, SelectLim (..))
 import Types
@@ -52,11 +52,4 @@ selectUsersForPost' conn postId = do
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh
 
-selectPostInfos' :: Connection -> PostId -> IO [PostInfo]
-selectPostInfos' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  select' conn $
-    Select
-      ["a.author_id", "author_info", "post_name", "post_category_id", "post_text", "post_main_pic_id"]
-      "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      wh
+

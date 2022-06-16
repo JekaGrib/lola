@@ -9,5 +9,4 @@ data PostMock
   | SelectPicsForPost PostId
   | SelectTagsForPost PostId
   | SelectUsersForPost PostId
-  | SelectPostInfos PostId
   deriving (Eq, Show)

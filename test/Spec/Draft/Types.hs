@@ -7,7 +7,6 @@ data DraftMock
   = SelectDrafts DraftId
   | SelectUsersForDraft DraftId
   | SelectTags [TagId]
-  | SelectDaysForPost PostId
   | SelectLimDraftsForAuthor AuthorId OrderBy Page Limit
   | SelectPicsForDraft PostId
   | SelectTagsForDraft DraftId
@@ -15,6 +14,7 @@ data DraftMock
   | SelectAuthorsForUser UserId
   | UpdateDraft DraftId UpdateDbDraft
   | UpdatePost PostId UpdateDbPost
+  | UpdatePostForDraft DraftId PostId 
   | InsertReturnDraft InsertDraft
   | InsertManyDraftsPics [(DraftId, PictureId)]
   | InsertManyDraftsTags [(DraftId, TagId)]
