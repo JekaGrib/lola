@@ -24,7 +24,7 @@ checkQStr h qStr = do
 class (Show a) => ParseQueryStr a where
   parseQueryStr :: (Monad m) => QueryText -> ExceptT ReqError m a
 
-data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
+data LogIn = LogIn {userIdLI :: UserId, passwordLI :: Text}
   deriving (Show)
 
 instance ParseQueryStr LogIn where
@@ -68,7 +68,7 @@ instance ParseQueryStr CreateAdminKey where
     CreateAdminKey
       <$> parseTxtParam qStr 50 "create_admin_key"
 
-data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
+data CreateAuthor = CreateAuthor {userIdCA :: UserId, authorInfoCA :: Text}
   deriving (Show)
 
 instance ParseQueryStr CreateAuthor where
@@ -81,7 +81,7 @@ instance CheckExist CreateAuthor where
   checkExist h (CreateAuthor usId _) =
     checkExist h (UserId usId)
 
-data UpdateAuthor = UpdateAuthor {user_idUA :: Id, author_infoUA :: Text}
+data UpdateAuthor = UpdateAuthor {userIdUA :: Id, authorInfoUA :: Text}
   deriving (Show)
 
 instance ParseQueryStr UpdateAuthor where
