@@ -145,7 +145,7 @@ getDrafts h@Handle {..} usId (GetDrafts pageNum) = do
   let orderBy = ByDraftId DESC
   drafts <- catchSelE hLog $ selectLimDraftsForAuthor auId orderBy pageNum (cDraftsLimit hConf)
   draftsResps <- mapM (makeDraftResp h usId auId) drafts
-  lift $ logInfo hLog $ "Draft_ids: " ++ show (fmap draft_idD drafts) ++ " sending in response"
+  lift $ logInfo hLog $ "Draft_ids: " ++ show (fmap draftIdDR drafts) ++ " sending in response"
   okHelper $
     DraftsResponse
       { page = pageNum,

@@ -95,7 +95,7 @@ getPosts h@Handle {..} gP@(GetPosts page _ _) = do
   let orderBy = OrderList $ sortArgs ++ defOrderBy
   posts <- catchSelE hLog $ selectLimPosts filterArgs orderBy page (cPostsLimit hConf)
   resps <- mapM (makePostResponse h) posts
-  lift $ logInfo hLog $ "Post_ids: " ++ show (fmap post_idP posts) ++ " sending in response"
+  lift $ logInfo hLog $ "Post_ids: " ++ show (fmap postIdPS posts) ++ " sending in response"
   okHelper $ PostsResponse {pageP = page, postsP = resps}
 
 deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo

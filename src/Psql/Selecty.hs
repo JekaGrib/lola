@@ -16,7 +16,7 @@ instance FromRow Auth where
 
 instance Selecty Auth
 
-data Cat = Cat {cat_nameC :: Text, super_cat_idC :: CategoryId}
+data Cat = Cat {catNameC :: Text, superCatIdC :: CategoryId}
   deriving (Eq, Show)
 
 instance FromRow Cat where
@@ -25,7 +25,7 @@ instance FromRow Cat where
 
 instance Selecty Cat
 
-data Tag = Tag {tag_idT :: TagId, tag_nameT :: Text}
+data Tag = Tag {tagIdT :: TagId, tagNameT :: Text}
   deriving (Eq, Show)
 
 instance FromRow Tag where
@@ -34,7 +34,7 @@ instance FromRow Tag where
 
 instance Selecty Tag
 
-data Author = Author {author_idA :: AuthorId, author_infoA :: Text, user_idA :: UserId}
+data Author = Author {authorIdA :: AuthorId, authorInfoA :: Text, userIdA :: UserId}
   deriving (Eq, Show)
 
 instance FromRow Author where
@@ -43,7 +43,7 @@ instance FromRow Author where
 
 instance Selecty Author
 
-data Comment = Comment {comment_idC :: CommentId, user_idC :: UserId, comment_textC :: Text, post_id :: PostId}
+data Comment = Comment {commentIdC :: CommentId, userIdC :: UserId, commentTextC :: Text, postId :: PostId}
   deriving (Eq, Show)
 
 instance FromRow Comment where
@@ -52,7 +52,7 @@ instance FromRow Comment where
 
 instance Selecty Comment
 
-data User = User {f_nameU :: Text, l_nameU :: Text, pic_idU :: PictureId, user_create_dateU :: Day}
+data User = User {firstNameU :: Text, lastNameU :: Text, picIdU :: PictureId, userCreateDateU :: Day}
   deriving (Eq, Show)
 
 instance FromRow User where
@@ -61,7 +61,7 @@ instance FromRow User where
 
 instance Selecty User
 
-data PostInfo = PostInfo {author_idPI :: AuthorId, author_infoPI :: Text, post_namePI :: Text, post_cat_idPI :: CategoryId, post_textPI :: Text, post_pic_idPI :: PictureId}
+data PostInfo = PostInfo {authorIdPI :: AuthorId, authorInfoPI :: Text, postNamePI :: Text, postCatIdPI :: CategoryId, postTextPI :: Text, postPicIdPI :: PictureId}
   deriving (Eq, Show)
 
 instance FromRow PostInfo where
@@ -70,7 +70,7 @@ instance FromRow PostInfo where
 
 instance Selecty PostInfo
 
-data Draft = Draft {draft_idD :: DraftId, author_infoD :: Text, post_idD :: PostId, draft_nameD :: Text, draft_cat_idD :: CategoryId, draft_textD :: Text, draft_pic_idD :: PictureId}
+data Draft = Draft {draftIdDR :: DraftId, authorInfoDR :: Text, postIdDR :: PostId, draftNameDR :: Text, draftCatIdDR :: CategoryId, draftTextDR :: Text, draftPicIdDR :: PictureId}
   deriving (Eq, Show)
 
 instance FromRow Draft where
@@ -79,7 +79,7 @@ instance FromRow Draft where
 
 instance Selecty Draft
 
-data Post = Post {post_idP :: PostId, author_idP :: AuthorId, author_infoP :: Text, user_idP :: UserId, post_nameP :: Text, post_create_dateU :: Day, post_cat_idP :: CategoryId, post_textP :: Text, post_pic_idP :: PictureId}
+data Post = Post {postIdPS :: PostId, authorIdPS :: AuthorId, authorInfoPS :: Text, userIdPS :: UserId, postNamePS :: Text, postCreateDatePS :: Day, postCatIdPS :: CategoryId, postTextPS :: Text, postPicIdPS :: PictureId}
   deriving (Eq, Show)
 
 instance FromRow Post where

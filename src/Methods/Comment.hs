@@ -96,7 +96,7 @@ getComments :: (MonadCatch m) => Handle m -> GetComments -> ExceptT ReqError m R
 getComments Handle {..} (GetComments postIdParam pageNum) = do
   let orderBy = ByCommentId DESC
   comments <- catchSelE hLog $ selectLimCommentsForPost postIdParam orderBy pageNum (cCommentLimit hConf)
-  lift $ logInfo hLog $ "Comments_id: " ++ show (fmap comment_idC comments) ++ " sending in response"
+  lift $ logInfo hLog $ "Comments_id: " ++ show (fmap commentIdC comments) ++ " sending in response"
   okHelper $ CommentsResponse {pageCSR = pageNum, postIdCSR = postIdParam, commentsCSR = fmap inCommentResp comments}
 
 updateComment :: (MonadCatch m) => Handle m -> UserId -> CommentId -> UpdateComment -> ExceptT ReqError m ResponseInfo
