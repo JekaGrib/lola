@@ -9,6 +9,7 @@ import qualified Data.Configurator as C
 import qualified Data.Configurator.Types as C
 import Data.List ((\\))
 import Data.String (fromString)
+import Data.Text (unpack)
 import Data.Time.LocalTime (getZonedTime)
 import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
@@ -82,119 +83,66 @@ pullConfig =
     `E.catch` (\e -> print (e :: C.KeyError) >> return C.empty)
     `E.catch` (\e -> print (e :: E.IOException) >> return C.empty)
 
+lookUpConf :: C.Configured a => C.Config -> C.Name -> IO (Maybe a)
+lookUpConf conf name = 
+  C.lookup conf name 
+      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe a))
+      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe a))
+
+parseConf :: C.Configured a => C.Config -> C.Name -> IO a -> IO a
+parseConf conf name orToDo =
+  lookUpConf conf name >>=  maybe orToDo pure 
+
+parseStingConf :: C.Config -> C.Name -> IO String
+parseStingConf conf name = parseConf conf name $ inputString  (unpack  name)
+
+parseNumConf :: (C.Configured a, Num a, Read a) => C.Config -> C.Name -> IO a
+parseNumConf conf name = parseConf conf name $ inputNum  (unpack  name)
+
+parseLimitConf :: C.Config -> C.Name -> IO Limit
+parseLimitConf conf name =
+  lookUpConf conf name >>=  maybe orToDoIfNothing orToDoIfJust 
+    where
+      orToDoIfJust num = checkLimitOr num $ inputNum  (unpack  name)
+      orToDoIfNothing = do
+        num <- inputNum  (unpack  name)
+        orToDoIfJust num
+
+
 parseConfServerHost :: C.Config -> IO String
-parseConfServerHost conf = do
-  str <-
-    (C.lookup conf "Server.host" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputString "Server.host"
-    Just x -> return x
+parseConfServerHost conf = parseStingConf conf "Server.host"
 
 parseConfServerPort :: C.Config -> IO Port
-parseConfServerPort conf = do
-  str <-
-    (C.lookup conf "Server.port" :: IO (Maybe Port))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Port))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Port))
-  case str of
-    Nothing -> inputNum "Server.port"
-    Just x -> return x
+parseConfServerPort conf = parseNumConf conf "Server.port"
 
 parseConfDBHost :: C.Config -> IO String
-parseConfDBHost conf = do
-  str <-
-    (C.lookup conf "DataBase.host" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputString "DataBase.host"
-    Just x -> return x
+parseConfDBHost conf = parseStingConf conf "DataBase.host"
 
 parseConfDBport :: C.Config -> IO Word16
-parseConfDBport conf = do
-  str <-
-    (C.lookup conf "DataBase.port" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> inputNum "DataBase.port"
-    Just x -> return (fromInteger x)
+parseConfDBport conf = fromInteger <$> parseNumConf conf "DataBase.port"
 
 parseConfDBUser :: C.Config -> IO String
-parseConfDBUser conf = do
-  str <-
-    (C.lookup conf "DataBase.user" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputString "DataBase.user"
-    Just x -> return x
+parseConfDBUser conf = parseStingConf conf "DataBase.user"
 
 parseConfDBname :: C.Config -> IO String
-parseConfDBname conf = do
-  str <-
-    (C.lookup conf "DataBase.dbname" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputString "DataBase.dbname"
-    Just x -> return x
+parseConfDBname conf = parseStingConf conf "DataBase.dbname"
 
 parseConfDBpwd :: C.Config -> IO String
-parseConfDBpwd conf = do
-  str <-
-    (C.lookup conf "DataBase.password" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case str of
-    Nothing -> inputString "DataBase.password"
-    Just x -> return x
+parseConfDBpwd conf = parseStingConf conf "DataBase.password"
 
 parseConfCommentLimit :: C.Config -> IO Limit
-parseConfCommentLimit conf = do
-  str <-
-    (C.lookup conf "LimitNumbers.commentNumberLimit" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      num <- inputNum "commentNumberLimit"
-      checkLimitOr num (inputNum "commentNumberLimit")
-    Just num -> checkLimitOr num (inputNum "commentNumberLimit")
+parseConfCommentLimit conf = parseLimitConf conf "LimitNumbers.commentNumberLimit"
 
 parseConfDraftsLimit :: C.Config -> IO Limit
-parseConfDraftsLimit conf = do
-  str <-
-    (C.lookup conf "LimitNumbers.draftNumberLimit" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      num <- inputNum "draftNumberLimit"
-      checkLimitOr num (inputNum "draftNumberLimit")
-    Just num -> checkLimitOr num (inputNum "draftNumberLimit")
+parseConfDraftsLimit conf = parseLimitConf conf "LimitNumbers.draftNumberLimit"
 
 parseConfPostsLimit :: C.Config -> IO Limit
-parseConfPostsLimit conf = do
-  str <-
-    (C.lookup conf "LimitNumbers.postNumberLimit" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      num <- inputNum "postNumberLimit"
-      checkLimitOr num (inputNum "postNumberLimit")
-    Just num -> checkLimitOr num (inputNum "postNumberLimit")
+parseConfPostsLimit conf = parseLimitConf conf "LimitNumbers.postNumberLimit"
 
 parseConfPrio :: C.Config -> IO Priority
 parseConfPrio conf = do
-  str <-
-    (C.lookup conf "log.logLevel" :: IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe String))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe String))
-  case fmap (map toUpper) str >>= readMaybe of
+  maybeStr <- lookUpConf conf "log.logLevel"
+  case fmap (map toUpper) maybeStr >>= readMaybe of
     Just p -> pure p
     _ -> inputLogLevel
 
@@ -227,116 +175,61 @@ inputOrCreateDefUsId conn defPicId = inputIdOr "defaultUserId" (createNewDefUser
 inputOrCreateDefAuthId :: Connection -> UserId -> IO AuthorId
 inputOrCreateDefAuthId conn defUsId = inputIdOr "defaultAuthorId" (createNewDefAuthor conn defUsId)
 
-parseConfDefPicId :: C.Config -> Connection -> IO PictureId
-parseConfDefPicId conf conn = do
-  str <-
-    (C.lookup conf "defaultValues.defaultPictureId" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
+parseConfDefId :: Connection -> C.Config -> C.Name -> (Connection -> IO Id) -> (Connection -> Id -> IO Id) -> IO Id
+parseConfDefId conn conf name inputOrCreateFunc checkExistFunc = do
+  maybeInteger <- lookUpConf conf name
+  case maybeInteger of
     Nothing -> do
-      iD <- inputOrCreateDefPicId conn
-      checkExistId
-        conn
+      iD <- inputOrCreateFunc conn
+      checkExistFunc conn iD
+    Just num -> do
+      iD <- checkBigIntOr num $ inputOrCreateFunc conn
+      checkExistFunc conn iD
+
+parseConfDefPicId :: C.Config -> Connection -> IO PictureId
+parseConfDefPicId conf conn = parseConfDefId conn conf name inputOrCreateFunc checkExistFunc
+  where
+    name = "defaultValues.defaultPictureId"
+    inputOrCreateFunc = inputOrCreateDefPicId 
+    checkExistFunc = checkExistId (inputOrCreateFunc conn)
         "pics"
         "pic_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefPicId conn)
-    Just x -> do
-      iD <- checkBigIntOr x $ inputOrCreateDefPicId conn
-      checkExistId
-        conn
-        "pics"
-        "pic_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefPicId conn)
 
 parseConfDefUsId :: C.Config -> Connection -> PictureId -> IO UserId
-parseConfDefUsId conf conn defPicId = do
-  str <-
-    (C.lookup conf "defaultValues.defaultUserId" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      iD <- inputOrCreateDefUsId conn defPicId
-      checkExistId
-        conn
+parseConfDefUsId conf conn defPicId = parseConfDefId conn conf name inputOrCreateFunc checkExistFunc
+  where
+    name = "defaultValues.defaultUserId"
+    inputOrCreateFunc conn' = inputOrCreateDefUsId conn' defPicId
+    checkExistFunc = checkExistId (inputOrCreateFunc conn)
         "users"
         "user_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefUsId conn defPicId)
-    Just x -> do
-      iD <- checkBigIntOr x $ inputOrCreateDefUsId conn defPicId
-      checkExistId
-        conn
-        "users"
-        "user_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefUsId conn defPicId)
 
 parseConfDefAuthId :: C.Config -> Connection -> UserId -> IO AuthorId
-parseConfDefAuthId conf conn defUsId = do
-  str <-
-    (C.lookup conf "defaultValues.defaultAuthorId" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      iD <- inputOrCreateDefAuthId conn defUsId
-      checkExistId
-        conn
+parseConfDefAuthId conf conn defUsId = parseConfDefId conn conf name inputOrCreateFunc checkExistFunc
+  where
+    name = "defaultValues.defaultAuthorId"
+    inputOrCreateFunc conn' = inputOrCreateDefAuthId conn' defUsId
+    checkExistFunc = checkExistId (inputOrCreateFunc conn)
         "authors"
         "author_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefAuthId conn defUsId)
-    Just x -> do
-      iD <- checkBigIntOr x $ inputOrCreateDefAuthId conn defUsId
-      checkExistId
-        conn
-        "authors"
-        "author_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefAuthId conn defUsId)
 
 parseConfDefCatId :: C.Config -> Connection -> IO CategoryId
-parseConfDefCatId conf conn = do
-  str <-
-    (C.lookup conf "defaultValues.defaultCategoryId" :: IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: C.KeyError -> IO (Maybe Integer))
-      `E.catch` ((\_ -> return Nothing) :: E.IOException -> IO (Maybe Integer))
-  case str of
-    Nothing -> do
-      iD <- inputOrCreateDefCatId conn
-      checkExistId
-        conn
+parseConfDefCatId conf conn = parseConfDefId conn conf name inputOrCreateFunc checkExistFunc
+  where
+    name = "defaultValues.defaultCategoryId"
+    inputOrCreateFunc = inputOrCreateDefCatId 
+    checkExistFunc = checkExistId (inputOrCreateFunc conn)
         "categories"
         "category_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefCatId conn)
-    Just x -> do
-      iD <- checkBigIntOr x $ inputOrCreateDefCatId conn
-      checkExistId
-        conn
-        "categories"
-        "category_id=?"
-        (Id iD)
-        (return iD)
-        (inputOrCreateDefCatId conn)
 
-checkExistId :: Connection -> String -> String -> DbValue -> IO Id -> IO Id -> IO Id
-checkExistId conn table where' value ifTrue ifFalse = do
+      
+checkExistId :: IO Id -> Table -> String -> Connection -> Id -> IO Id
+checkExistId  ifFalse table where' conn iD = do
+  let value = Id iD
   let exi = Exists table (WherePair where' value)
   onlyChecks <- query conn (toQ exi) (toVal exi)
   case onlyChecks of
-    [Only True] -> ifTrue
+    [Only True] -> return iD
     [Only False] -> do
       putStrLn $ (where' \\ "=?") ++ ": " ++ show value ++ " doesn`t exist"
       ifFalse
