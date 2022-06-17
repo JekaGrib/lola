@@ -100,7 +100,7 @@ updateDbPost' conn postId (UpdateDbPost name catId txt picId) = do
       wh = WherePair "post_id=?" (Id postId)
   updateInDb' conn (Update "posts" [setName, setCat, setTxt, setPic] wh)
 
-updateDbPostForDraft' :: Connection -> DraftId -> PostId -> IO () 
+updateDbPostForDraft' :: Connection -> DraftId -> PostId -> IO ()
 updateDbPostForDraft' conn draftId postId = do
   let set = SetPair "post_id=?" (Id postId)
       wh = WherePair "draft_id=?" (Id draftId)

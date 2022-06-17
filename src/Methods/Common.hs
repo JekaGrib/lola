@@ -1,6 +1,6 @@
 module Methods.Common where
 
-import Api.Response (CommentIdTextUserResponse (..), PublishedPost (..), Created (..), CreatedUser (..), PicIdUrl (..), TagResponse (..))
+import Api.Response (CommentIdTextUserResponse (..), Created (..), CreatedUser (..), PicIdUrl (..), PublishedPost (..), TagResponse (..))
 import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)

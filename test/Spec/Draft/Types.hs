@@ -14,7 +14,7 @@ data DraftMock
   | SelectAuthorsForUser UserId
   | UpdateDraft DraftId UpdateDbDraft
   | UpdatePost PostId UpdateDbPost
-  | UpdatePostForDraft DraftId PostId 
+  | UpdatePostForDraft DraftId PostId
   | InsertReturnDraft InsertDraft
   | InsertManyDraftsPics [(DraftId, PictureId)]
   | InsertManyDraftsTags [(DraftId, TagId)]

@@ -71,5 +71,3 @@ selectUsersForPostTest :: PostId -> StateT [MockAction] IO [UserId]
 selectUsersForPostTest pId = do
   modify (PostMock (SelectUsersForPost pId) :)
   return [3]
-
-

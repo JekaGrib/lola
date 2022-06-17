@@ -198,7 +198,6 @@ publishDraft h@Handle {..} usId draftId = do
         insertManyPostsTags (zip (repeat postId) (fmap tagIdTR tagResps))
       lift $ logInfo hLog $ "Draft_id: " ++ show draftId ++ " published as post_id: " ++ show postId
       okPublishedPostHelper postId
-      
 
 selectDraftAndMakeResp :: (MonadCatch m) => Handle m -> UserId -> DraftId -> ExceptT ReqError m DraftResponse
 selectDraftAndMakeResp h@Handle {..} usId draftId = do

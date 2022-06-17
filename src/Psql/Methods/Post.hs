@@ -51,5 +51,3 @@ selectUsersForPost' conn postId = do
       ["user_id"]
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh
-
-
