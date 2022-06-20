@@ -8,7 +8,11 @@ import Network.HTTP.Types (StdMethod (..))
 import TryRead (getTxtstart, tryReadResourseId)
 import Types
 
-parseEndPoint :: (MonadCatch m) => StdMethod -> [Text] -> ExceptT ReqError m EndPoint
+parseEndPoint ::
+  (MonadCatch m) =>
+  StdMethod ->
+  [Text] ->
+  ExceptT ReqError m EndPoint
 parseEndPoint stdMeth path = do
   resourses <- parsePath path
   toEP (stdMeth, resourses)
@@ -71,7 +75,10 @@ toEP (stdMeth, resourses) = case (stdMeth, resourses) of
   (GET, [UserIdR iD]) -> return $ UserEP (ToGet iD)
   (PUT, [UserIdR iD]) -> return $ UserEP (ToPut iD)
   (DELETE, [UserIdR iD]) -> return $ UserEP (ToDelete iD)
-  (x, y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x, y)
+  (x, y) ->
+    throwE
+      $ ResourseNotExistError
+      $ "Unknown method-path combination: " ++ show (x, y)
 
 data Resourse
   = AdminR
@@ -124,5 +131,9 @@ toResourseId "tags" idTxt = TagIdR <$> parseResourseId "tag" idTxt
 toResourseId "users" idTxt = UserIdR <$> parseResourseId "user" idTxt
 toResourseId txt _ = throwE $ ResourseNotExistError $ getTxtstart txt
 
-parseResourseId :: (MonadCatch m) => ResourseName -> ResourseIdText -> ExceptT ReqError m Id
+parseResourseId ::
+  (MonadCatch m) =>
+  ResourseName ->
+  ResourseIdText ->
+  ExceptT ReqError m Id
 parseResourseId resName = tryReadResourseId (append resName "_id")

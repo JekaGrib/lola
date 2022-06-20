@@ -1,6 +1,11 @@
 module Methods.Admin where
 
-import Api.Request.QueryStr (CreateAdminKey (..), CreateUser (..), checkQStr, parseQueryStr)
+import Api.Request.QueryStr
+  ( CreateAdminKey (..),
+    CreateUser (..),
+    checkQStr,
+    parseQueryStr,
+  )
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -37,13 +42,21 @@ makeH conf logH =
         generateTokenKey'
         (Methods.Common.Exist.makeH conf)
 
-workWithAdmin :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
+workWithAdmin ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  ExceptT ReqError m ResponseInfo
 workWithAdmin h@Handle {..} qStr = do
   hideErr $ lift $ logInfo hLog "Create admin command"
   checkAdminKey h qStr
   checkQStr hExist qStr >>= createAdmin h
 
-createAdmin :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
+createAdmin ::
+  (MonadCatch m) =>
+  Handle m ->
+  CreateUser ->
+  ExceptT ReqError m ResponseInfo
 createAdmin Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   day <- lift getDay
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam

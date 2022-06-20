@@ -23,7 +23,11 @@ makeH conf =
         conf
         (isExist' conn)
 
-isExistResourseE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
+isExistResourseE ::
+  (MonadCatch m) =>
+  Handle m ->
+  UncheckedExId ->
+  ExceptT ReqError m ()
 isExistResourseE h iD = do
   isEx <- catchDbErrE $ isExist h iD
   unless isEx

@@ -59,7 +59,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithCats :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithCats ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithCats h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -80,9 +85,15 @@ workWithCats h@Handle {..} qStr meth =
       tokenAdminAuth hAuth qStr
       isExistResourseE hExist (CategoryId catId)
       deleteCategory h catId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for categories resourse: " ++ show meth
+    _ ->
+      throwE $ ResourseNotExistError $
+        "Wrong method for categories resourse: " ++ show meth
 
-createCategory :: (MonadCatch m) => Handle m -> CreateCategory -> ExceptT ReqError m ResponseInfo
+createCategory ::
+  (MonadCatch m) =>
+  Handle m ->
+  CreateCategory ->
+  ExceptT ReqError m ResponseInfo
 createCategory Handle {..} (CreateCategory catNameParam Nothing) = do
   catId <- catchInsertReturnE hLog $ insertReturnCat catNameParam
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " created"
@@ -92,13 +103,24 @@ createCategory Handle {..} (CreateCategory catNameParam (Just superCatIdParam)) 
   lift $ logInfo hLog $ "Sub_Category_id: " ++ show catId ++ " created"
   ok201Helper hConf "category" catId
 
-getCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
+getCategory ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m ResponseInfo
 getCategory Handle {..} catId = do
   catResp <- makeCatResp hCatResp catId
-  lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " sending in response"
+  lift $ logInfo hLog $
+    "Category_id: " ++ show catId
+      ++ " sending in response"
   okHelper catResp
 
-updateCategory :: (MonadCatch m) => Handle m -> CategoryId -> UpdateCategory -> ExceptT ReqError m ResponseInfo
+updateCategory ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  UpdateCategory ->
+  ExceptT ReqError m ResponseInfo
 updateCategory h@Handle {..} catId (UpdateCategory catNameParam maybeSuperCatIdParam) = do
   case maybeSuperCatIdParam of
     Just superCatIdParam -> do
@@ -110,7 +132,11 @@ updateCategory h@Handle {..} catId (UpdateCategory catNameParam maybeSuperCatIdP
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " updated."
   okHelper catResp
 
-deleteCategory :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m ResponseInfo
+deleteCategory ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m ResponseInfo
 deleteCategory h@Handle {..} catId = do
   allSubCats <- findAllSubCats h catId
   let allCats = catId : allSubCats
@@ -121,15 +147,24 @@ deleteCategory h@Handle {..} catId = do
   lift $ logInfo hLog $ "Category_id: " ++ show catId ++ " deleted."
   ok204Helper
 
-checkRelationCats :: (MonadCatch m) => Handle m -> CategoryId -> CategoryId -> ExceptT ReqError m ()
+checkRelationCats ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  CategoryId ->
+  ExceptT ReqError m ()
 checkRelationCats h catId superCatId
-  | catId == superCatId = throwE $ BadReqError $ "super_category_id: " ++ show superCatId ++ " equal to category_id."
+  | catId == superCatId =
+    throwE $ BadReqError $
+      "super_category_id: " ++ show superCatId ++ " equal to category_id."
   | otherwise = do
     allSubCats <- findAllSubCats h catId
     when (superCatId `elem` allSubCats)
       $ throwE
       $ BadReqError
-      $ "super_category_id: " ++ show superCatId ++ " is subCategory of category_id: " ++ show catId
+      $ "super_category_id: " ++ show superCatId
+        ++ " is subCategory of category_id: "
+        ++ show catId
 
 findAllSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
 findAllSubCats h@Handle {..} catId = do

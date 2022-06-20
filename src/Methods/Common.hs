@@ -1,6 +1,13 @@
 module Methods.Common where
 
-import Api.Response (CommentIdTextUserResponse (..), Created (..), CreatedUser (..), PicIdUrl (..), PublishedPost (..), TagResponse (..))
+import Api.Response
+  ( CommentIdTextUserResponse (..),
+    Created (..),
+    CreatedUser (..),
+    PicIdUrl (..),
+    PublishedPost (..),
+    TagResponse (..),
+  )
 import Conf (Config (..))
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
@@ -16,18 +23,35 @@ import Data.Time.Calendar (Day)
 import Data.Time.LocalTime (getZonedTime, localDay, zonedTimeToLocalTime)
 import Error (ReqError (..), catchDbErr)
 import Logger
-import Network.HTTP.Types (Header, ResponseHeaders, Status, hLocation, status200, status201, status204)
+import Network.HTTP.Types
+  ( Header,
+    ResponseHeaders,
+    Status,
+    hLocation,
+    status200,
+    status201,
+    status204,
+  )
 import Psql.Selecty (Comment (..), Tag (..))
 import System.Random (getStdGen, newStdGen, randomRs)
 import Types
 
 -- common logic functions:
 
-data ResponseInfo = ResponseInfo {resStatus :: Status, resHeaders :: ResponseHeaders, resBS :: BSL.ByteString}
+data ResponseInfo = ResponseInfo
+  { resStatus :: Status,
+    resHeaders :: ResponseHeaders,
+    resBS :: BSL.ByteString
+  }
   deriving (Eq)
 
 instance Show ResponseInfo where
-  show (ResponseInfo s h b) = "ResponseInfo Status: " ++ show s ++ ". Headers: " ++ show h ++ ". ByteString: " ++ show b
+  show (ResponseInfo s h b) =
+    "ResponseInfo Status: " ++ show s
+      ++ ". Headers: "
+      ++ show h
+      ++ ". ByteString: "
+      ++ show b
 
 jsonHeader :: Header
 jsonHeader = ("Content-Type", "application/json; charset=utf-8")
@@ -42,15 +66,27 @@ okPublishedPostHelper :: (MonadCatch m) => Id -> ExceptT ReqError m ResponseInfo
 okPublishedPostHelper postId =
   return $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost postId
 
-ok201Helper :: (MonadCatch m) => Config -> String -> Id -> ExceptT ReqError m ResponseInfo
+ok201Helper ::
+  (MonadCatch m) =>
+  Config ->
+  String ->
+  Id ->
+  ExceptT ReqError m ResponseInfo
 ok201Helper conf entity iD =
-  return $ ResponseInfo status201 [jsonHeader, (hLocation, url entity iD)] $ encode $ Created iD entity
+  return $ ResponseInfo status201 [jsonHeader, (hLocation, url entity iD)] $ encode $
+    Created iD entity
   where
     url name number = makeMyUrl conf (toPlural name ++ "/" ++ show number)
 
-ok201UserHelper :: (MonadCatch m) => Config -> Text -> Id -> ExceptT ReqError m ResponseInfo
+ok201UserHelper ::
+  (MonadCatch m) =>
+  Config ->
+  Text ->
+  Id ->
+  ExceptT ReqError m ResponseInfo
 ok201UserHelper conf token iD =
-  return $ ResponseInfo status201 [jsonHeader, (hLocation, url iD)] $ encode $ CreatedUser iD token
+  return $ ResponseInfo status201 [jsonHeader, (hLocation, url iD)] $ encode $
+    CreatedUser iD token
   where
     url number = makeMyUrl conf ("users/" ++ show number)
 
@@ -80,7 +116,11 @@ catchOneSelectE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT Req
 catchOneSelectE logH m =
   catchSelE logH m >>= checkOneE
 
-catchMaybeOneSelectE :: (MonadCatch m, Show a) => LogHandle m -> m [a] -> ExceptT ReqError m (Maybe a)
+catchMaybeOneSelectE ::
+  (MonadCatch m, Show a) =>
+  LogHandle m ->
+  m [a] ->
+  ExceptT ReqError m (Maybe a)
 catchMaybeOneSelectE logH m =
   catchSelE logH m >>= checkMaybeOneE
 
@@ -137,13 +177,20 @@ txtSha1 :: Text -> Text
 txtSha1 = pack . strSha1 . unpack
 
 inCommentResp :: Comment -> CommentIdTextUserResponse
-inCommentResp (Comment idComment usId txt _) = CommentIdTextUserResponse idComment txt usId
+inCommentResp (Comment idComment usId txt _) =
+  CommentIdTextUserResponse idComment txt usId
 
 inTagResp :: Tag -> TagResponse
 inTagResp (Tag tagId tagName) = TagResponse tagId tagName
 
 makeMyPicUrl :: Config -> PictureId -> Text
-makeMyPicUrl conf picId = pack $ "http://" ++ cServerHost conf ++ ":" ++ show (cServerPort conf) ++ "/pictures/" ++ show picId
+makeMyPicUrl conf picId =
+  pack $
+    "http://" ++ cServerHost conf
+      ++ ":"
+      ++ show (cServerPort conf)
+      ++ "/pictures/"
+      ++ show picId
 
 inPicIdUrl :: Config -> PictureId -> PicIdUrl
 inPicIdUrl conf picId = PicIdUrl picId (makeMyPicUrl conf picId)
@@ -152,7 +199,13 @@ numToTxt :: Id -> Text
 numToTxt = pack . show
 
 makeMyUrl :: Config -> String -> ByteString
-makeMyUrl conf str = fromString $ "http://" ++ cServerHost conf ++ ":" ++ show (cServerPort conf) ++ "/" ++ str
+makeMyUrl conf str =
+  fromString $
+    "http://" ++ cServerHost conf
+      ++ ":"
+      ++ show (cServerPort conf)
+      ++ "/"
+      ++ str
 
 toPlural :: String -> String
 toPlural "category" = "categories"

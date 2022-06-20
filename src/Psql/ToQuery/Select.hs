@@ -9,7 +9,11 @@ data Select
 
 instance ToStr Select where
   toStr (Select keys table where') =
-    "SELECT " ++ intercalate ", " keys ++ " FROM " ++ table ++ " WHERE " ++ toStr where'
+    "SELECT " ++ intercalate ", " keys
+      ++ " FROM "
+      ++ table
+      ++ " WHERE "
+      ++ toStr where'
 
 instance ToVal Select where
   toVal (Select _ _ where') = toVal where'

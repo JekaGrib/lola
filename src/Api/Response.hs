@@ -3,8 +3,18 @@
 
 module Api.Response where
 
-import Api.AesonOption (optionsEraseSuffix, optionsSnakeCase, optionsSnakeCasePreEraseSuffix)
-import Data.Aeson ((.=), ToJSON (toEncoding, toJSON), genericToEncoding, genericToJSON, object)
+import Api.AesonOption
+  ( optionsEraseSuffix,
+    optionsSnakeCase,
+    optionsSnakeCasePreEraseSuffix,
+  )
+import Data.Aeson
+  ( (.=),
+    ToJSON (toEncoding, toJSON),
+    genericToEncoding,
+    genericToJSON,
+    object,
+  )
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
@@ -25,13 +35,15 @@ instance ToJSON UserResponse where
   toJSON = genericToJSON optionsSnakeCase
   toEncoding = genericToEncoding optionsSnakeCase
 
-newtype TokenResponse = TokenResponse {tokenTR :: Text} deriving (Eq, Show, Generic)
+newtype TokenResponse = TokenResponse {tokenTR :: Text}
+  deriving (Eq, Show, Generic)
 
 instance ToJSON TokenResponse where
   toJSON = genericToJSON $ optionsEraseSuffix "TR"
   toEncoding = genericToEncoding $ optionsEraseSuffix "TR"
 
-data OkInfoResponse = OkInfoResponse {okOI :: Bool, infoOI :: Text} deriving (Eq, Show, Generic)
+data OkInfoResponse = OkInfoResponse {okOI :: Bool, infoOI :: Text}
+  deriving (Eq, Show, Generic)
 
 instance ToJSON OkInfoResponse where
   toJSON = genericToJSON $ optionsEraseSuffix "OI"

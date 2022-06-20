@@ -38,7 +38,9 @@ testAuth = hspec $ do
         `shouldBe` [LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO]
       eitherResp <- evalStateT (runExceptT $ tokenAdminAuth handle0 qStr3) []
       eitherResp
-        `shouldBe` Left (SecretError "SecretTokenError \"INVALID token. Wrong token key or user_id\"")
+        `shouldBe` ( Left $
+                       SecretError "SecretTokenError \"INVALID token. Wrong token key or user_id\""
+                   )
   describe "tokenUserAuth" $ do
     it "work with Admin token" $ do
       state <- execStateT (runExceptT $ tokenUserAuth handle0 qStr1) []

@@ -83,7 +83,10 @@ dayExample = fromGregorian 2020 02 02
 selectLimDraftsForAuthorTest :: AuthorId -> OrderBy -> Page -> Limit -> StateT [MockAction] IO [Draft]
 selectLimDraftsForAuthorTest aId ordBy page lim = do
   modify (DraftMock (SelectLimDraftsForAuthor aId ordBy page lim) :)
-  return [Draft 1 "author" 7 "draft" 15 "lalala" 6, Draft 5 "author" 0 "draft5" 24 "lalala" 4, Draft 12 "author" 0 "draft12" 17 "lalala" 13]
+  let draft1 = Draft 1 "author" 7 "draft" 15 "lalala" 6
+      draft5 = Draft 5 "author" 0 "draft5" 24 "lalala" 4
+      draft12 = Draft 12 "author" 0 "draft12" 17 "lalala" 13
+  return [draft1, draft5, draft12]
 
 selectPicsForDraftTest :: PostId -> StateT [MockAction] IO [PictureId]
 selectPicsForDraftTest pId = do

@@ -52,7 +52,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithTags :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithTags ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithTags h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -73,9 +78,15 @@ workWithTags h@Handle {..} qStr meth =
       tokenAdminAuth hAuth qStr
       isExistResourseE hExist (TagId tagId)
       deleteTag h tagId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for tags resourse: " ++ show meth
+    _ ->
+      throwE $ ResourseNotExistError $
+        "Wrong method for tags resourse: " ++ show meth
 
-createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
+createTag ::
+  (Monad m, MonadCatch m) =>
+  Handle m ->
+  CreateTag ->
+  ExceptT ReqError m ResponseInfo
 createTag Handle {..} (CreateTag tagNameParam) = do
   tagId <- catchInsertReturnE hLog $ insertReturnTag tagNameParam
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " created"
@@ -87,7 +98,12 @@ getTag Handle {..} tagId = do
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " sending in response"
   okHelper $ TagResponse tagId tagName
 
-updateTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> UpdateTag -> ExceptT ReqError m ResponseInfo
+updateTag ::
+  (Monad m, MonadCatch m) =>
+  Handle m ->
+  TagId ->
+  UpdateTag ->
+  ExceptT ReqError m ResponseInfo
 updateTag Handle {..} tagId (UpdateTag tagNameParam) = do
   catchUpdE hLog $ updateDbTag tagNameParam tagId
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " updated"

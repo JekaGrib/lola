@@ -34,4 +34,13 @@ testMakeCatResp = hspec
                    ]
       eitherResp <- evalStateT (runExceptT $ makeCatResp handle 16) []
       eitherResp
-        `shouldBe` (Right $ Sub $ SubCatResponse 16 "p" [] $ Sub $ SubCatResponse 12 "l" [16, 17] $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6])
+        `shouldBe` ( Right
+                       $ Sub
+                       $ SubCatResponse 16 "p" []
+                       $ Sub
+                       $ SubCatResponse 12 "l" [16, 17]
+                       $ Sub
+                       $ SubCatResponse 4 "d" [11, 12]
+                       $ Super
+                       $ SuperCatResponse 1 "a" [4, 5, 6]
+                   )

@@ -19,5 +19,13 @@ insertReturnUser' conn (InsertUser pwd fName lName picId day bool tokenKey) = do
       insPairDay = InsertPair "user_create_date" (Day day)
       insPairAdmin = InsertPair "admin" (Bool bool)
       insPairKey = InsertPair "token_key" (Str tokenKey)
-      insPairs = [insPairPwd, insPairFirstName, insPairLastName, insPairPic, insPairDay, insPairAdmin, insPairKey]
+      insPairs =
+        [ insPairPwd,
+          insPairFirstName,
+          insPairLastName,
+          insPairPic,
+          insPairDay,
+          insPairAdmin,
+          insPairKey
+        ]
   insertReturn' conn (InsertRet "users" insPairs "user_id")

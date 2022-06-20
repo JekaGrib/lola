@@ -1,4 +1,16 @@
-module Error (MigrationException (..), ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
+module Error
+  ( MigrationException (..),
+    ReqError (..),
+    logOnErr,
+    hideErr,
+    hideLogInErr,
+    hideTokenErr,
+    catchDbErr,
+    UnexpectedDbOutPutException (..),
+    addToBadReqErr,
+    hideResourseNotExistErr,
+  )
+where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)
@@ -20,7 +32,9 @@ data ReqError
   | ReqBodyTooLargeError String
   deriving (Eq, Show)
 
-data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
+data UnexpectedDbOutPutException
+  = UnexpectedEmptyDbOutPutException
+  | UnexpectedMultipleDbOutPutException
   deriving (Eq, Show)
 
 instance Exception UnexpectedDbOutPutException
@@ -55,9 +69,16 @@ addToBadReqErr addStr (BadReqError str) = throwE $ BadReqError $ str ++ addStr
 addToBadReqErr _ e = throwE e
 
 catchDbErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr
+catchDbErr =
+  catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr
 
-cathSqlErr, cathFormatErr, cathQueryErr, cathResultErr, catchIOErr, catchDbOutputErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+cathSqlErr,
+  cathFormatErr,
+  cathQueryErr,
+  cathResultErr,
+  catchIOErr,
+  catchDbOutputErr ::
+    (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 cathSqlErr m =
   m
     `catch` ( \e ->

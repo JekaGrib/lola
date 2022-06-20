@@ -49,9 +49,12 @@ instance ToStr OrderBy where
 
 instance AddJoinTable OrderBy where
   addJoinTable (ByPostPicsNumb _) =
-    " JOIN (SELECT post_id, count (post_id) AS count_pics FROM postspics GROUP BY post_id) AS counts ON posts.post_id=counts.post_id"
+    " JOIN (SELECT post_id, count (post_id) AS count_pics\
+    \ FROM postspics GROUP BY post_id) AS counts\
+    \ ON posts.post_id=counts.post_id"
   addJoinTable (ByPostCat _) =
-    " JOIN categories ON posts.post_category_id=categories.category_id"
+    " JOIN categories\
+    \ ON posts.post_category_id=categories.category_id"
   addJoinTable (ByPostAuthor _) =
     " JOIN users AS u ON authors.user_id=u.user_id"
   addJoinTable (OrderList xs) = addJoinTable xs
@@ -94,7 +97,8 @@ instance ToWhere Filter where
   toWhere (TagF f) = toWhere f
 
 instance AddJoinTable Filter where
-  addJoinTable (AuthorNameF _) = " JOIN users AS usrs ON authors.user_id=usrs.user_id"
+  addJoinTable (AuthorNameF _) =
+    " JOIN users AS usrs ON authors.user_id=usrs.user_id"
   addJoinTable (InF f) = addJoinTable f
   addJoinTable _ = ""
 
@@ -118,7 +122,8 @@ instance ToWhere InF where
   toWhere (UsersName txt) =
     WherePair " us.first_name ILIKE ? " (Txt (toILike txt))
   toWhere (TagName txt) =
-    let sel = Select ["post_id"] "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id" (WherePair " tag_name ILIKE ? " (Txt (toILike txt)))
+    let t = "tags JOIN poststags AS pt ON tags.tag_id = pt.tag_id"
+        sel = Select ["post_id"] t (WherePair " tag_name ILIKE ? " (Txt (toILike txt)))
      in WhereSelect " posts.post_id IN " sel
   toWhere (CatName txt) =
     WherePair " c.category_name ILIKE ? " (Txt (toILike txt))
@@ -146,5 +151,6 @@ instance ToWhere TagF where
     let sel = Select ["post_id"] "poststags" $ WherePair " tag_id IN ? " (IdIn (In idS))
      in WhereSelect " posts.post_id IN " sel
   toWhere (TagsAll idS) =
-    let sel = Select ["array_agg(tag_id)"] "poststags" $ Where "posts.post_id = poststags.post_id"
+    let wh = "posts.post_id = poststags.post_id"
+        sel = Select ["array_agg(tag_id)"] "poststags" $ Where wh
      in WhereSelectPair sel " @>?::bigint[] " (IdArray (PGArray idS))

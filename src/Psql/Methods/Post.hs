@@ -12,7 +12,16 @@ selectPosts' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   select' conn $
     Select
-      ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
+      [ "posts.post_id",
+        "posts.author_id",
+        "author_info",
+        "user_id",
+        "post_name",
+        "post_create_date",
+        "post_category_id",
+        "post_text",
+        "post_main_pic_id"
+      ]
       "posts JOIN authors ON authors.author_id = posts.author_id "
       wh
 
@@ -21,7 +30,16 @@ selectLimPosts' conn filterArgs orderBy page limit = do
   let wh = WhereAnd $ fmap toWhere filterArgs ++ [Where "true"]
   selectLimit' conn $
     SelectLim
-      ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
+      [ "posts.post_id",
+        "posts.author_id",
+        "author_info",
+        "authors.user_id",
+        "post_name",
+        "post_create_date",
+        "post_category_id",
+        "post_text",
+        "post_main_pic_id"
+      ]
       "posts JOIN authors ON authors.author_id = posts.author_id"
       wh
       filterArgs

@@ -34,7 +34,11 @@ instance FromRow Tag where
 
 instance Selecty Tag
 
-data Author = Author {authorIdA :: AuthorId, authorInfoA :: Text, userIdA :: UserId}
+data Author = Author
+  { authorIdA :: AuthorId,
+    authorInfoA :: Text,
+    userIdA :: UserId
+  }
   deriving (Eq, Show)
 
 instance FromRow Author where
@@ -43,7 +47,12 @@ instance FromRow Author where
 
 instance Selecty Author
 
-data Comment = Comment {commentIdC :: CommentId, userIdC :: UserId, commentTextC :: Text, postId :: PostId}
+data Comment = Comment
+  { commentIdC :: CommentId,
+    userIdC :: UserId,
+    commentTextC :: Text,
+    postId :: PostId
+  }
   deriving (Eq, Show)
 
 instance FromRow Comment where
@@ -52,7 +61,12 @@ instance FromRow Comment where
 
 instance Selecty Comment
 
-data User = User {firstNameU :: Text, lastNameU :: Text, picIdU :: PictureId, userCreateDateU :: Day}
+data User = User
+  { firstNameU :: Text,
+    lastNameU :: Text,
+    picIdU :: PictureId,
+    userCreateDateU :: Day
+  }
   deriving (Eq, Show)
 
 instance FromRow User where
@@ -61,7 +75,14 @@ instance FromRow User where
 
 instance Selecty User
 
-data PostInfo = PostInfo {authorIdPI :: AuthorId, authorInfoPI :: Text, postNamePI :: Text, postCatIdPI :: CategoryId, postTextPI :: Text, postPicIdPI :: PictureId}
+data PostInfo = PostInfo
+  { authorIdPI :: AuthorId,
+    authorInfoPI :: Text,
+    postNamePI :: Text,
+    postCatIdPI :: CategoryId,
+    postTextPI :: Text,
+    postPicIdPI :: PictureId
+  }
   deriving (Eq, Show)
 
 instance FromRow PostInfo where
@@ -70,20 +91,52 @@ instance FromRow PostInfo where
 
 instance Selecty PostInfo
 
-data Draft = Draft {draftIdDR :: DraftId, authorInfoDR :: Text, postIdDR :: PostId, draftNameDR :: Text, draftCatIdDR :: CategoryId, draftTextDR :: Text, draftPicIdDR :: PictureId}
+data Draft = Draft
+  { draftIdDR :: DraftId,
+    authorInfoDR :: Text,
+    postIdDR :: PostId,
+    draftNameDR :: Text,
+    draftCatIdDR :: CategoryId,
+    draftTextDR :: Text,
+    draftPicIdDR :: PictureId
+  }
   deriving (Eq, Show)
 
 instance FromRow Draft where
   fromRow =
-    Draft <$> field <*> field <*> field <*> field <*> field <*> field <*> field
+    Draft <$> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
 
 instance Selecty Draft
 
-data Post = Post {postIdPS :: PostId, authorIdPS :: AuthorId, authorInfoPS :: Text, userIdPS :: UserId, postNamePS :: Text, postCreateDatePS :: Day, postCatIdPS :: CategoryId, postTextPS :: Text, postPicIdPS :: PictureId}
+data Post = Post
+  { postIdPS :: PostId,
+    authorIdPS :: AuthorId,
+    authorInfoPS :: Text,
+    userIdPS :: UserId,
+    postNamePS :: Text,
+    postCreateDatePS :: Day,
+    postCatIdPS :: CategoryId,
+    postTextPS :: Text,
+    postPicIdPS :: PictureId
+  }
   deriving (Eq, Show)
 
 instance FromRow Post where
   fromRow =
-    Post <$> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field <*> field
+    Post <$> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
+      <*> field
 
 instance Selecty Post

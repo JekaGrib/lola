@@ -3,7 +3,12 @@ module Psql.Methods.Draft where
 import Database.PostgreSQL.Simple (Connection)
 import Psql.Methods.Common
 import Psql.Selecty (Author (..), Draft (..), Tag (..))
-import Psql.ToQuery.Insert (InsertMany (..), InsertManyPair (..), InsertPair (..), InsertRet (..))
+import Psql.ToQuery.Insert
+  ( InsertMany (..),
+    InsertManyPair (..),
+    InsertPair (..),
+    InsertRet (..),
+  )
 import Psql.ToQuery.Select (Select (..), Where (..))
 import Psql.ToQuery.SelectLimit (OrderBy, SelectLim (..))
 import Psql.ToQuery.Update (Set (..), Update (..))
@@ -14,7 +19,14 @@ selectDrafts' conn draftId = do
   let wh = WherePair "draft_id=?" (Id draftId)
   select' conn $
     Select
-      ["d.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
+      [ "d.draft_id",
+        "author_info",
+        "COALESCE (post_id, '0') AS post_id",
+        "draft_name",
+        "draft_category_id",
+        "draft_text",
+        "draft_main_pic_id"
+      ]
       "drafts AS d JOIN authors AS a ON d.author_id=a.author_id"
       wh
 
@@ -37,12 +49,25 @@ selectTags' conn tagIds = do
       "tags"
       wh
 
-selectLimDraftsForAuthor' :: Connection -> AuthorId -> OrderBy -> Page -> Limit -> IO [Draft]
+selectLimDraftsForAuthor' ::
+  Connection ->
+  AuthorId ->
+  OrderBy ->
+  Page ->
+  Limit ->
+  IO [Draft]
 selectLimDraftsForAuthor' conn auId orderBy page limit = do
   let wh = WherePair "drafts.author_id=?" (Id auId)
   selectLimit' conn $
     SelectLim
-      ["drafts.draft_id", "author_info", "COALESCE (post_id, '0') AS post_id", "draft_name", "draft_category_id", "draft_text", "draft_main_pic_id"]
+      [ "drafts.draft_id",
+        "author_info",
+        "COALESCE (post_id, '0') AS post_id",
+        "draft_name",
+        "draft_category_id",
+        "draft_text",
+        "draft_main_pic_id"
+      ]
       "drafts JOIN authors ON authors.author_id = drafts.author_id"
       wh
       []

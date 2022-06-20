@@ -9,7 +9,10 @@ data Exists
 
 instance ToStr Exists where
   toStr (Exists table where') =
-    "SELECT EXISTS (SELECT 1 FROM " ++ table ++ " WHERE " ++ toStr where' ++ ")"
+    "SELECT EXISTS (SELECT 1 FROM " ++ table
+      ++ " WHERE "
+      ++ toStr where'
+      ++ ")"
 
 instance ToVal Exists where
   toVal (Exists _ where') = toVal where'

@@ -76,7 +76,12 @@ workWithLogIn h@Handle {..} qStr = hideLogInErr $ do
   lift $ logInfo hLog "LogIn command"
   checkQStr hExist qStr >>= logIn h
 
-workWithUsers :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithUsers ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithUsers h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -91,7 +96,9 @@ workWithUsers h@Handle {..} qStr meth =
       tokenAdminAuth hAuth qStr
       isExistResourseE hExist (UserId usId)
       deleteUser h usId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for users resourse: " ++ show meth
+    _ ->
+      throwE $ ResourseNotExistError $
+        "Wrong method for users resourse: " ++ show meth
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle {..} (LogIn usIdParam pwdParam) = do
@@ -102,11 +109,15 @@ logIn Handle {..} (LogIn usIdParam pwdParam) = do
   if admBool
     then do
       let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as admin."
+      lift $ logInfo hLog $
+        "User_id: " ++ show usIdParam
+          ++ " successfully logIn as admin."
       okHelper $ TokenResponse {tokenTR = usToken}
     else do
       let usToken = pack $ show usIdParam ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
+      lift $ logInfo hLog $
+        "User_id: " ++ show usIdParam
+          ++ " successfully logIn as user."
       okHelper $ TokenResponse {tokenTR = usToken}
 
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
@@ -124,7 +135,15 @@ createUser Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 getUser Handle {..} usId = do
   User fName lName picId usCreateDate <- catchOneSelectE hLog $ selectUsers usId
-  okHelper $ UserResponse {userId = usId, firstName = fName, lastName = lName, userPicId = picId, userPicUrl = makeMyPicUrl hConf picId, userCreateDate = usCreateDate}
+  okHelper $
+    UserResponse
+      { userId = usId,
+        firstName = fName,
+        lastName = lName,
+        userPicId = picId,
+        userPicUrl = makeMyPicUrl hConf picId,
+        userCreateDate = usCreateDate
+      }
 
 deleteUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 deleteUser h@Handle {..} usId = do

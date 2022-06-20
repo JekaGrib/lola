@@ -18,7 +18,8 @@ selectComment' conn commentId = do
 selectUsersForPost' :: Connection -> PostId -> IO [UserId]
 selectUsersForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
-  selectOnly' conn (Select ["user_id"] "posts AS p JOIN authors AS a ON p.author_id=a.author_id" wh)
+      t = "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
+  selectOnly' conn (Select ["user_id"] t wh)
 
 selectUsersForComment' :: Connection -> CommentId -> IO [UserId]
 selectUsersForComment' conn commentId = do

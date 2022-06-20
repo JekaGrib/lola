@@ -5,7 +5,14 @@ import Control.Exception.Safe (throwString)
 import Data.Char (toLower)
 import Data.List (isPrefixOf, sort)
 import Database.PostgreSQL.Simple (Connection, execute_, withTransaction)
-import Database.PostgreSQL.Simple.Migration (MigrationCommand (MigrationDirectory, MigrationInitialization), MigrationResult (..), runMigrations)
+import Database.PostgreSQL.Simple.Migration
+  ( MigrationCommand
+      ( MigrationDirectory,
+        MigrationInitialization
+      ),
+    MigrationResult (..),
+    runMigrations,
+  )
 import Error (MigrationException (..))
 import System.Directory (getDirectoryContents)
 import System.Environment (getArgs)
@@ -46,7 +53,9 @@ readMigrateArg = do
     (UnknownArg arg : _) -> throwString $ unKnownArgErrMsg arg
 
 unKnownArgErrMsg :: String -> String
-unKnownArgErrMsg str = "Error. Unknown argument in program's command line: \"" ++ str ++ "\".\nIf you want execute migrations, use argument - <migrate>"
+unKnownArgErrMsg str =
+  "Error. Unknown argument in program's command line: \"" ++ str
+    ++ "\".\nIf you want execute migrations, use argument - <migrate>"
 
 data Arg = MigrateArg | UnknownArg String
 

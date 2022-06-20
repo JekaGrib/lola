@@ -29,7 +29,11 @@ checkPrioAndLog h prio = when (prio >= configPrio) . log h prio
   where
     configPrio = cLogLevel (hLogConf h)
 
-logDebug, logInfo, logWarning, logError :: (Applicative m) => LogHandle m -> String -> m ()
+logDebug,
+  logInfo,
+  logWarning,
+  logError ::
+    (Applicative m) => LogHandle m -> String -> m ()
 logDebug h = checkPrioAndLog h DEBUG
 logInfo h = checkPrioAndLog h INFO
 logWarning h = checkPrioAndLog h WARNING

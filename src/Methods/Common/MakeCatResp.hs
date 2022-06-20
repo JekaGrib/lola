@@ -27,16 +27,36 @@ makeH conf logH =
         (selectCats' conn)
         (selectSubCats' conn)
 
-makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
+makeCatResp ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m CatResponse
 makeCatResp h@Handle {..} catId = do
   Cat catName superCatId <- catchOneSelectE hLog $ selectCats catId
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
-    0 -> return $ Super $ SuperCatResponse {categoryIdCATR = catId, categoryNameCATR = catName, subCategoriesCATR = subCatsIds}
+    0 ->
+      return $ Super $
+        SuperCatResponse
+          { categoryIdCATR = catId,
+            categoryNameCATR = catName,
+            subCategoriesCATR = subCatsIds
+          }
     _ -> do
       superCatResp <- makeCatResp h superCatId
-      return $ Sub $ SubCatResponse {categoryIdSCATR = catId, categoryNameSCATR = catName, subCategoriesSCATR = subCatsIds, superCategorySCATR = superCatResp}
+      return $ Sub $
+        SubCatResponse
+          { categoryIdSCATR = catId,
+            categoryNameSCATR = catName,
+            subCategoriesSCATR = subCatsIds,
+            superCategorySCATR = superCatResp
+          }
 
-findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
+findOneLevelSubCats ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m [CategoryId]
 findOneLevelSubCats Handle {..} catId =
   catchSelE hLog $ selectSubCats catId

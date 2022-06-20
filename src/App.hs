@@ -25,8 +25,32 @@ import Methods.Picture (workWithPics)
 import Methods.Post (workWithPosts)
 import Methods.Tag (workWithTags)
 import Methods.User (workWithLogIn, workWithUsers)
-import Network.HTTP.Types (QueryText, StdMethod, parseMethod, queryToQueryText, status400, status401, status403, status404, status413, status414, status500, status501)
-import Network.Wai (Request, RequestBodyLength (..), Response, ResponseReceived, getRequestBodyChunk, pathInfo, queryString, requestBodyLength, requestMethod, responseLBS)
+import Network.HTTP.Types
+  ( QueryText,
+    StdMethod,
+    parseMethod,
+    queryToQueryText,
+    status400,
+    status401,
+    status403,
+    status404,
+    status413,
+    status414,
+    status500,
+    status501,
+  )
+import Network.Wai
+  ( Request,
+    RequestBodyLength (..),
+    Response,
+    ResponseReceived,
+    getRequestBodyChunk,
+    pathInfo,
+    queryString,
+    requestBodyLength,
+    requestMethod,
+    responseLBS,
+  )
 
 data Handle m = Handle
   { hLog :: LogHandle m,
@@ -34,7 +58,12 @@ data Handle m = Handle
     getBody :: Request -> m ByteString
   }
 
-application :: Config -> LogHandle IO -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
+application ::
+  Config ->
+  LogHandle IO ->
+  Request ->
+  (Response -> IO ResponseReceived) ->
+  IO ResponseReceived
 application config handleLog req send = do
   newConfig <- reConnectDB config
   let methodH = Methods.makeH newConfig handleLog
@@ -76,11 +105,16 @@ fromE responseE = case responseE of
       status403
       [jsonHeader]
       (encode $ OkInfoResponse {okOI = False, infoOI = pack str})
-  Left (ReqBodyTooLargeError _) -> ResponseInfo status413 [textHeader] "Status 413 Request Body Too Large"
-  Left (UriTooLongError _) -> ResponseInfo status414 [textHeader] "Status 414 Request-URI Too Long"
-  Left (ResourseNotExistError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
-  Left (SecretError _) -> ResponseInfo status404 [textHeader] "Status 404 Not Found"
-  Left (DatabaseError _) -> ResponseInfo status500 [textHeader] "Internal server error"
+  Left (ReqBodyTooLargeError _) ->
+    ResponseInfo status413 [textHeader] "Status 413 Request Body Too Large"
+  Left (UriTooLongError _) ->
+    ResponseInfo status414 [textHeader] "Status 414 Request-URI Too Long"
+  Left (ResourseNotExistError _) ->
+    ResponseInfo status404 [textHeader] "Status 404 Not Found"
+  Left (SecretError _) ->
+    ResponseInfo status404 [textHeader] "Status 404 Not Found"
+  Left (DatabaseError _) ->
+    ResponseInfo status500 [textHeader] "Internal server error"
 
 chooseResponseEx :: (MonadCatch m) => Handle m -> Request -> ExceptT ReqError m ResponseInfo
 chooseResponseEx h@Handle {..} req = do
@@ -126,12 +160,16 @@ checkPathLength path =
 checkPathTextLength :: (Monad m) => Text -> ExceptT ReqError m ()
 checkPathTextLength txt = case splitAt 20 (unpack txt) of
   (_, []) -> return ()
-  (x, _) -> throwE $ UriTooLongError $ "Request path part too long: " ++ show x ++ "..."
+  (x, _) ->
+    throwE $ UriTooLongError $
+      "Request path part too long: " ++ show x ++ "..."
 
 checkLengthQStr :: (MonadCatch m) => QueryText -> ExceptT ReqError m ()
 checkLengthQStr qStr =
   case drop 12 qStr of
-    [] -> when ((sum . map lengthQText $ qStr) > 600) $ throwE $ UriTooLongError "Query string too long."
+    [] ->
+      when ((sum . map lengthQText $ qStr) > 600) $ throwE $
+        UriTooLongError "Query string too long."
     _ -> throwE $ UriTooLongError "Query string too long"
 
 lengthQText :: (Text, Maybe Text) -> Integer

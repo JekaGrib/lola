@@ -46,7 +46,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithPics :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithPics ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithPics h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -57,7 +62,9 @@ workWithPics h@Handle {..} qStr meth =
       lift $ logInfo hLog "Get picture command"
       isExistResourseE hExist (PictureId picId)
       sendPicture h picId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for pictures resourse: " ++ show meth
+    _ ->
+      throwE $ ResourseNotExistError $
+        "Wrong method for pictures resourse: " ++ show meth
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture Handle {..} picIdNum = do
@@ -70,7 +77,11 @@ sendPicture Handle {..} picIdNum = do
       [("Content-Type", "image/jpeg")]
       lbs
 
-loadPicture :: (MonadCatch m) => Handle m -> LoadPicture -> ExceptT ReqError m ResponseInfo
+loadPicture ::
+  (MonadCatch m) =>
+  Handle m ->
+  LoadPicture ->
+  ExceptT ReqError m ResponseInfo
 loadPicture h@Handle {..} (LoadPicture picUrlParam) = do
   lbs <- checkPicUrlGetPic h picUrlParam
   let sbs = BSL.toStrict lbs
@@ -80,7 +91,14 @@ loadPicture h@Handle {..} (LoadPicture picUrlParam) = do
 
 checkPicUrlGetPic :: (MonadCatch m) => Handle m -> Text -> ExceptT ReqError m BSL.ByteString
 checkPicUrlGetPic Handle {..} url = do
-  lbs <- lift (goToUrl url) `catch` (\e -> throwE $ BadReqError $ "Invalid picture url:" ++ unpack url ++ ". " ++ show (e :: HT.HttpException))
+  lbs <-
+    lift (goToUrl url)
+      `catch` ( \e ->
+                  throwE $ BadReqError $
+                    "Invalid picture url:" ++ unpack url
+                      ++ ". "
+                      ++ show (e :: HT.HttpException)
+              )
   let sbs = BSL.toStrict lbs
   case decodeImage sbs of
     Right _ -> return lbs

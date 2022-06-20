@@ -2,7 +2,14 @@ module Psql.Methods.Common where
 
 import Control.Monad.Catch (MonadCatch, throwM)
 import Data.ByteString (ByteString)
-import Database.PostgreSQL.Simple (Binary (..), Connection, Only (..), execute, executeMany, query)
+import Database.PostgreSQL.Simple
+  ( Binary (..),
+    Connection,
+    Only (..),
+    execute,
+    executeMany,
+    query,
+  )
 import Database.PostgreSQL.Simple.FromField (FromField)
 import Error (UnexpectedDbOutPutException (..))
 import Psql.Selecty (Selecty)

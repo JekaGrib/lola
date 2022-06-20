@@ -64,7 +64,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithPosts :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithPosts ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithPosts h@Handle {..} qStr meth =
   case meth of
     ToGet postId -> do
@@ -91,11 +96,16 @@ getPost h@Handle {..} postId = do
 getPosts :: (MonadCatch m) => Handle m -> GetPosts -> ExceptT ReqError m ResponseInfo
 getPosts h@Handle {..} gP@(GetPosts page _ _) = do
   LimitArg filterArgs sortArgs <- chooseArgs gP
-  let defOrderBy = if isDateASC sortArgs then [ByPostDate ASC, ByPostId ASC] else [ByPostDate DESC, ByPostId DESC]
+  let defOrderBy =
+        if isDateASC sortArgs
+          then [ByPostDate ASC, ByPostId ASC]
+          else [ByPostDate DESC, ByPostId DESC]
   let orderBy = OrderList $ sortArgs ++ defOrderBy
   posts <- catchSelE hLog $ selectLimPosts filterArgs orderBy page (cPostsLimit hConf)
   resps <- mapM (makePostResponse h) posts
-  lift $ logInfo hLog $ "Post_ids: " ++ show (fmap postIdPS posts) ++ " sending in response"
+  lift $ logInfo hLog $
+    "Post_ids: " ++ show (fmap postIdPS posts)
+      ++ " sending in response"
   okHelper $ PostsResponse {pageP = page, postsP = resps}
 
 deletePost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
@@ -109,7 +119,19 @@ makePostResponse Handle {..} (Post pId auId auInfo usId pName pDate pCatId pText
   picsIds <- catchSelE hLog $ selectPicsForPost pId
   tagS <- catchSelE hLog $ selectTagsForPost pId
   catResp <- makeCatResp hCatResp pCatId
-  return $ PostResponse {postIdP = pId, authorP = AuthorResponse auId auInfo usId, postNameP = pName, postCreateDateP = pDate, postCategoryP = catResp, postTextP = pText, postMainPicIdP = picId, postMainPicUrlP = makeMyPicUrl hConf picId, postPicsP = fmap (inPicIdUrl hConf) picsIds, postTagsP = fmap inTagResp tagS}
+  return $
+    PostResponse
+      { postIdP = pId,
+        authorP = AuthorResponse auId auInfo usId,
+        postNameP = pName,
+        postCreateDateP = pDate,
+        postCategoryP = catResp,
+        postTextP = pText,
+        postMainPicIdP = picId,
+        postMainPicUrlP = makeMyPicUrl hConf picId,
+        postPicsP = fmap (inPicIdUrl hConf) picsIds,
+        postTagsP = fmap inTagResp tagS
+      }
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
 withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

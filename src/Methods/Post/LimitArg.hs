@@ -9,7 +9,13 @@ import Data.List (sortBy)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
 import Error (ReqError (..))
-import Psql.ToQuery.SelectLimit (CreatedF (..), Filter (..), InF (..), OrderBy (..), TagF (..))
+import Psql.ToQuery.SelectLimit
+  ( CreatedF (..),
+    Filter (..),
+    InF (..),
+    OrderBy (..),
+    TagF (..),
+  )
 import Types
 
 data LimitArg = LimitArg [Filter] [OrderBy]
@@ -30,7 +36,12 @@ chooseFilterArgs (GetPostsF crAt crLt crGt tag tagsIn tagsAll nameIn textIn evIn
   let filterArgs = concatMap toList [filterCreated, filterTag, filterIn, filterCat, filtAuthor]
   return filterArgs
 
-toCreatedF :: (MonadCatch m) => Maybe Day -> Maybe Day -> Maybe Day -> ExceptT ReqError m (Maybe Filter)
+toCreatedF ::
+  (MonadCatch m) =>
+  Maybe Day ->
+  Maybe Day ->
+  Maybe Day ->
+  ExceptT ReqError m (Maybe Filter)
 toCreatedF crAt crLt crGt = case (crAt, crLt, crGt) of
   (Just day, Nothing, Nothing) -> return . Just $ CreatedF (At day)
   (Nothing, Just day, Nothing) -> return . Just $ CreatedF (AtLt day)
@@ -38,7 +49,12 @@ toCreatedF crAt crLt crGt = case (crAt, crLt, crGt) of
   (Nothing, Nothing, Nothing) -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of created filter parameters"
 
-toTagF :: (MonadCatch m) => Maybe TagId -> Maybe [TagId] -> Maybe [TagId] -> ExceptT ReqError m (Maybe Filter)
+toTagF ::
+  (MonadCatch m) =>
+  Maybe TagId ->
+  Maybe [TagId] ->
+  Maybe [TagId] ->
+  ExceptT ReqError m (Maybe Filter)
 toTagF tag tagsIn tagsAll = case (tag, tagsIn, tagsAll) of
   (Just iD, Nothing, Nothing) -> return . Just $ TagF (TagIdF iD)
   (Nothing, Just ids, Nothing) -> return . Just $ TagF (TagsIn ids)
@@ -46,7 +62,12 @@ toTagF tag tagsIn tagsAll = case (tag, tagsIn, tagsAll) of
   (Nothing, Nothing, Nothing) -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of tag filter parameters"
 
-toInF :: (MonadCatch m) => Maybe Text -> Maybe Text -> Maybe Text -> ExceptT ReqError m (Maybe Filter)
+toInF ::
+  (MonadCatch m) =>
+  Maybe Text ->
+  Maybe Text ->
+  Maybe Text ->
+  ExceptT ReqError m (Maybe Filter)
 toInF nameIn textIn evIn = case (nameIn, textIn, evIn) of
   (Just txt, Nothing, Nothing) -> return . Just $ InF (Name txt)
   (Nothing, Just txt, Nothing) -> return . Just $ InF (PostText txt)

@@ -11,7 +11,10 @@ data InsertRet
 
 instance ToStr InsertRet where
   toStr (InsertRet table insertPairs retKey) =
-    "INSERT INTO " ++ table ++ toStr insertPairs ++ " RETURNING " ++ retKey
+    "INSERT INTO " ++ table
+      ++ toStr insertPairs
+      ++ " RETURNING "
+      ++ retKey
 
 instance ToVal InsertRet where
   toVal (InsertRet _ insertPairs _) = toVal insertPairs
@@ -26,7 +29,10 @@ instance ToVal InsertPair where
 
 instance ToStr [InsertPair] where
   toStr insertPairs =
-    " ( " ++ intercalate "," (map insKey insertPairs) ++ " ) VALUES ( " ++ (intercalate "," . fmap (const "?") $ insertPairs) ++ " )"
+    " ( " ++ intercalate "," (map insKey insertPairs)
+      ++ " ) VALUES ( "
+      ++ (intercalate "," . fmap (const "?") $ insertPairs)
+      ++ " )"
 
 instance ToVal [InsertPair] where
   toVal = concatMap toVal
@@ -38,7 +44,13 @@ instance ToStr InsertMany where
   toStr (InsertMany table insertPair) =
     "INSERT INTO " ++ table ++ toStr insertPair
 
-data InsertManyPair = InsertManyPair {insManyKey :: (DbKey, DbKey), insManyVal :: [(Id, Id)]}
+data InsertManyPair = InsertManyPair
+  { insManyKey :: (DbKey, DbKey),
+    insManyVal :: [(Id, Id)]
+  }
 
 instance ToStr InsertManyPair where
-  toStr (InsertManyPair (key, val) _) = " (" ++ key ++ "," ++ val ++ ") VALUES (?,?)"
+  toStr (InsertManyPair (key, val) _) =
+    " (" ++ key ++ ","
+      ++ val
+      ++ ") VALUES (?,?)"

@@ -62,7 +62,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithAuthors :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithAuthors ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithAuthors h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -84,9 +89,15 @@ workWithAuthors h@Handle {..} qStr meth =
       tokenAdminAuth hAuth qStr
       isExistResourseE hExist (AuthorId auId)
       deleteAuthor h auId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for authors resourse: " ++ show meth
+    _ ->
+      throwE $ ResourseNotExistError $
+        "Wrong method for authors resourse: " ++ show meth
 
-createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
+createAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  CreateAuthor ->
+  ExceptT ReqError m ResponseInfo
 createAuthor h@Handle {..} (CreateAuthor usIdParam auInfoParam) = do
   isNotAlreadyAuthor h usIdParam
   auId <- catchInsertReturnE hLog $ insertReturnAuthor usIdParam auInfoParam
@@ -99,12 +110,18 @@ getAuthor Handle {..} authId = do
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
   okHelper $ AuthorResponse {authorIdA = auId, userIdA = usId, authorInfoA = auInfo}
 
-updateAuthor :: (MonadCatch m) => Handle m -> AuthorId -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
+updateAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  AuthorId ->
+  UpdateAuthor ->
+  ExceptT ReqError m ResponseInfo
 updateAuthor h@Handle {..} auId (UpdateAuthor usIdParam auInfoParam) = do
   isntUserOtherAuthor h usIdParam auId
   catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " updated."
-  okHelper $ AuthorResponse {authorIdA = auId, userIdA = usIdParam, authorInfoA = auInfoParam}
+  okHelper $
+    AuthorResponse {authorIdA = auId, userIdA = usIdParam, authorInfoA = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 deleteAuthor h@Handle {..} auId = do
@@ -116,7 +133,12 @@ deleteAuthor h@Handle {..} auId = do
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " deleted."
   ok204Helper
 
-isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
+isntUserOtherAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  UserId ->
+  AuthorId ->
+  ExceptT ReqError m ()
 isntUserOtherAuthor Handle {..} usId auId = do
   maybeAuId <- catchMaybeOneSelectE hLog $ selectAuthorsForUser usId
   case maybeAuId of

@@ -12,7 +12,11 @@ data Update
 
 instance ToStr Update where
   toStr (Update table sets where') =
-    "UPDATE " ++ table ++ " SET " ++ toStr sets ++ " WHERE " ++ toStr where'
+    "UPDATE " ++ table
+      ++ " SET "
+      ++ toStr sets
+      ++ " WHERE "
+      ++ toStr where'
 
 instance ToVal Update where
   toVal (Update _ set where') = toVal set ++ toVal where'

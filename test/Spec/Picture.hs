@@ -49,7 +49,12 @@ testPic = hspec $ do
         `shouldBe` []
       eitherResp <- evalStateT (runExceptT $ sendPicture handle3 4) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
   describe "loadPicture" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
@@ -57,7 +62,13 @@ testPic = hspec $ do
         `shouldBe` [PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
       eitherResp <- evalStateT (runExceptT $ loadPicture handle (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/pictures/14")] $ encode $ Created 14 "picture")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/pictures/14")]
+                       $ encode
+                       $ Created 14 "picture"
+                   )
     it "throw BadReq Error to invalid picture in url" $ do
       state <- execStateT (runExceptT $ loadPicture handle4 (LoadPicture "url")) []
       reverse state
@@ -71,14 +82,22 @@ testPic = hspec $ do
         `shouldBe` []
       eitherResp <- evalStateT (runExceptT $ loadPicture handle3 (LoadPicture "url")) []
       eitherResp
-        `shouldBe` Left (BadReqError "Invalid picture url:url. InvalidUrlException \"oops\" \"oops\"")
+        `shouldBe` Left
+          ( BadReqError
+              "Invalid picture url:url. InvalidUrlException \"oops\" \"oops\""
+          )
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
       reverse state
         `shouldBe` [PicMock (GoToUrl "url")]
       eitherResp <- evalStateT (runExceptT $ loadPicture handle5 (LoadPicture "url")) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
     it "throw DBError to UnexpectedDbOutPutException" $ do
       state <- execStateT (runExceptT $ loadPicture handle6 (LoadPicture "url")) []
       reverse state
@@ -90,10 +109,19 @@ testPic = hspec $ do
     it "work with valid token" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
       reverse state
-        `shouldBe` [AuthMock (SelectTokenKeyForUser 152), PicMock (GoToUrl "url"), PicMock (InsertReturnPicBS sbsPicExample)]
+        `shouldBe` [ AuthMock (SelectTokenKeyForUser 152),
+                     PicMock (GoToUrl "url"),
+                     PicMock (InsertReturnPicBS sbsPicExample)
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [jsonHeader, ("Location", "http://localhost:3000/pictures/14")] $ encode $ Created 14 "picture")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/pictures/14")]
+                       $ encode
+                       $ Created 14 "picture"
+                   )
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithPics handle qStr1 ToPost) []
       reverse state
