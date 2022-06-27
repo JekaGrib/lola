@@ -8,7 +8,6 @@ import Conf.CreateDefault
     createNewDefUser,
   )
 import qualified Control.Exception as E
-import Control.Monad (when)
 import Data.Char (toUpper)
 import qualified Data.Configurator as C
 import qualified Data.Configurator.Types as C
@@ -20,7 +19,7 @@ import Database.PostgreSQL.Simple (Connection, Only (..), query)
 import GHC.Word (Word16)
 import Logger
 import Network.Wai.Handler.Warp (Settings, defaultSettings, setHost, setPort)
-import Psql.Migration (Migrate (..), migrate)
+import Psql.Migration (Migrate, migrateAll)
 import Psql.ToQuery
 import Psql.ToQuery.Exists
 import Psql.ToQuery.Select
@@ -71,7 +70,7 @@ parseConfAnd migrateArg = do
   pwdDB <- parseConfDBpwd conf
   let connInfo = ConnectInfo hostDB portDB userDB pwdDB dbName
   connDB@(ConnDB conn _) <- tryConnect connInfo
-  when (migrateArg == Migrate) $ migrate conn
+  migrateAll conn migrateArg
   defPicId <- parseConfDefPicId conf conn
   defUsId <- parseConfDefUsId conf conn defPicId
   defAuthId <- parseConfDefAuthId conf conn defUsId

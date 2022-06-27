@@ -40,17 +40,29 @@ Psql command:
 
 
 ## 2. Migrations
-If you want execute some PostgreSQL migrations before start application you should use "migrate" argument when [run](#5-run) application: 
+If you want create DB structure automatically. You can use argument "sm" or "structureMigrate". It will execute script "dbStructure.sql".
 
-   $ stack exec lola-exe migrate
+   $ stack exec lola-exe sm
 
-Program will execute automatically all SQL scripts from folder "migrations" at startup.
 
-By default, "migrations" folder contains "01dbStructure.sql" SQL script with database structure. But if it is necessary, you can add other sql scripts, they will execute in alphabetical order.
+If you want fill your DB with test data. You can use argument "tm" or "testMigrate". It will execute scripts from "testsMigrations" folder in alphabetical order.
 
-Or you can do migrations directly in psql by yourself (file "COMMAND for all migrations with dbStructure" can help you). 
+   $ stack exec lola-exe tm
 
-For E2E tests you can use SQL scripts from folder "testMigrations" and put them to "migrations". 
+
+If you want execute some other PostgreSQL migrations for change DB structure later, you should put this scripts to "migrations" folder and use "migrate" or "m" argument when [run](#5-run) application.  It will execute scripts from "migrations" folder in alphabetical order.
+
+   $ stack exec lola-exe m
+
+
+This three(or two) arguments can be used together 
+
+   $ stack exec lola-exe m sm tm
+
+Program will execute them in the following order:
+ First dbStructure migrations, then test migrations, then other migrations.
+
+First migration, executed with arguments, create in DB table schema_migrations, where you can see all migrations history.
 
 ## 3. Add default entities to db
 Application has several default db entities:
@@ -92,7 +104,7 @@ You can run App WITHOUT [migrations](#2-migrations):
 
 You can run App WITH [migrations](#2-migrations):
 
-    $ stack exec lola-exe migrate
+    $ stack exec lola-exe m
 
 
 # Api
@@ -519,4 +531,4 @@ Modules, which has handlers, have unit-tests:
 
 All database wrong answers (multiple,emty) are tested at Tag and Picture modules. In other modules only success and some local errors are tested.
 
-For E2E tests with database you can use folder "scripts". Also you can use SQL [migration](#2-migrations) scripts from folder "testMigrations" and put them to folder "migrations" (program will execute them automatically at startup).
+For E2E tests with database you can use folder "scripts". Also you can use SQL [migration](#2-migrations) scripts from folder "testMigrations".
