@@ -17,7 +17,7 @@ import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (findOneLevelSubCats, makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
@@ -73,21 +73,21 @@ workWithCats h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= createCategory h
     ToGet catId -> do
       lift $ logInfo hLog "Get category command"
-      isExistResourseE hExist (CategoryId catId)
+      isExistResourceE hExist (CategoryId catId)
       getCategory h catId
     ToPut catId -> do
       lift $ logInfo hLog "Update category command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (CategoryId catId)
+      isExistResourceE hExist (CategoryId catId)
       checkQStr hExist qStr >>= updateCategory h catId
     ToDelete catId -> do
       lift $ logInfo hLog "Delete category command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (CategoryId catId)
+      isExistResourceE hExist (CategoryId catId)
       deleteCategory h catId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for categories resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for categories resource: " ++ show meth
 
 createCategory ::
   (MonadCatch m) =>

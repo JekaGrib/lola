@@ -23,16 +23,16 @@ makeH conf =
         conf
         (isExist' conn)
 
-isExistResourseE ::
+isExistResourceE ::
   (MonadCatch m) =>
   Handle m ->
   UncheckedExId ->
   ExceptT ReqError m ()
-isExistResourseE h iD = do
+isExistResourceE h iD = do
   isEx <- catchDbErrE $ isExist h iD
   unless isEx
     $ throwE
-    $ ResourseNotExistError
+    $ ResourceNotExistError
     $ toPretty iD ++ " doesn`t exist"
 
 isExistE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()

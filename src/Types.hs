@@ -55,9 +55,9 @@ type ReturnParam = Param
 
 type CheckParam = Param
 
-type ResourseIdText = Text
+type ResourceIdText = Text
 
-type ResourseName = Text
+type ResourceName = Text
 
 type Page = Int
 

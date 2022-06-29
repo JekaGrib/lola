@@ -143,4 +143,4 @@ testPic = hspec $ do
         `shouldBe` [ExistMock (IsExist (PictureId 200))]
       eitherResp <- evalStateT (runExceptT $ workWithPics handle qStr1 (ToGet 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "pic_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "pic_id: 200 doesn`t exist")

@@ -8,7 +8,7 @@ module Error
     catchDbErr,
     UnexpectedDbOutPutException (..),
     addToBadReqErr,
-    hideResourseNotExistErr,
+    hideResourceNotExistErr,
   )
 where
 
@@ -25,7 +25,7 @@ data ReqError
   | SecretLogInError String
   | SecretTokenError String
   | BadReqError String
-  | ResourseNotExistError String
+  | ResourceNotExistError String
   | NotImplementedError String
   | UriTooLongError String
   | ForbiddenError String
@@ -61,8 +61,8 @@ hideLogInErr m = m `catchE` (throwE . badReqToSecretLogIn)
 hideTokenErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideTokenErr m = m `catchE` (throwE . badReqToSecretToken)
 
-hideResourseNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideResourseNotExistErr m = m `catchE` (throwE . badReqToResourseNotExistError)
+hideResourceNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideResourceNotExistErr m = m `catchE` (throwE . badReqToResourceNotExistError)
 
 addToBadReqErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
 addToBadReqErr addStr (BadReqError str) = throwE $ BadReqError $ str ++ addStr
@@ -121,6 +121,6 @@ badReqToSecretToken :: ReqError -> ReqError
 badReqToSecretToken e@(BadReqError _) = SecretTokenError $ show e
 badReqToSecretToken e = e
 
-badReqToResourseNotExistError :: ReqError -> ReqError
-badReqToResourseNotExistError e@(BadReqError _) = ResourseNotExistError $ show e
-badReqToResourseNotExistError e = e
+badReqToResourceNotExistError :: ReqError -> ReqError
+badReqToResourceNotExistError e@(BadReqError _) = ResourceNotExistError $ show e
+badReqToResourceNotExistError e = e

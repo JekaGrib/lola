@@ -35,7 +35,7 @@ import Methods.Common.DeleteMany
   )
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
@@ -120,12 +120,12 @@ workWithDrafts h@Handle {..} qStr meth json =
     ToPostId draftId -> do
       lift $ logInfo hLog "Publish draft command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (DraftId draftId)
+      isExistResourceE hExist (DraftId draftId)
       publishDraft h usId draftId
     ToGet draftId -> do
       lift $ logInfo hLog "Get draft command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (DraftId draftId)
+      isExistResourceE hExist (DraftId draftId)
       getDraft h usId draftId
     ToGetAll -> do
       lift $ logInfo hLog "Get drafts command"
@@ -134,13 +134,13 @@ workWithDrafts h@Handle {..} qStr meth json =
     ToPut draftId -> do
       lift $ logInfo hLog "Update draft command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (DraftId draftId)
+      isExistResourceE hExist (DraftId draftId)
       body <- checkDraftReqJson hExist json
       updateDraft h usId draftId body
     ToDelete draftId -> do
       lift $ logInfo hLog "Delete draft command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (DraftId draftId)
+      isExistResourceE hExist (DraftId draftId)
       deleteDraft h usId draftId
 
 createNewDraft ::

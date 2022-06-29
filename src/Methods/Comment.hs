@@ -19,7 +19,7 @@ import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (AccessMode (..), tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
 import Psql.Methods.Comment
@@ -76,21 +76,21 @@ workWithComments h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= getComments h
     ToGet commentId -> do
       lift $ logInfo hLog "Get comment command"
-      isExistResourseE hExist (CommentId commentId)
+      isExistResourceE hExist (CommentId commentId)
       getComment h commentId
     ToPut commentId -> do
       lift $ logInfo hLog "Update comment command"
       (usId, _) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (CommentId commentId)
+      isExistResourceE hExist (CommentId commentId)
       checkQStr hExist qStr >>= updateComment h usId commentId
     ToDelete commentId -> do
       lift $ logInfo hLog "Delete comment command"
       (usId, accessMode) <- tokenUserAuth hAuth qStr
-      isExistResourseE hExist (CommentId commentId)
+      isExistResourceE hExist (CommentId commentId)
       deleteComment h usId accessMode commentId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for comments resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for comments resource: " ++ show meth
 
 createComment ::
   (MonadCatch m) =>

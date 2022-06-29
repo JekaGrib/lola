@@ -28,9 +28,9 @@ tryReadId paramKey txt = do
   num <- tryReadInteger paramKey txt
   checkBigIntId paramKey num
 
-tryReadResourseId :: (MonadCatch m) => QueryParamKey -> Text -> ExceptT ReqError m Id
-tryReadResourseId paramKey txt =
-  hideResourseNotExistErr $
+tryReadResourceId :: (MonadCatch m) => QueryParamKey -> Text -> ExceptT ReqError m Id
+tryReadResourceId paramKey txt =
+  hideResourceNotExistErr $
     tryReadId paramKey txt
 
 tryReadPage :: (Monad m) => Text -> ExceptT ReqError m Page

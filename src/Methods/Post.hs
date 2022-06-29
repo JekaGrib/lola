@@ -18,7 +18,7 @@ import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutPost)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Common.MakeCatResp (makeCatResp)
 import qualified Methods.Common.MakeCatResp (Handle, makeH)
@@ -74,7 +74,7 @@ workWithPosts h@Handle {..} qStr meth =
   case meth of
     ToGet postId -> do
       lift $ logInfo hLog "Get post command"
-      isExistResourseE hExist (PostId postId)
+      isExistResourceE hExist (PostId postId)
       getPost h postId
     ToGetAll -> do
       lift $ logInfo hLog "Get posts command"
@@ -82,9 +82,9 @@ workWithPosts h@Handle {..} qStr meth =
     ToDelete postId -> do
       lift $ logInfo hLog "Delete post command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (PostId postId)
+      isExistResourceE hExist (PostId postId)
       deletePost h postId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for posts resourse: " ++ show meth
+    _ -> throwE $ ResourceNotExistError $ "Wrong method for posts resource: " ++ show meth
 
 getPost :: (MonadCatch m) => Handle m -> PostId -> ExceptT ReqError m ResponseInfo
 getPost h@Handle {..} postId = do

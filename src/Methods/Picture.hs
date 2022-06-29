@@ -17,7 +17,7 @@ import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenUserAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import qualified Network.HTTP.Simple as HT
 import Network.HTTP.Types (QueryText, status200)
@@ -60,11 +60,11 @@ workWithPics h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= loadPicture h
     ToGet picId -> do
       lift $ logInfo hLog "Get picture command"
-      isExistResourseE hExist (PictureId picId)
+      isExistResourceE hExist (PictureId picId)
       sendPicture h picId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for pictures resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for pictures resource: " ++ show meth
 
 sendPicture :: (MonadCatch m) => Handle m -> PictureId -> ExceptT ReqError m ResponseInfo
 sendPicture Handle {..} picIdNum = do

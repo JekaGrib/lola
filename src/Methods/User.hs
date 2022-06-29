@@ -20,7 +20,7 @@ import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
 import Psql.Methods.User
@@ -89,16 +89,16 @@ workWithUsers h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= createUser h
     ToGet usId -> do
       lift $ logInfo hLog "Get user command"
-      isExistResourseE hExist (UserId usId)
+      isExistResourceE hExist (UserId usId)
       getUser h usId
     ToDelete usId -> do
       lift $ logInfo hLog "Delete user command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (UserId usId)
+      isExistResourceE hExist (UserId usId)
       deleteUser h usId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for users resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for users resource: " ++ show meth
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle {..} (LogIn usIdParam pwdParam) = do

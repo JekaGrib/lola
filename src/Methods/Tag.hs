@@ -16,7 +16,7 @@ import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
 import Psql.Methods.Tag
@@ -66,21 +66,21 @@ workWithTags h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= createTag h
     ToGet tagId -> do
       lift $ logInfo hLog "Get tag command"
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       getTag h tagId
     ToPut tagId -> do
       lift $ logInfo hLog "Update tag command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       checkQStr hExist qStr >>= updateTag h tagId
     ToDelete tagId -> do
       lift $ logInfo hLog "Delete tag command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       deleteTag h tagId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for tags resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for tags resource: " ++ show meth
 
 createTag ::
   (Monad m, MonadCatch m) =>

@@ -205,7 +205,7 @@ testTag = hspec $ do
         `shouldBe` [LOG INFO, ExistMock (IsExist (TagId 200))]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
   describe "workWithTags (ToPut )" $ do
     it "work with exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToPut 4)) []
@@ -243,7 +243,7 @@ testTag = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToPut 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToPut 4)) []
       reverse state
@@ -294,7 +294,7 @@ testTag = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
   describe "workWithTags (ToPostId)"
     $ it "throw 404 Error "
     $ do
@@ -303,4 +303,4 @@ testTag = hspec $ do
         `shouldBe` []
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToPostId 4)) []
       eitherResp
-        `shouldBe` Left (ResourseNotExistError "Wrong method for tags resourse: ToPostId 4")
+        `shouldBe` Left (ResourceNotExistError "Wrong method for tags resource: ToPostId 4")

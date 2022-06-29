@@ -19,7 +19,7 @@ import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
 import Psql.Methods.Author
@@ -77,21 +77,21 @@ workWithAuthors h@Handle {..} qStr meth =
     ToGet auId -> do
       lift $ logInfo hLog "Get author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       getAuthor h auId
     ToPut auId -> do
       lift $ logInfo hLog "Update author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       checkQStr hExist qStr >>= updateAuthor h auId
     ToDelete auId -> do
       lift $ logInfo hLog "Delete author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       deleteAuthor h auId
     _ ->
-      throwE $ ResourseNotExistError $
-        "Wrong method for authors resourse: " ++ show meth
+      throwE $ ResourceNotExistError $
+        "Wrong method for authors resource: " ++ show meth
 
 createAuthor ::
   (MonadCatch m) =>

@@ -109,7 +109,7 @@ fromE responseE = case responseE of
     ResponseInfo status413 [textHeader] "Status 413 Request Body Too Large"
   Left (UriTooLongError _) ->
     ResponseInfo status414 [textHeader] "Status 414 Request-URI Too Long"
-  Left (ResourseNotExistError _) ->
+  Left (ResourceNotExistError _) ->
     ResponseInfo status404 [textHeader] "Status 404 Not Found"
   Left (SecretError _) ->
     ResponseInfo status404 [textHeader] "Status 404 Not Found"
