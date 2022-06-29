@@ -64,6 +64,10 @@ Program will execute them in the following order:
 
 First migration, executed with arguments, create in DB table schema_migrations, where you can see all migrations history.
 
+Every time you try execute migrations at startup, terminal will output all migrations history of DB(that was executed with arguments at startup and that schema_migrations table in DB contains). Last executed migrations should be in the end of history list.
+
+If you try execute script, that has already been executed, it wouldn`t run. You can follow it in migrations history in table schema_migrations in DB or in terminal(if you try to execute some migrations).
+
 ## 3. Add default entities to db
 Application has several default db entities:
 1. default picture  - picture of deleted user

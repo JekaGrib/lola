@@ -4,7 +4,7 @@ import Control.Exception (SomeException, catch, throw)
 import Control.Exception.Safe (throwString)
 import Data.Char (toLower)
 import Data.List (isPrefixOf, sort)
-import Database.PostgreSQL.Simple (Connection, withTransaction, query_, Only(..))
+import Database.PostgreSQL.Simple (Connection, withTransaction)
 import Database.PostgreSQL.Simple.Migration
   ( MigrationCommand
       ( MigrationDirectory,
@@ -32,13 +32,12 @@ emptyMigrate = Migrate False False False
 
 migrateAll :: Connection -> Migrate -> IO ()
 migrateAll conn (Migrate structureBool testBool migBool) = do
-  when (structureBool || testBool) $ do
-    let addCmds = (addStructureCommand structureBool) ++ (addTestCommand testBool)
-    migrateInitial addCmds conn
-  when migBool $ migrate conn
+  when (structureBool || testBool || migBool) $ do
+    let addCmds = (addStructureCommand structureBool) ++ (addTestCommand testBool) ++ (addMigCommand migBool)
+    migrate addCmds conn
 
-migrateInitial :: [MigrationCommand] -> Connection -> IO ()
-migrateInitial addCmds conn = catchMigrationEx $ do
+migrate :: [MigrationCommand] -> Connection -> IO ()
+migrate addCmds conn = catchMigrationEx $ do
   result <- withTransaction conn $ runMigrations False conn cmds
   case result of
     MigrationError err -> do
@@ -48,42 +47,21 @@ migrateInitial addCmds conn = catchMigrationEx $ do
       getMigrations conn >>= mapM_ (putStrLn . show)
   where
     cmds = MigrationInitialization : addCmds
-    
 
 
-addStructureCommand,addTestCommand :: Bool -> [MigrationCommand]
+addStructureCommand,addTestCommand,addMigCommand :: Bool -> [MigrationCommand]
 addStructureCommand True = [structureMigrationCommand]
 addStructureCommand _ = []
 addTestCommand True = [testMigrationCommand]
 addTestCommand _ = []
+addMigCommand True = [migrationsCommand]
+addMigCommand _ = []
 
 structureMigrationCommand, testMigrationCommand, migrationsCommand :: MigrationCommand
 structureMigrationCommand = MigrationFile "dbStructure.sql" "./dbStructure.sql"
 testMigrationCommand = MigrationDirectory "./testMigrations"
 migrationsCommand = MigrationDirectory "./migrations"
 
-
-migrate :: Connection -> IO ()
-migrate conn = catchMigrationEx $ do
-  [Only num]<- query_ conn "SELECT sum(n_live_tup)::integer AS xx FROM pg_stat_user_tables" :: IO [Only Integer]
-  result <- withTransaction conn $ do
-    result <- runMigrations False conn cmds
-    [Only num1] <- query_ conn "SELECT sum(n_live_tup)::integer AS xx FROM pg_stat_user_tables"
-    when (num1 < num) $ 
-      throwString $ "Error. Data is lost due to migrations from \
-      \\"migrations\" folder. It won't run"
-    return result
-  case result of
-    MigrationError err -> do
-      throw $ MigrationException err
-    _ -> do
-      putStrLn "Migrations history:"
-      getMigrations conn >>= mapM_ (putStrLn . show)
-  where
-    cmds =
-      [ MigrationInitialization,
-        migrationsCommand
-      ]      
 
 catchMigrationEx :: IO () -> IO ()
 catchMigrationEx m = m `catch` (\e -> throw $ MigrationException (show (e :: SomeException)))
