@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.User.Handlers where
 
 import Control.Monad.State (StateT (..), modify)
@@ -40,7 +36,11 @@ handle =
     Spec.Exist.Handlers.handle
 
 handle1 :: Handle (StateT [MockAction] IO)
-handle1 = handle {selectAuthsForUser = selectAuthsForUserTest [Auth "37fa265330ad83eaa879efb1e2db6380896cf639" True]}
+handle1 =
+  handle
+    { selectAuthsForUser =
+        selectAuthsForUserTest [Auth "37fa265330ad83eaa879efb1e2db6380896cf639" True]
+    }
 
 withTransactionDBTest :: StateT [MockAction] IO a -> StateT [MockAction] IO a
 withTransactionDBTest m = do

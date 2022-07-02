@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Picture.Types where
 
 import Data.ByteString (ByteString)

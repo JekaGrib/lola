@@ -1,20 +1,16 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Author where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateAuthor (..), UpdateAuthor (..))
-import Api.Response (AuthorResponse (..))
+import Api.Response (AuthorResponse (..), Created (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Methods.Author
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Author.Handlers
 import Spec.Author.QStrExample
@@ -35,7 +31,13 @@ testAuthor = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 3 "author")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/authors/14")]
+                       $ encode
+                       $ Created 14 "author"
+                   )
     it "throw Bad Request Error if user already author" $ do
       eitherResp <- evalStateT (runExceptT $ createAuthor handle (CreateAuthor 25 "author")) []
       eitherResp
@@ -59,7 +61,8 @@ testAuthor = hspec $ do
                      AuthorMock (UpdateDbAuthor 3 "author" 4)
                    ]
     it "throw Bad Request Error if user already other author" $ do
-      eitherResp <- evalStateT (runExceptT $ updateAuthor handle 4 (UpdateAuthor 25 "author")) []
+      eitherResp <-
+        evalStateT (runExceptT $ updateAuthor handle 4 (UpdateAuthor 25 "author")) []
       eitherResp
         `shouldBe` Left (BadReqError "User_id: 25 is already other author")
   describe "deleteAuthor"
@@ -91,7 +94,13 @@ testAuthor = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithAuthors handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/authors/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/authors/14")]
+                       $ encode
+                       $ Created 14 "author"
+                   )
   describe "workWithAuthors (ToGet)"
     $ it "work with valid DB answer"
     $ do

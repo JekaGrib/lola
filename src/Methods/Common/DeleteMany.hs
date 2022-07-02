@@ -1,8 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Common.DeleteMany where
 
 import Conf (Config (..), extractConn)
@@ -15,7 +10,7 @@ data Handle m = Handle
     selectDraftsForPost :: PostId -> m [DraftId],
     deleteDbPicsForPost :: PostId -> m (),
     deleteDbTagsForPost :: PostId -> m (),
-    deleteDbCommsForPost :: PostId -> m (),
+    deleteDbCommentsForPost :: PostId -> m (),
     deleteDbPost :: PostId -> m (),
     deleteDbPicsForDrafts :: [DraftId] -> m (),
     deleteDbTagsForDrafts :: [DraftId] -> m (),
@@ -30,7 +25,7 @@ makeH conf =
         (selectDraftsForPost' conn)
         (deleteDbPicsForPost' conn)
         (deleteDbTagsForPost' conn)
-        (deleteDbCommsForPost' conn)
+        (deleteDbCommentsForPost' conn)
         (deleteDbPost' conn)
         (deleteDbPicsForDrafts' conn)
         (deleteDbTagsForDrafts' conn)
@@ -39,7 +34,7 @@ makeH conf =
 deleteAllAboutPost :: (MonadCatch m) => Handle m -> PostId -> m ()
 deleteAllAboutPost h@Handle {..} postId = do
   deletePicsTagsForPost h postId
-  deleteDbCommsForPost postId
+  deleteDbCommentsForPost postId
   draftsIds <- selectDraftsForPost postId
   deleteAllAboutDrafts h draftsIds
   deleteDbPost postId

@@ -1,8 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
 
 module Methods.User where
 
@@ -16,6 +12,7 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (pack)
 import Data.Time.Calendar (Day)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..), hideLogInErr)
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -23,10 +20,9 @@ import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..), hideLogInErr)
 import Psql.Methods.User
 import Psql.Selecty (Auth (..), User (..))
 import Types
@@ -38,7 +34,7 @@ data Handle m = Handle
     selectAuthsForUser :: UserId -> m [Auth],
     selectAuthorsForUser :: UserId -> m [AuthorId],
     selectDraftsForAuthor :: AuthorId -> m [DraftId],
-    updateDbUserForComms :: UserId -> UserId -> m (),
+    updateDbUserForComments :: UserId -> UserId -> m (),
     updateDbAuthorForPosts :: AuthorId -> AuthorId -> m (),
     updateDbTokenKeyForUser :: TokenKey -> UserId -> m (),
     deleteDbUser :: UserId -> m (),
@@ -62,7 +58,7 @@ makeH conf logH =
         (selectAuthsForUser' conn)
         (selectAuthorsForUser' conn)
         (selectDraftsForAuthor' conn)
-        (updateDbUserForComms' conn)
+        (updateDbUserForComments' conn)
         (updateDbAuthorForPosts' conn)
         (updateDbTokenKeyForUser' conn)
         (deleteDbUser' conn)
@@ -80,7 +76,12 @@ workWithLogIn h@Handle {..} qStr = hideLogInErr $ do
   lift $ logInfo hLog "LogIn command"
   checkQStr hExist qStr >>= logIn h
 
-workWithUsers :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithUsers ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithUsers h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -88,29 +89,35 @@ workWithUsers h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= createUser h
     ToGet usId -> do
       lift $ logInfo hLog "Get user command"
-      isExistResourseE hExist (UserId usId)
+      isExistResourceE hExist (UserId usId)
       getUser h usId
     ToDelete usId -> do
       lift $ logInfo hLog "Delete user command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (UserId usId)
+      isExistResourceE hExist (UserId usId)
       deleteUser h usId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for users resourse: " ++ show meth
+    _ ->
+      throwE $ ResourceNotExistError $
+        "Wrong method for users resource: " ++ show meth
 
 logIn :: (MonadCatch m) => Handle m -> LogIn -> ExceptT ReqError m ResponseInfo
 logIn Handle {..} (LogIn usIdParam pwdParam) = do
-  Auth pwd admBool <- catchOneSelE hLog $ selectAuthsForUser usIdParam
+  Auth pwd admBool <- catchOneSelectE hLog $ selectAuthsForUser usIdParam
   checkPwd pwdParam pwd
   tokenKey <- lift generateTokenKey
   catchUpdE hLog $ updateDbTokenKeyForUser tokenKey usIdParam
   if admBool
     then do
       let usToken = pack $ show usIdParam ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as admin."
+      lift $ logInfo hLog $
+        "User_id: " ++ show usIdParam
+          ++ " successfully logIn as admin."
       okHelper $ TokenResponse {tokenTR = usToken}
     else do
       let usToken = pack $ show usIdParam ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-      lift $ logInfo hLog $ "User_id: " ++ show usIdParam ++ " successfully logIn as user."
+      lift $ logInfo hLog $
+        "User_id: " ++ show usIdParam
+          ++ " successfully logIn as user."
       okHelper $ TokenResponse {tokenTR = usToken}
 
 createUser :: (MonadCatch m) => Handle m -> CreateUser -> ExceptT ReqError m ResponseInfo
@@ -119,22 +126,30 @@ createUser Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = 
   tokenKey <- lift generateTokenKey
   let hashPwdParam = txtSha1 pwdParam
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day False tokenKey
-  usId <- catchInsRetE hLog $ insertReturnUser insUser
+  usId <- catchInsertReturnE hLog $ insertReturnUser insUser
   lift $ logDebug hLog $ "DB return user_id:" ++ show usId ++ "and token key"
   lift $ logInfo hLog $ "User_id: " ++ show usId ++ " created"
   let usToken = pack $ show usId ++ ".stu." ++ strSha1 ("stu" ++ tokenKey)
-  ok201JsonHelper hConf ("users/" ++ show usId) $ TokenResponse {tokenTR = usToken}
+  ok201UserHelper hConf usToken usId
 
 getUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 getUser Handle {..} usId = do
-  User fName lName picId usCreateDate <- catchOneSelE hLog $ selectUsers usId
-  okHelper $ UserResponse {user_id = usId, first_name = fName, last_name = lName, user_pic_id = picId, user_pic_url = makeMyPicUrl hConf picId, user_create_date = usCreateDate}
+  User fName lName picId usCreateDate <- catchOneSelectE hLog $ selectUsers usId
+  okHelper $
+    UserResponse
+      { userId = usId,
+        firstName = fName,
+        lastName = lName,
+        userPicId = picId,
+        userPicUrl = makeMyPicUrl hConf picId,
+        userCreateDate = usCreateDate
+      }
 
 deleteUser :: (MonadCatch m) => Handle m -> UserId -> ExceptT ReqError m ResponseInfo
 deleteUser h@Handle {..} usId = do
-  let updateCom = updateDbUserForComms (cDefUsId hConf) usId
+  let updateCom = updateDbUserForComments (cDefUsId hConf) usId
   let deleteUs = deleteDbUser usId
-  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usId
+  maybeAuId <- catchMaybeOneSelectE hLog $ selectAuthorsForUser usId
   case maybeAuId of
     Just authorId -> do
       let updatePost = updateDbAuthorForPosts (cDefAuthId hConf) authorId
@@ -155,4 +170,4 @@ checkPwd pwdParam pwd
     hashPwdParam = txtSha1 pwdParam
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

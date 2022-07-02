@@ -1,7 +1,16 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
-module Oops (ReqError (..), logOnErr, hideErr, hideLogInErr, hideTokenErr, catchDbErr, UnexpectedDbOutPutException (..), addToBadReqErr, hideResourseNotExistErr) where
+module Error
+  ( MigrationException (..),
+    ReqError (..),
+    logOnErr,
+    hideErr,
+    hideLogInErr,
+    hideTokenErr,
+    catchDbErr,
+    UnexpectedDbOutPutException (..),
+    addToBadReqErr,
+    hideResourceNotExistErr,
+  )
+where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (Exception, MonadCatch, catch)
@@ -16,17 +25,24 @@ data ReqError
   | SecretLogInError String
   | SecretTokenError String
   | BadReqError String
-  | ResourseNotExistError String
+  | ResourceNotExistError String
   | NotImplementedError String
   | UriTooLongError String
   | ForbiddenError String
   | ReqBodyTooLargeError String
   deriving (Eq, Show)
 
-data UnexpectedDbOutPutException = UnexpectedEmptyDbOutPutException | UnexpectedMultipleDbOutPutException
+data UnexpectedDbOutPutException
+  = UnexpectedEmptyDbOutPutException
+  | UnexpectedMultipleDbOutPutException
   deriving (Eq, Show)
 
 instance Exception UnexpectedDbOutPutException
+
+newtype MigrationException = MigrationException String
+  deriving (Eq, Show)
+
+instance Exception MigrationException
 
 logOnErr :: (MonadCatch m) => LogHandle m -> ExceptT ReqError m a -> ExceptT ReqError m a
 logOnErr logH m =
@@ -45,17 +61,24 @@ hideLogInErr m = m `catchE` (throwE . badReqToSecretLogIn)
 hideTokenErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 hideTokenErr m = m `catchE` (throwE . badReqToSecretToken)
 
-hideResourseNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-hideResourseNotExistErr m = m `catchE` (throwE . badReqToResNotExistError)
+hideResourceNotExistErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+hideResourceNotExistErr m = m `catchE` (throwE . badReqToResourceNotExistError)
 
 addToBadReqErr :: (Monad m) => String -> ReqError -> ExceptT ReqError m a
-addToBadReqErr str2 (BadReqError str1) = throwE $ BadReqError $ str1 ++ str2
+addToBadReqErr addStr (BadReqError str) = throwE $ BadReqError $ str ++ addStr
 addToBadReqErr _ e = throwE e
 
 catchDbErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
-catchDbErr = catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr
+catchDbErr =
+  catchDbOutputErr . catchIOErr . cathResultErr . cathQueryErr . cathFormatErr . cathSqlErr
 
-cathSqlErr, cathFormatErr, cathQueryErr, cathResultErr, catchIOErr, catchDbOutputErr :: (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
+cathSqlErr,
+  cathFormatErr,
+  cathQueryErr,
+  cathResultErr,
+  catchIOErr,
+  catchDbOutputErr ::
+    (MonadCatch m) => ExceptT ReqError m a -> ExceptT ReqError m a
 cathSqlErr m =
   m
     `catch` ( \e ->
@@ -98,6 +121,6 @@ badReqToSecretToken :: ReqError -> ReqError
 badReqToSecretToken e@(BadReqError _) = SecretTokenError $ show e
 badReqToSecretToken e = e
 
-badReqToResNotExistError :: ReqError -> ReqError
-badReqToResNotExistError e@(BadReqError _) = ResourseNotExistError $ show e
-badReqToResNotExistError e = e
+badReqToResourceNotExistError :: ReqError -> ReqError
+badReqToResourceNotExistError e@(BadReqError _) = ResourceNotExistError $ show e
+badReqToResourceNotExistError e = e

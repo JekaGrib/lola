@@ -1,12 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Post where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (GetPosts (..), GetPostsF (..), GetPostsOrd (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), PicIdUrl (..), PostResponse (..), PostsResponse (..), TagResponse (..))
+import Api.Response
+  ( AuthorResponse (..),
+    CatResponse (..),
+    PicIdUrl (..),
+    PostResponse (..),
+    PostsResponse (..),
+    SubCatResponse (..),
+    SuperCatResponse (..),
+    TagResponse (..),
+  )
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
@@ -14,11 +19,10 @@ import Data.Text (Text, pack)
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Post
-import Network.HTTP.Types (status200, status201, status204)
+import Network.HTTP.Types (status200, status204)
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.DeleteMany.Types
-import Spec.Draft.Types
 import Spec.Exist.Types
 import Spec.MakeCatResp.Types
 import Spec.Post.Handlers
@@ -30,25 +34,7 @@ import Types
 
 testPost :: IO ()
 testPost = hspec $ do
-  describe "createPostsDraft"
-    $ it "work with valid DB answer"
-    $ do
-      state <- execStateT (runExceptT $ createPostsDraft handle 3 7) []
-      reverse state
-        `shouldBe` [ DraftMock (SelectAuthorsForUser 3),
-                     PostMock (SelectPostInfos 7),
-                     PostMock (SelectUsersForPost 7),
-                     PostMock (SelectPicsForPost 7),
-                     PostMock (SelectTagsForPost 7),
-                     TRANSACTIONOPEN,
-                     DraftMock (InsertReturnDraft (InsertDraft (Just 7) 7 "post" 4 "lalala" 8)),
-                     DraftMock (InsertManyDraftsPics [(14, 6), (14, 9), (14, 12)]),
-                     DraftMock (InsertManyDraftsTags [(14, 15), (14, 18), (14, 20)]),
-                     TRANSACTIONCLOSE
-                   ]
-      eitherResp <- evalStateT (runExceptT $ createPostsDraft handle 3 7) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+  let no = Nothing
   describe "getPost"
     $ it "work with valid DB answer"
     $ do
@@ -75,8 +61,8 @@ testPost = hspec $ do
                 handle
                 ( GetPosts
                     1
-                    (GetPostsF Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing)
-                    (GetPostsOrd Nothing Nothing Nothing Nothing)
+                    (GetPostsF no no no no no no no no no no no)
+                    (GetPostsOrd no no no no)
                 )
           )
           []
@@ -104,8 +90,8 @@ testPost = hspec $ do
                 handle
                 ( GetPosts
                     1
-                    (GetPostsF Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing)
-                    (GetPostsOrd Nothing Nothing Nothing Nothing)
+                    (GetPostsF no no no no no no no no no no no)
+                    (GetPostsOrd no no no no)
                 )
           )
           []
@@ -132,27 +118,6 @@ testPost = hspec $ do
       eitherResp <- evalStateT (runExceptT $ deletePost handle 4) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
-  describe "workWithPosts (ToPost id)"
-    $ it "work with valid DB answer"
-    $ do
-      state <- execStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
-      reverse state
-        `shouldBe` [ AuthMock (SelectTokenKeyForUser 3),
-                     ExistMock (IsExist (PostId 4)),
-                     DraftMock (SelectAuthorsForUser 3),
-                     PostMock (SelectPostInfos 4),
-                     PostMock (SelectUsersForPost 4),
-                     PostMock (SelectPicsForPost 4),
-                     PostMock (SelectTagsForPost 4),
-                     TRANSACTIONOPEN,
-                     DraftMock (InsertReturnDraft (InsertDraft (Just 4) 7 "post" 4 "lalala" 8)),
-                     DraftMock (InsertManyDraftsPics [(14, 6), (14, 9), (14, 12)]),
-                     DraftMock (InsertManyDraftsTags [(14, 15), (14, 18), (14, 20)]),
-                     TRANSACTIONCLOSE
-                   ]
-      eitherResp <- evalStateT (runExceptT $ workWithPosts handle qStr1 (ToPostId 4)) []
-      eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
   describe "workWithPosts (ToGet)"
     $ it "work with valid DB answer"
     $ do
@@ -223,24 +188,54 @@ toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
 
 postResp0 :: PostResponse
 postResp0 =
-  let catResp = SubCatResponse 4 "d" [11, 12] $ CatResponse 1 "a" [4, 5, 6]
+  let catResp = Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in PostResponse 4 (AuthorResponse 7 "author" 3) "post" dayExample catResp "lalala" 8 (toPicUrl 8) picsResps tagsResps
+   in PostResponse
+        4
+        (AuthorResponse 7 "author" 3)
+        "post"
+        dayExample
+        catResp
+        "lalala"
+        8
+        (toPicUrl 8)
+        picsResps
+        tagsResps
 
 postResp1 :: PostResponse
-postResp1 = postResp0 {post_id = 1}
+postResp1 = postResp0 {postIdP = 1}
 
 postResp2 :: PostResponse
 postResp2 =
-  let catResp = CatResponse 2 "b" [7, 8]
+  let catResp = Super $ SuperCatResponse 2 "b" [7, 8]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in PostResponse 2 (AuthorResponse 8 "author" 4) "post2" dayExample catResp "lalala" 7 (toPicUrl 7) picsResps tagsResps
+   in PostResponse
+        2
+        (AuthorResponse 8 "author" 4)
+        "post2"
+        dayExample
+        catResp
+        "lalala"
+        7
+        (toPicUrl 7)
+        picsResps
+        tagsResps
 
 postResp3 :: PostResponse
 postResp3 =
-  let catResp = CatResponse 1 "a" [4, 5, 6]
+  let catResp = Super $ SuperCatResponse 1 "a" [4, 5, 6]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in PostResponse 3 (AuthorResponse 9 "author" 5) "post3" dayExample catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
+   in PostResponse
+        3
+        (AuthorResponse 9 "author" 5)
+        "post3"
+        dayExample
+        catResp
+        "lalala"
+        6
+        (toPicUrl 6)
+        picsResps
+        tagsResps

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Post.LimitArg (LimitArg (..), chooseArgs, isDateASC) where
 
 import Api.Request.QueryStr (GetPosts (..), GetPostsF (..), GetPostsOrd (..))
@@ -12,8 +8,14 @@ import Data.Function (on)
 import Data.List (sortBy)
 import Data.Text (Text)
 import Data.Time.Calendar (Day)
-import Oops (ReqError (..))
-import Psql.ToQuery.SelectLimit (CreatedF (..), Filter (..), InF (..), OrderBy (..), TagF (..))
+import Error (ReqError (..))
+import Psql.ToQuery.SelectLimit
+  ( CreatedF (..),
+    Filter (..),
+    InF (..),
+    OrderBy (..),
+    TagF (..),
+  )
 import Types
 
 data LimitArg = LimitArg [Filter] [OrderBy]
@@ -26,15 +28,20 @@ chooseArgs (GetPosts _ gPF gPOrd) = do
 
 chooseFilterArgs :: (MonadCatch m) => GetPostsF -> ExceptT ReqError m [Filter]
 chooseFilterArgs (GetPostsF crAt crLt crGt tag tagsIn tagsAll nameIn textIn evIn auName catId) = do
-  filt1 <- toCreatedF crAt crLt crGt
-  filt2 <- toTagF tag tagsIn tagsAll
-  filt3 <- toInF nameIn textIn evIn
-  let filt4 = toCatIdF catId
-  let filt5 = toAuNameF auName
-  let filterArgs = concatMap toList [filt1, filt2, filt3, filt4, filt5]
+  filterCreated <- toCreatedF crAt crLt crGt
+  filterTag <- toTagF tag tagsIn tagsAll
+  filterIn <- toInF nameIn textIn evIn
+  let filterCat = toCatIdF catId
+  let filtAuthor = toAuNameF auName
+  let filterArgs = concatMap toList [filterCreated, filterTag, filterIn, filterCat, filtAuthor]
   return filterArgs
 
-toCreatedF :: (MonadCatch m) => Maybe Day -> Maybe Day -> Maybe Day -> ExceptT ReqError m (Maybe Filter)
+toCreatedF ::
+  (MonadCatch m) =>
+  Maybe Day ->
+  Maybe Day ->
+  Maybe Day ->
+  ExceptT ReqError m (Maybe Filter)
 toCreatedF crAt crLt crGt = case (crAt, crLt, crGt) of
   (Just day, Nothing, Nothing) -> return . Just $ CreatedF (At day)
   (Nothing, Just day, Nothing) -> return . Just $ CreatedF (AtLt day)
@@ -42,7 +49,12 @@ toCreatedF crAt crLt crGt = case (crAt, crLt, crGt) of
   (Nothing, Nothing, Nothing) -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of created filter parameters"
 
-toTagF :: (MonadCatch m) => Maybe TagId -> Maybe [TagId] -> Maybe [TagId] -> ExceptT ReqError m (Maybe Filter)
+toTagF ::
+  (MonadCatch m) =>
+  Maybe TagId ->
+  Maybe [TagId] ->
+  Maybe [TagId] ->
+  ExceptT ReqError m (Maybe Filter)
 toTagF tag tagsIn tagsAll = case (tag, tagsIn, tagsAll) of
   (Just iD, Nothing, Nothing) -> return . Just $ TagF (TagIdF iD)
   (Nothing, Just ids, Nothing) -> return . Just $ TagF (TagsIn ids)
@@ -50,7 +62,12 @@ toTagF tag tagsIn tagsAll = case (tag, tagsIn, tagsAll) of
   (Nothing, Nothing, Nothing) -> return Nothing
   _ -> throwE $ BadReqError "Invalid combination of tag filter parameters"
 
-toInF :: (MonadCatch m) => Maybe Text -> Maybe Text -> Maybe Text -> ExceptT ReqError m (Maybe Filter)
+toInF ::
+  (MonadCatch m) =>
+  Maybe Text ->
+  Maybe Text ->
+  Maybe Text ->
+  ExceptT ReqError m (Maybe Filter)
 toInF nameIn textIn evIn = case (nameIn, textIn, evIn) of
   (Just txt, Nothing, Nothing) -> return . Just $ InF (Name txt)
   (Nothing, Just txt, Nothing) -> return . Just $ InF (PostText txt)
@@ -68,11 +85,11 @@ toAuNameF = fmap AuthorNameF
 
 chooseSortArgs :: GetPostsOrd -> [OrderBy]
 chooseSortArgs (GetPostsOrd byPicN byCat byAu byDate) =
-  let sort1 = fmap toPicNOrd byPicN
-      sort2 = fmap toCatOrd byCat
-      sort3 = fmap toAuthorOrd byAu
-      sort4 = fmap toDateOrd byDate
-      sortArgs = sortArgsInOrder . concatMap toList $ [sort1, sort2, sort3, sort4]
+  let sortPic = fmap toPicNOrd byPicN
+      sortCat = fmap toCatOrd byCat
+      sortAuthor = fmap toAuthorOrd byAu
+      sortDate = fmap toDateOrd byDate
+      sortArgs = sortArgsInOrder . concatMap toList $ [sortPic, sortCat, sortAuthor, sortDate]
    in sortArgs
 
 sortArgsInOrder :: [(OrderBy, SortPriority)] -> [OrderBy]
@@ -92,4 +109,3 @@ toDateOrd (sortOrd, n) = (ByPostDate sortOrd, n)
 
 isDateASC :: [OrderBy] -> Bool
 isDateASC = foldr (\ordBy cont -> (ordBy == ByPostDate ASC) || cont) False
-

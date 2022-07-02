@@ -1,22 +1,30 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Draft where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.JSON (DraftRequest (..))
 import Api.Request.QueryStr (GetDrafts (..))
-import Api.Response (AuthorResponse (..), CatResponse (..), DraftResponse (..), DraftsResponse (..), PicIdUrl (..), PostIdOrNull (..), TagResponse (..))
+import Api.Response
+  ( AuthorResponse (..),
+    CatResponse (..),
+    Created (..),
+    DraftResponse (..),
+    DraftsResponse (..),
+    PicIdUrl (..),
+    PostIdOrNull (..),
+    PublishedPost (..),
+    SubCatResponse (..),
+    SuperCatResponse (..),
+    TagResponse (..),
+  )
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
 import Data.Text (Text, pack)
+import Error (ReqError (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Draft
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Psql.ToQuery.SelectLimit (OrderBy (..))
 import Spec.Auth.Types
 import Spec.DeleteMany.Types
@@ -32,9 +40,10 @@ import Types
 
 testDraft :: IO ()
 testDraft = hspec $ do
+  let draftReq = DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41]
   describe "createNewDraft" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ createNewDraft handle 4 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
+      state <- execStateT (runExceptT $ createNewDraft handle 4 draftReq) []
       reverse state
         `shouldBe` [ DraftMock (SelectAuthorsForUser 4),
                      TRANSACTIONOPEN,
@@ -43,11 +52,17 @@ testDraft = hspec $ do
                      DraftMock (InsertManyDraftsTags [(14, 2), (14, 8), (14, 41)]),
                      TRANSACTIONCLOSE
                    ]
-      eitherResp <- evalStateT (runExceptT $ createNewDraft handle 4 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
+      eitherResp <- evalStateT (runExceptT $ createNewDraft handle 4 draftReq) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/drafts/14")]
+                       $ encode
+                       $ Created 14 "draft"
+                   )
     it "throw Forbidden Error if user not author" $ do
-      eitherResp <- evalStateT (runExceptT $ createNewDraft handle 25 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
+      eitherResp <- evalStateT (runExceptT $ createNewDraft handle 25 draftReq) []
       eitherResp
         `shouldBe` Left (ForbiddenError "user_id: 25 isn`t author")
   describe "getDraft"
@@ -113,7 +128,7 @@ testDraft = hspec $ do
                    )
   describe "updateDraft" $ do
     it "work with valid DB answer" $ do
-      state <- execStateT (runExceptT $ updateDraft handle 3 14 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
+      state <- execStateT (runExceptT $ updateDraft handle 3 14 draftReq) []
       reverse state
         `shouldBe` [ DraftMock (SelectUsersForDraft 14),
                      DraftMock (SelectAuthorsForUser 3),
@@ -134,7 +149,7 @@ testDraft = hspec $ do
                      TRANSACTIONCLOSE
                    ]
     it "throw Forbidden Error if user not author of draft" $ do
-      eitherResp <- evalStateT (runExceptT $ updateDraft handle 25 14 (DraftRequest "ok" 12 "lala" 3 [5, 7, 24] [2, 8, 41])) []
+      eitherResp <- evalStateT (runExceptT $ updateDraft handle 25 14 draftReq) []
       eitherResp
         `shouldBe` Left (ForbiddenError "user_id: 25 is not author of draft_id: 14")
   describe "deleteDraft" $ do
@@ -169,7 +184,6 @@ testDraft = hspec $ do
                      MakeCatRMock (SelectSubCats 9),
                      MakeCatRMock (SelectCats 3),
                      MakeCatRMock (SelectSubCats 3),
-                     DraftMock (SelectDaysForPost 7),
                      TRANSACTIONOPEN,
                      DraftMock (UpdatePost 7 (UpdateDbPost "draft" 9 "lalala" 6)),
                      DeleteManyMock (DeleteDbPicsForPost 7),
@@ -195,11 +209,12 @@ testDraft = hspec $ do
                      DraftMock (InsertReturnPost (InsertPost 7 "draft" dayExample 9 "lalala" 6)),
                      DraftMock (InsertManyPostsPics [(20, 6), (20, 9), (20, 12)]),
                      DraftMock (InsertManyPostsTags [(20, 15), (20, 18), (20, 20)]),
+                     DraftMock (UpdatePostForDraft 25 20),
                      TRANSACTIONCLOSE
                    ]
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 3 25) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost 20)
     it "throw Forbidden Error if user not author" $ do
       eitherResp <- evalStateT (runExceptT $ publishDraft handle 25 7) []
       eitherResp
@@ -226,11 +241,18 @@ testDraft = hspec $ do
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/drafts/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/drafts/14")]
+                       $ encode
+                       $ Created 14 "draft"
+                   )
     it "throw Bad Request Error on wrong request body(id not a number)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json2) []
       eitherResp
-        `shouldBe` Left (BadReqError "Can`t parse parameter: draft_category_id. It should be number")
+        `shouldBe` Left
+          (BadReqError "Can`t parse parameter: draft_category_id. It should be number")
     it "throw Bad Request Error on wrong request body(draft_text is a number)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json3) []
       eitherResp
@@ -238,7 +260,11 @@ testDraft = hspec $ do
     it "throw Bad Request Error on wrong request body(draft_tags_ids not a number list)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json4) []
       eitherResp
-        `shouldBe` Left (BadReqError "Can`t parse parameter: draft_tags_ids. It should be number array. Example: [1,5,8]")
+        `shouldBe` Left
+          ( BadReqError
+              "Can`t parse parameter: draft_tags_ids.\
+              \ It should be number array. Example: [1,5,8]"
+          )
     it "throw Bad Request Error on wrong request body(draft_text missing)" $ do
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 ToPost json5) []
       eitherResp
@@ -258,7 +284,6 @@ testDraft = hspec $ do
                      MakeCatRMock (SelectSubCats 9),
                      MakeCatRMock (SelectCats 3),
                      MakeCatRMock (SelectSubCats 3),
-                     DraftMock (SelectDaysForPost 7),
                      TRANSACTIONOPEN,
                      DraftMock (UpdatePost 7 (UpdateDbPost "draft" 9 "lalala" 6)),
                      DeleteManyMock (DeleteDbPicsForPost 7),
@@ -286,11 +311,12 @@ testDraft = hspec $ do
                      DraftMock (InsertReturnPost (InsertPost 7 "draft" dayExample 9 "lalala" 6)),
                      DraftMock (InsertManyPostsPics [(20, 6), (20, 9), (20, 12)]),
                      DraftMock (InsertManyPostsTags [(20, 15), (20, 18), (20, 20)]),
+                     DraftMock (UpdatePostForDraft 25 20),
                      TRANSACTIONCLOSE
                    ]
       eitherResp <- evalStateT (runExceptT $ workWithDrafts handle qStr1 (ToPostId 25) json1) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/posts/20")] "Status 201 Created")
+        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] $ encode $ PublishedPost 20)
   describe "workWithDrafts (ToGet)"
     $ it "work with valid DB answer"
     $ do
@@ -408,28 +434,68 @@ toPicUrl iD = pack $ "http://localhost:3000/pictures/" ++ show iD
 
 draftResp0 :: DraftResponse
 draftResp0 =
-  let catResp = SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in DraftResponse 4 (PostIdExist 7) (AuthorResponse 7 "author" 3) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
+   in DraftResponse
+        4
+        (PostIdExist 7)
+        (AuthorResponse 7 "author" 3)
+        "draft"
+        catResp
+        "lalala"
+        6
+        (toPicUrl 6)
+        picsResps
+        tagsResps
 
 draftResp1 :: DraftResponse
 draftResp1 =
-  let catResp = SubCatResponse 15 "o" [19, 20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in DraftResponse 1 (PostIdExist 7) (AuthorResponse 7 "author" 4) "draft" catResp "lalala" 6 (toPicUrl 6) picsResps tagsResps
+   in DraftResponse
+        1
+        (PostIdExist 7)
+        (AuthorResponse 7 "author" 4)
+        "draft"
+        catResp
+        "lalala"
+        6
+        (toPicUrl 6)
+        picsResps
+        tagsResps
 
 draftResp2 :: DraftResponse
 draftResp2 =
-  let catResp = SubCatResponse 24 "u" [] $ SubCatResponse 20 "t" [] $ SubCatResponse 15 "o" [19, 20] $ SubCatResponse 9 "i" [15] $ CatResponse 3 "c" [9, 10]
+  let catResp = Sub $ SubCatResponse 24 "u" [] $ Sub $ SubCatResponse 20 "t" [] $ Sub $ SubCatResponse 15 "o" [19, 20] $ Sub $ SubCatResponse 9 "i" [15] $ Super $ SuperCatResponse 3 "c" [9, 10]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in DraftResponse 5 PostIdNull (AuthorResponse 7 "author" 4) "draft5" catResp "lalala" 4 (toPicUrl 4) picsResps tagsResps
+   in DraftResponse
+        5
+        PostIdNull
+        (AuthorResponse 7 "author" 4)
+        "draft5"
+        catResp
+        "lalala"
+        4
+        (toPicUrl 4)
+        picsResps
+        tagsResps
 
 draftResp3 :: DraftResponse
 draftResp3 =
-  let catResp = SubCatResponse 17 "q" [] $ SubCatResponse 12 "l" [16, 17] $ SubCatResponse 4 "d" [11, 12] $ CatResponse 1 "a" [4, 5, 6]
+  let catResp = Sub $ SubCatResponse 17 "q" [] $ Sub $ SubCatResponse 12 "l" [16, 17] $ Sub $ SubCatResponse 4 "d" [11, 12] $ Super $ SuperCatResponse 1 "a" [4, 5, 6]
       picsResps = [PicIdUrl 6 (toPicUrl 6), PicIdUrl 9 (toPicUrl 9), PicIdUrl 12 (toPicUrl 12)]
       tagsResps = [TagResponse 15 "cats", TagResponse 18 "dogs", TagResponse 20 "birds"]
-   in DraftResponse 12 PostIdNull (AuthorResponse 7 "author" 4) "draft12" catResp "lalala" 13 (toPicUrl 13) picsResps tagsResps
+   in DraftResponse
+        12
+        PostIdNull
+        (AuthorResponse 7 "author" 4)
+        "draft12"
+        catResp
+        "lalala"
+        13
+        (toPicUrl 13)
+        picsResps
+        tagsResps

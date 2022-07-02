@@ -1,7 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
 
 module Api.Request.QueryStr where
 
@@ -10,14 +7,25 @@ import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.List (delete, elemIndex)
 import Data.Text (Text, unpack)
 import Data.Time.Calendar (Day)
+import Error (ReqError (..))
 import Methods.Common.Exist (CheckExist (..), Handle)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types.URI (QueryText)
-import Oops (ReqError (..))
-import TryRead (tryReadDay, tryReadId, tryReadIdArray, tryReadPage, tryReadSortOrd)
+import TryRead
+  ( tryReadDay,
+    tryReadId,
+    tryReadIdArray,
+    tryReadPage,
+    tryReadSortOrd,
+  )
 import Types
+import Prelude hiding (length)
 
-checkQStr :: (MonadCatch m, ParseQueryStr a, CheckExist a) => Handle m -> QueryText -> ExceptT ReqError m a
+checkQStr ::
+  (MonadCatch m, ParseQueryStr a, CheckExist a) =>
+  Handle m ->
+  QueryText ->
+  ExceptT ReqError m a
 checkQStr h qStr = do
   a <- parseQueryStr qStr
   checkExist h a
@@ -26,7 +34,7 @@ checkQStr h qStr = do
 class (Show a) => ParseQueryStr a where
   parseQueryStr :: (Monad m) => QueryText -> ExceptT ReqError m a
 
-data LogIn = LogIn {user_idLI :: UserId, passwordLI :: Text}
+data LogIn = LogIn {userIdLI :: UserId, passwordLI :: Text}
   deriving (Show)
 
 instance ParseQueryStr LogIn where
@@ -47,7 +55,12 @@ instance ParseQueryStr Token where
     Token
       <$> parseTxtParam qStr 50 "token"
 
-data CreateUser = CreateUser {pwdCU :: Text, fNameCU :: Text, lNameCU :: Text, picIdCU :: PictureId}
+data CreateUser = CreateUser
+  { pwdCU :: Text,
+    fNameCU :: Text,
+    lNameCU :: Text,
+    picIdCU :: PictureId
+  }
   deriving (Show)
 
 instance ParseQueryStr CreateUser where
@@ -62,23 +75,15 @@ instance CheckExist CreateUser where
   checkExist h (CreateUser _ _ _ picId) =
     checkExist h (PictureId picId)
 
-data CreateAdmin = CreateAdmin {keyCAK :: Text, pwdCAK :: Text, fNameCAK :: Text, lNameCAK :: Text, picIdCAK :: PictureId}
+newtype CreateAdminKey = CreateAdminKey {key :: Text}
   deriving (Show)
 
-instance ParseQueryStr CreateAdmin where
+instance ParseQueryStr CreateAdminKey where
   parseQueryStr qStr =
-    CreateAdmin
+    CreateAdminKey
       <$> parseTxtParam qStr 50 "create_admin_key"
-      <*> parseTxtParam qStr 50 "password"
-      <*> parseTxtParam qStr 50 "first_name"
-      <*> parseTxtParam qStr 50 "last_name"
-      <*> parseIdParam qStr "user_pic_id"
 
-instance CheckExist CreateAdmin where
-  checkExist h (CreateAdmin _ _ _ _ picId) =
-    checkExist h (PictureId picId)
-
-data CreateAuthor = CreateAuthor {user_idCA :: UserId, author_infoCA :: Text}
+data CreateAuthor = CreateAuthor {userIdCA :: UserId, authorInfoCA :: Text}
   deriving (Show)
 
 instance ParseQueryStr CreateAuthor where
@@ -91,7 +96,7 @@ instance CheckExist CreateAuthor where
   checkExist h (CreateAuthor usId _) =
     checkExist h (UserId usId)
 
-data UpdateAuthor = UpdateAuthor {user_idUA :: Id, author_infoUA :: Text}
+data UpdateAuthor = UpdateAuthor {userIdUA :: Id, authorInfoUA :: Text}
   deriving (Show)
 
 instance ParseQueryStr UpdateAuthor where
@@ -212,11 +217,11 @@ instance ParseQueryStr GetPostsF where
       <*> parseMaybeIdParam qStr "category_id"
 
 instance CheckExist GetPostsF where
-  checkExist h (GetPostsF _ _ _ maybTag maybTagsIn maybTagsAll _ _ _ _ maybCat) = do
-    checkExist h $ fmap TagId maybTag
-    checkExist h $ (fmap . fmap) TagId maybTagsIn
-    checkExist h $ (fmap . fmap) TagId maybTagsAll
-    checkExist h $ fmap CategoryId maybCat
+  checkExist h (GetPostsF _ _ _ maybeTag maybeTagsIn maybeTagsAll _ _ _ _ maybeCat) = do
+    checkExist h $ fmap TagId maybeTag
+    checkExist h $ (fmap . fmap) TagId maybeTagsIn
+    checkExist h $ (fmap . fmap) TagId maybeTagsAll
+    checkExist h $ fmap CategoryId maybeCat
 
 data GetPostsOrd
   = GetPostsOrd
@@ -282,10 +287,15 @@ instance ParseQueryStr LoadPicture where
 instance CheckExist LoadPicture where
   checkExist _ _ = return ()
 
-parseTxtParam :: (Monad m) => QueryText -> Int -> QueryParamKey -> ExceptT ReqError m Text
-parseTxtParam qStr leng paramKey = do
+parseTxtParam ::
+  (Monad m) =>
+  QueryText ->
+  Int ->
+  QueryParamKey ->
+  ExceptT ReqError m Text
+parseTxtParam qStr length paramKey = do
   paramTxt <- checkParam qStr paramKey
-  checkLength leng paramKey paramTxt
+  checkLength length paramKey paramTxt
 
 parseIdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Id
 parseIdParam qStr paramKey = do
@@ -297,16 +307,25 @@ parsePageParam qStr paramKey = do
   paramTxt <- checkParam qStr paramKey
   tryReadPage paramTxt
 
-parseMaybeTxtParam :: (Monad m) => QueryText -> Int -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
-parseMaybeTxtParam qStr leng paramKey = do
+parseMaybeTxtParam ::
+  (Monad m) =>
+  QueryText ->
+  Int ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe Text)
+parseMaybeTxtParam qStr length paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
     Just paramTxt -> do
-      txt <- checkLength leng paramKey paramTxt
+      txt <- checkLength length paramKey paramTxt
       return $ Just txt
     Nothing -> return Nothing
 
-parseMaybeIdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Id)
+parseMaybeIdParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe Id)
 parseMaybeIdParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
@@ -315,7 +334,11 @@ parseMaybeIdParam qStr paramKey = do
       return (Just num)
     Nothing -> return Nothing
 
-parseMaybeIdArrayParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe [Id])
+parseMaybeIdArrayParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe [Id])
 parseMaybeIdArrayParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
@@ -324,7 +347,11 @@ parseMaybeIdArrayParam qStr paramKey = do
       return (Just ids)
     Nothing -> return Nothing
 
-parseMaybeDayParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Day)
+parseMaybeDayParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe Day)
 parseMaybeDayParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
@@ -333,7 +360,11 @@ parseMaybeDayParam qStr paramKey = do
       return (Just day)
     Nothing -> return Nothing
 
-parseMaybeSortOrdParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe (SortOrd, SortPriority))
+parseMaybeSortOrdParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe (SortOrd, SortPriority))
 parseMaybeSortOrdParam qStr paramKey = do
   maybeParamTxt <- checkMaybeParam qStr paramKey
   case maybeParamTxt of
@@ -345,29 +376,49 @@ parseMaybeSortOrdParam qStr paramKey = do
 
 checkParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m Text
 checkParam qStr paramKey = case lookup paramKey qStr of
-  Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
+  Just (Just "") ->
+    throwE $ BadReqError $
+      "Can't parse parameter:" ++ unpack paramKey
+        ++ ". Empty input."
   Just (Just txt) -> checkSingleParam qStr paramKey txt
   Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
   Nothing -> throwE $ BadReqError $ "Can't find parameter:" ++ unpack paramKey
 
-checkMaybeParam :: (Monad m) => QueryText -> QueryParamKey -> ExceptT ReqError m (Maybe Text)
+checkMaybeParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  ExceptT ReqError m (Maybe Text)
 checkMaybeParam qStr paramKey = case lookup paramKey qStr of
-  Just (Just "") -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey ++ ". Empty input."
+  Just (Just "") ->
+    throwE $ BadReqError $
+      "Can't parse parameter:" ++ unpack paramKey
+        ++ ". Empty input."
   Just (Just txt) -> do
-    txt1 <- checkSingleParam qStr paramKey txt
-    return (Just txt1)
+    checkedTxt <- checkSingleParam qStr paramKey txt
+    return (Just checkedTxt)
   Just Nothing -> throwE $ BadReqError $ "Can't parse parameter:" ++ unpack paramKey
   Nothing -> return Nothing
 
-checkSingleParam :: (Monad m) => QueryText -> QueryParamKey -> Text -> ExceptT ReqError m Text
-checkSingleParam qStr paramKey txt = case lookup paramKey . delete (paramKey, Just txt) $ qStr of
-  Nothing -> return txt
-  Just _ -> throwE $ BadReqError $ "Multiple parameter: " ++ unpack paramKey
+checkSingleParam ::
+  (Monad m) =>
+  QueryText ->
+  QueryParamKey ->
+  Text ->
+  ExceptT ReqError m Text
+checkSingleParam qStr paramKey txt =
+  case lookup paramKey . delete (paramKey, Just txt) $ qStr of
+    Nothing -> return txt
+    Just _ -> throwE $ BadReqError $ "Multiple parameter: " ++ unpack paramKey
 
 checkLength :: (Monad m) => Int -> QueryParamKey -> Text -> ExceptT ReqError m Text
-checkLength leng paramKey txt = case splitAt leng (unpack txt) of
+checkLength length paramKey txt = case splitAt length (unpack txt) of
   (_, []) -> return txt
-  _ -> throwE $ BadReqError $ "Parameter: " ++ unpack paramKey ++ " too long. Maximum length should be: " ++ show leng
+  _ ->
+    throwE $ BadReqError $
+      "Parameter: " ++ unpack paramKey
+        ++ " too long. Maximum length should be: "
+        ++ show length
 
 findParamIndex :: QueryText -> QueryParamKey -> Maybe Int
 findParamIndex qStr paramKey = elemIndex paramKey . fmap fst $ qStr

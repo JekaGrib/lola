@@ -1,8 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Author where
 
@@ -15,6 +11,7 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..), catchDbErr)
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
@@ -22,10 +19,9 @@ import Methods.Common.Auth (tokenAdminAuth)
 import Methods.Common.DeleteMany (deleteAllAboutDrafts)
 import qualified Methods.Common.DeleteMany (Handle, makeH)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..), catchDbErr)
 import Psql.Methods.Author
 import Psql.Selecty (Author (..))
 import Types
@@ -66,7 +62,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithAuthors :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithAuthors ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithAuthors h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -76,39 +77,51 @@ workWithAuthors h@Handle {..} qStr meth =
     ToGet auId -> do
       lift $ logInfo hLog "Get author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       getAuthor h auId
     ToPut auId -> do
       lift $ logInfo hLog "Update author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       checkQStr hExist qStr >>= updateAuthor h auId
     ToDelete auId -> do
       lift $ logInfo hLog "Delete author command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (AuthorId auId)
+      isExistResourceE hExist (AuthorId auId)
       deleteAuthor h auId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for authors resourse: " ++ show meth
+    _ ->
+      throwE $ ResourceNotExistError $
+        "Wrong method for authors resource: " ++ show meth
 
-createAuthor :: (MonadCatch m) => Handle m -> CreateAuthor -> ExceptT ReqError m ResponseInfo
+createAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  CreateAuthor ->
+  ExceptT ReqError m ResponseInfo
 createAuthor h@Handle {..} (CreateAuthor usIdParam auInfoParam) = do
   isNotAlreadyAuthor h usIdParam
-  auId <- catchInsRetE hLog $ insertReturnAuthor usIdParam auInfoParam
+  auId <- catchInsertReturnE hLog $ insertReturnAuthor usIdParam auInfoParam
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " created"
-  ok201Helper hConf $ "authors/" ++ show auId
+  ok201Helper hConf "author" auId
 
 getAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 getAuthor Handle {..} authId = do
-  Author auId auInfo usId <- catchOneSelE hLog $ selectAuthors authId
+  Author auId auInfo usId <- catchOneSelectE hLog $ selectAuthors authId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " sending in response."
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usId, author_info = auInfo}
+  okHelper $ AuthorResponse {authorIdA = auId, userIdA = usId, authorInfoA = auInfo}
 
-updateAuthor :: (MonadCatch m) => Handle m -> AuthorId -> UpdateAuthor -> ExceptT ReqError m ResponseInfo
+updateAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  AuthorId ->
+  UpdateAuthor ->
+  ExceptT ReqError m ResponseInfo
 updateAuthor h@Handle {..} auId (UpdateAuthor usIdParam auInfoParam) = do
   isntUserOtherAuthor h usIdParam auId
   catchUpdE hLog $ updateDbAuthor usIdParam auInfoParam auId
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " updated."
-  okHelper $ AuthorResponse {author_id = auId, auth_user_id = usIdParam, author_info = auInfoParam}
+  okHelper $
+    AuthorResponse {authorIdA = auId, userIdA = usIdParam, authorInfoA = auInfoParam}
 
 deleteAuthor :: (MonadCatch m) => Handle m -> AuthorId -> ExceptT ReqError m ResponseInfo
 deleteAuthor h@Handle {..} auId = do
@@ -120,9 +133,14 @@ deleteAuthor h@Handle {..} auId = do
   lift $ logInfo hLog $ "Author_id: " ++ show auId ++ " deleted."
   ok204Helper
 
-isntUserOtherAuthor :: (MonadCatch m) => Handle m -> UserId -> AuthorId -> ExceptT ReqError m ()
+isntUserOtherAuthor ::
+  (MonadCatch m) =>
+  Handle m ->
+  UserId ->
+  AuthorId ->
+  ExceptT ReqError m ()
 isntUserOtherAuthor Handle {..} usId auId = do
-  maybeAuId <- catchMaybeOneSelE hLog $ selectAuthorsForUser usId
+  maybeAuId <- catchMaybeOneSelectE hLog $ selectAuthorsForUser usId
   case maybeAuId of
     Just usAuId ->
       if usAuId == auId
@@ -139,4 +157,4 @@ isNotAlreadyAuthor Handle {..} usId = do
     $ BadReqError "User is already author."
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

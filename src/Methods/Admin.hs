@@ -1,23 +1,22 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Admin where
 
-import Api.Request.QueryStr (CreateAdmin (..), checkQStr)
-import Api.Response (TokenResponse (..))
+import Api.Request.QueryStr
+  ( CreateAdminKey (..),
+    CreateUser (..),
+    checkQStr,
+    parseQueryStr,
+  )
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, pack, unpack)
 import Data.Time.Calendar (Day)
+import Error (ReqError (..), hideErr)
 import Logger
 import Methods.Common
 import qualified Methods.Common.Exist (Handle, makeH)
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..), hideErr)
 import Psql.Methods.Admin
 import Types
 
@@ -43,27 +42,40 @@ makeH conf logH =
         generateTokenKey'
         (Methods.Common.Exist.makeH conf)
 
-workWithAdmin :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ResponseInfo
-workWithAdmin h@Handle {..} qStr = hideErr $ do
-  lift $ logInfo hLog "Create admin command"
+workWithAdmin ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  ExceptT ReqError m ResponseInfo
+workWithAdmin h@Handle {..} qStr = do
+  hideErr $ lift $ logInfo hLog "Create admin command"
+  checkAdminKey h qStr
   checkQStr hExist qStr >>= createAdmin h
 
-createAdmin :: (MonadCatch m) => Handle m -> CreateAdmin -> ExceptT ReqError m ResponseInfo
-createAdmin Handle {..} (CreateAdmin keyParam pwdParam fNameParam lNameParam picIdParam) = do
-  keys <- catchSelE hLog selectKeys
-  key <- getLastKey keys
-  checkKeyE keyParam key
+createAdmin ::
+  (MonadCatch m) =>
+  Handle m ->
+  CreateUser ->
+  ExceptT ReqError m ResponseInfo
+createAdmin Handle {..} (CreateUser pwdParam fNameParam lNameParam picIdParam) = do
   day <- lift getDay
   let hashPwdParam = pack . strSha1 . unpack $ pwdParam
   tokenKey <- lift generateTokenKey
   let insUser = InsertUser hashPwdParam fNameParam lNameParam picIdParam day True tokenKey
-  admId <- catchInsRetE hLog $ insertReturnUser insUser
+  admId <- catchInsertReturnE hLog $ insertReturnUser insUser
   let usToken = pack $ show admId ++ ".hij." ++ strSha1 ("hij" ++ tokenKey)
   lift $ logInfo hLog $ "User_id: " ++ show admId ++ " created as admin"
-  ok201JsonHelper hConf ("users/" ++ show admId) $ TokenResponse {tokenTR = usToken}
+  ok201UserHelper hConf usToken admId
 
-checkKeyE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
-checkKeyE keyParam key
+checkAdminKey :: (MonadCatch m) => Handle m -> QueryText -> ExceptT ReqError m ()
+checkAdminKey Handle {..} qStr = hideErr $ do
+  CreateAdminKey keyParam <- parseQueryStr qStr
+  keys <- catchSelE hLog selectKeys
+  key <- getLastKey keys
+  compareKeysE keyParam key
+
+compareKeysE :: (MonadCatch m) => QueryTxtParam -> Text -> ExceptT ReqError m ()
+compareKeysE keyParam key
   | keyParam == key = return ()
   | otherwise = throwE $ BadReqError "Invalid create_admin_key"
 

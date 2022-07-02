@@ -1,8 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Psql.Methods.Author where
 
 import Database.PostgreSQL.Simple (Connection)
@@ -32,10 +27,10 @@ selectAuthors' conn auId = do
 
 updateDbAuthor' :: Connection -> UserId -> AuthorInfo -> AuthorId -> IO ()
 updateDbAuthor' conn usId auInfo auId = do
-  let set1 = SetPair "user_id=?" (Id usId)
-  let set2 = SetPair "author_info=?" (Txt auInfo)
-  let wh = WherePair "author_id=?" (Id auId)
-  updateInDb' conn (Update "authors" [set1, set2] wh)
+  let setUser = SetPair "user_id=?" (Id usId)
+      setInfo = SetPair "author_info=?" (Txt auInfo)
+      wh = WherePair "author_id=?" (Id auId)
+  updateInDb' conn (Update "authors" [setUser, setInfo] wh)
 
 updateDbAuthorForPosts' :: Connection -> AuthorId -> AuthorId -> IO ()
 updateDbAuthorForPosts' conn auIdNew auId = do
@@ -55,7 +50,7 @@ isUserAuthor' conn usId = do
 
 insertReturnAuthor' :: Connection -> UserId -> AuthorInfo -> IO AuthorId
 insertReturnAuthor' conn usId auInfo = do
-  let insPair1 = InsertPair "user_id" (Id usId)
-  let insPair2 = InsertPair "author_info" (Txt auInfo)
-  let insPairs = [insPair1, insPair2]
+  let insPairUser = InsertPair "user_id" (Id usId)
+      insPairInfo = InsertPair "author_info" (Txt auInfo)
+      insPairs = [insPairUser, insPairInfo]
   insertReturn' conn (InsertRet "authors" insPairs "author_id")

@@ -1,7 +1,11 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
-module Conf.ConnectDB (tryConnect, ConnDB (..), ConnectInfo (..), inputString, inputNum) where
+module Conf.ConnectDB
+  ( tryConnect,
+    ConnDB (..),
+    ConnectInfo (..),
+    inputString,
+    inputNum,
+  )
+where
 
 import qualified Control.Exception as E
 import Control.Monad.Catch (catch)
@@ -16,7 +20,10 @@ tryConnect connInf =
       return $ ConnDB conn connInf
   )
     `catch` ( \e -> do
-                putStrLn $ "Can`t connect to database. ConnectInfo: " ++ show connInf ++ ". " ++ show (e :: E.IOException)
+                putStrLn $
+                  "Can`t connect to database. ConnectInfo: " ++ show connInf
+                    ++ ". "
+                    ++ show (e :: E.IOException)
                 connInf2 <- inputConnectInfo
                 tryConnect connInf2
             )
@@ -33,7 +40,10 @@ inputConnectInfo = do
 
 inputNum :: (Num a, Read a) => String -> IO a
 inputNum valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter number of " ++ valueName
+  putStrLn $
+    "Can`t parse value \"" ++ valueName
+      ++ "\" from configuration file or command line\nPlease, enter number of "
+      ++ valueName
   input <- getLine
   case reads input of
     [] -> do
@@ -44,5 +54,8 @@ inputNum valueName = do
 
 inputString :: String -> IO String
 inputString valueName = do
-  putStrLn $ "Can`t parse value \"" ++ valueName ++ "\" from configuration file or command line\nPlease, enter " ++ valueName
+  putStrLn $
+    "Can`t parse value \"" ++ valueName
+      ++ "\" from configuration file or command line\nPlease, enter "
+      ++ valueName
   getLine

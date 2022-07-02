@@ -1,17 +1,12 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Methods.Common.MakeCatResp where
 
-import Api.Response (CatResponse (..))
+import Api.Response (CatResponse (..), SubCatResponse (..), SuperCatResponse (..))
 import Conf (Config (..), extractConn)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT)
+import Error (ReqError)
 import Logger (LogHandle (..))
 import Methods.Common
-import Oops (ReqError)
 import Psql.Methods.Common.MakeCatResp
 import Psql.Selecty (Cat (..))
 import Types
@@ -32,16 +27,36 @@ makeH conf logH =
         (selectCats' conn)
         (selectSubCats' conn)
 
-makeCatResp :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m CatResponse
+makeCatResp ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m CatResponse
 makeCatResp h@Handle {..} catId = do
-  Cat catName superCatId <- catchOneSelE hLog $ selectCats catId
+  Cat catName superCatId <- catchOneSelectE hLog $ selectCats catId
   subCatsIds <- findOneLevelSubCats h catId
   case superCatId of
-    0 -> return $ CatResponse {cat_id = catId, cat_name = catName, one_level_sub_cats = subCatsIds}
+    0 ->
+      return $ Super $
+        SuperCatResponse
+          { categoryIdCATR = catId,
+            categoryNameCATR = catName,
+            subCategoriesCATR = subCatsIds
+          }
     _ -> do
       superCatResp <- makeCatResp h superCatId
-      return $ SubCatResponse {subCat_id = catId, subCat_name = catName, one_level_sub_categories = subCatsIds, super_category = superCatResp}
+      return $ Sub $
+        SubCatResponse
+          { categoryIdSCATR = catId,
+            categoryNameSCATR = catName,
+            subCategoriesSCATR = subCatsIds,
+            superCategorySCATR = superCatResp
+          }
 
-findOneLevelSubCats :: (MonadCatch m) => Handle m -> CategoryId -> ExceptT ReqError m [CategoryId]
+findOneLevelSubCats ::
+  (MonadCatch m) =>
+  Handle m ->
+  CategoryId ->
+  ExceptT ReqError m [CategoryId]
 findOneLevelSubCats Handle {..} catId =
   catchSelE hLog $ selectSubCats catId

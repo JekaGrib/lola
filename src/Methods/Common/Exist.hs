@@ -1,7 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Common.Exist where
 
@@ -9,9 +6,9 @@ import Conf (Config (..), extractConn)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
+import Error (ReqError (..))
 import Methods.Common
 import Methods.Common.Exist.UncheckedExId
-import Oops (ReqError (..))
 import Psql.Methods.Common.Exist
 
 data Handle m = Handle
@@ -26,12 +23,16 @@ makeH conf =
         conf
         (isExist' conn)
 
-isExistResourseE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()
-isExistResourseE h iD = do
+isExistResourceE ::
+  (MonadCatch m) =>
+  Handle m ->
+  UncheckedExId ->
+  ExceptT ReqError m ()
+isExistResourceE h iD = do
   isEx <- catchDbErrE $ isExist h iD
   unless isEx
     $ throwE
-    $ ResourseNotExistError
+    $ ResourceNotExistError
     $ toPretty iD ++ " doesn`t exist"
 
 isExistE :: (MonadCatch m) => Handle m -> UncheckedExId -> ExceptT ReqError m ()

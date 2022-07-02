@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Post.Types where
 
 import Psql.ToQuery.SelectLimit (Filter (..), OrderBy (..))
@@ -12,5 +9,4 @@ data PostMock
   | SelectPicsForPost PostId
   | SelectTagsForPost PostId
   | SelectUsersForPost PostId
-  | SelectPostInfos PostId
   deriving (Eq, Show)

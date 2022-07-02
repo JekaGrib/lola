@@ -1,13 +1,8 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Psql.Methods.Post where
 
 import Database.PostgreSQL.Simple (Connection)
 import Psql.Methods.Common
-import Psql.Selecty (Post (..), PostInfo (..), Tag (..))
+import Psql.Selecty (Post (..), Tag (..))
 import Psql.ToQuery.Select (Select (..), Where (..), toWhere)
 import Psql.ToQuery.SelectLimit (Filter, OrderBy, SelectLim (..))
 import Types
@@ -17,7 +12,16 @@ selectPosts' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   select' conn $
     Select
-      ["posts.post_id", "posts.author_id", "author_info", "user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
+      [ "posts.post_id",
+        "posts.author_id",
+        "author_info",
+        "user_id",
+        "post_name",
+        "post_create_date",
+        "post_category_id",
+        "post_text",
+        "post_main_pic_id"
+      ]
       "posts JOIN authors ON authors.author_id = posts.author_id "
       wh
 
@@ -26,7 +30,16 @@ selectLimPosts' conn filterArgs orderBy page limit = do
   let wh = WhereAnd $ fmap toWhere filterArgs ++ [Where "true"]
   selectLimit' conn $
     SelectLim
-      ["posts.post_id", "posts.author_id", "author_info", "authors.user_id", "post_name", "post_create_date", "post_category_id", "post_text", "post_main_pic_id"]
+      [ "posts.post_id",
+        "posts.author_id",
+        "author_info",
+        "authors.user_id",
+        "post_name",
+        "post_create_date",
+        "post_category_id",
+        "post_text",
+        "post_main_pic_id"
+      ]
       "posts JOIN authors ON authors.author_id = posts.author_id"
       wh
       filterArgs
@@ -54,14 +67,5 @@ selectUsersForPost' conn postId = do
   selectOnly' conn $
     Select
       ["user_id"]
-      "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
-      wh
-
-selectPostInfos' :: Connection -> PostId -> IO [PostInfo]
-selectPostInfos' conn postId = do
-  let wh = WherePair "post_id=?" (Id postId)
-  select' conn $
-    Select
-      ["a.author_id", "author_info", "post_name", "post_category_id", "post_text", "post_main_pic_id"]
       "posts AS p JOIN authors AS a ON p.author_id=a.author_id"
       wh

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.MakeCatResp.Handlers where
 
 import Control.Monad.State (StateT (..), modify)
@@ -33,7 +29,11 @@ selectSubCatsTest catId = do
   modify (MakeCatRMock (SelectSubCats catId) :)
   return $ map cat_idCat . filter ((== catId) . super_cat_idCat) $ exampleCats
 
-data Category = Category {cat_idCat :: CategoryId, cat_nameCat :: CatName, super_cat_idCat :: SuperCatId}
+data Category = Category
+  { cat_idCat :: CategoryId,
+    cat_nameCat :: CatName,
+    super_cat_idCat :: SuperCatId
+  }
 
 exampleCats :: [Category]
 exampleCats =

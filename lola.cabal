@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 524251be5e5c36e8140068cc07e285da9fda4b4f3bdbfa14ccb2806fba0cda30
+-- hash: d21384cd9ffc228cfc8fc16b1649b8690b42544c811b10fa5289193661cbd7a2
 
 name:           lola
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Api.AesonOption
       Api.Request.EndPoint
       Api.Request.JSON
       Api.Request.QueryStr
@@ -35,6 +36,7 @@ library
       Conf
       Conf.ConnectDB
       Conf.CreateDefault
+      Error
       Logger
       Methods
       Methods.Admin
@@ -53,7 +55,6 @@ library
       Methods.Post.LimitArg
       Methods.Tag
       Methods.User
-      Oops
       Psql.Methods.Admin
       Psql.Methods.Author
       Psql.Methods.Category
@@ -68,6 +69,7 @@ library
       Psql.Methods.Post
       Psql.Methods.Tag
       Psql.Methods.User
+      Psql.Migration
       Psql.Selecty
       Psql.ToQuery
       Psql.ToQuery.Delete
@@ -82,6 +84,8 @@ library
       Paths_lola
   hs-source-dirs:
       src
+  default-extensions: OverloadedStrings RecordWildCards
+  ghc-options: -Wall -Werror
   build-depends:
       JuicyPixels
     , aeson
@@ -90,6 +94,7 @@ library
     , configurator
     , containers
     , cryptonite
+    , directory
     , exceptions
     , hspec
     , http-conduit
@@ -97,7 +102,9 @@ library
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time
@@ -114,6 +121,7 @@ executable lola-exe
       Paths_lola
   hs-source-dirs:
       app
+  default-extensions: OverloadedStrings RecordWildCards
   ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
@@ -123,6 +131,7 @@ executable lola-exe
     , configurator
     , containers
     , cryptonite
+    , directory
     , exceptions
     , hspec
     , http-conduit
@@ -131,7 +140,9 @@ executable lola-exe
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time
@@ -200,7 +211,8 @@ test-suite lola-test
       Paths_lola
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  default-extensions: OverloadedStrings RecordWildCards
+  ghc-options: -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       JuicyPixels
     , aeson
@@ -209,6 +221,7 @@ test-suite lola-test
     , configurator
     , containers
     , cryptonite
+    , directory
     , exceptions
     , hspec
     , http-conduit
@@ -217,7 +230,9 @@ test-suite lola-test
     , mtl
     , postgresql-libpq
     , postgresql-simple
+    , postgresql-simple-migration
     , random
+    , safe-exceptions
     , scientific
     , text
     , time

@@ -1,21 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Tag where
 
 import Api.Request.EndPoint (AppMethod (..))
 import Api.Request.QueryStr (CreateTag (..), UpdateTag (..))
-import Api.Response (TagResponse (..))
+import Api.Response (Created (..), TagResponse (..))
 import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Aeson (encode)
+import Error (ReqError (..))
 import Logger (Priority (..))
 import Methods.Common (ResponseInfo (..), jsonHeader, textHeader)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Methods.Tag
 import Network.HTTP.Types (status200, status201, status204)
-import Oops (ReqError (..))
 import Spec.Auth.Types
 import Spec.Exist.Types
 import Spec.Tag.Handlers
@@ -33,14 +29,25 @@ testTag = hspec $ do
         `shouldBe` [LOG DEBUG, TagMock (InsertReturnTag "cats"), LOG INFO, LOG INFO]
       eitherResp <- evalStateT (runExceptT $ createTag handle (CreateTag "cats")) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/tags/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/tags/14")]
+                       $ encode
+                       $ Created 14 "tag"
+                   )
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ createTag handle3 (CreateTag "cats")) []
       reverse state
         `shouldBe` [LOG DEBUG]
       eitherResp <- evalStateT (runExceptT $ createTag handle3 (CreateTag "cats")) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
     it "throw DBError to UnexpectedDbOutPutException" $ do
       state <- execStateT (runExceptT $ createTag handle5 (CreateTag "cats")) []
       reverse state
@@ -76,7 +83,12 @@ testTag = hspec $ do
         `shouldBe` [LOG DEBUG]
       eitherResp <- evalStateT (runExceptT $ getTag handle3 7) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
   describe "updateTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ updateTag handle 7 (UpdateTag "food")) []
@@ -91,12 +103,25 @@ testTag = hspec $ do
         `shouldBe` [LOG DEBUG]
       eitherResp <- evalStateT (runExceptT $ updateTag handle3 7 (UpdateTag "food")) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
   describe "deleteTag" $ do
     it "work with valid DB answer" $ do
       state <- execStateT (runExceptT $ deleteTag handle 7) []
       reverse state
-        `shouldBe` [LOG DEBUG, TRANSACTIONOPEN, TagMock (DeleteDbTagForDrafts 7), TagMock (DeleteDbTagForPosts 7), TagMock (DeleteDbTag 7), TRANSACTIONCLOSE, LOG INFO, LOG INFO]
+        `shouldBe` [ LOG DEBUG,
+                     TRANSACTIONOPEN,
+                     TagMock (DeleteDbTagForDrafts 7),
+                     TagMock (DeleteDbTagForPosts 7),
+                     TagMock (DeleteDbTag 7),
+                     TRANSACTIONCLOSE,
+                     LOG INFO,
+                     LOG INFO
+                   ]
       eitherResp <- evalStateT (runExceptT $ deleteTag handle 7) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
@@ -106,26 +131,58 @@ testTag = hspec $ do
         `shouldBe` [LOG DEBUG]
       eitherResp <- evalStateT (runExceptT $ deleteTag handle3 7) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
     it "throw DBError to fatal Sql error" $ do
       state <- execStateT (runExceptT $ deleteTag handle4 7) []
       reverse state
         `shouldBe` [LOG DEBUG]
       eitherResp <- evalStateT (runExceptT $ deleteTag handle4 7) []
       eitherResp
-        `shouldBe` (Left $ DatabaseError "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError, sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\", sqlErrorHint = \"oops\"}")
+        `shouldBe` ( Left $
+                       DatabaseError
+                         "SqlError {sqlState = \"oops\", sqlExecStatus = FatalError,\
+                         \ sqlErrorMsg = \"oops\", sqlErrorDetail = \"oops\",\
+                         \ sqlErrorHint = \"oops\"}"
+                   )
   describe "workWithTags (ToPost)" $ do
     it "work with valid token" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 ToPost) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, LOG DEBUG, TagMock (InsertReturnTag "dogs"), LOG INFO, LOG INFO]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     TagMock (InsertReturnTag "dogs"),
+                     LOG INFO,
+                     LOG INFO
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 ToPost) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status201 [textHeader, ("Location", "http://localhost:3000/tags/14")] "Status 201 Created")
+        `shouldBe` ( Right
+                       $ ResponseInfo
+                         status201
+                         [jsonHeader, ("Location", "http://localhost:3000/tags/14")]
+                       $ encode
+                       $ Created 14 "tag"
+                   )
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 ToPost) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 ToPost) []
       eitherResp
         `shouldBe` (Left $ BadReqError "Can't find parameter:tag_name")
@@ -136,33 +193,68 @@ testTag = hspec $ do
         `shouldBe` [LOG INFO, ExistMock (IsExist (TagId 4)), LOG DEBUG, TagMock (SelectTagNames 4), LOG INFO, LOG INFO]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToGet 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ TagResponse 4 "cats"))
+        `shouldBe` ( Right $
+                       ResponseInfo
+                         status200
+                         [jsonHeader]
+                         (encode $ TagResponse 4 "cats")
+                   )
     it "throw 404 Error on not exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200)) []
       reverse state
         `shouldBe` [LOG INFO, ExistMock (IsExist (TagId 200))]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToGet 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
   describe "workWithTags (ToPut )" $ do
     it "work with exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToPut 4)) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, ExistMock (IsExist (TagId 4)), LOG DEBUG, TagMock (UpdateDbTag "dogs" 4), LOG INFO, LOG INFO]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     ExistMock (IsExist (TagId 4)),
+                     LOG DEBUG,
+                     TagMock (UpdateDbTag "dogs" 4),
+                     LOG INFO,
+                     LOG INFO
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToPut 4)) []
       eitherResp
-        `shouldBe` (Right $ ResponseInfo status200 [jsonHeader] (encode $ TagResponse 4 "dogs"))
+        `shouldBe` ( Right $
+                       ResponseInfo
+                         status200
+                         [jsonHeader]
+                         (encode $ TagResponse 4 "dogs")
+                   )
     it "throw 404 Error on not exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToPut 200)) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, ExistMock (IsExist (TagId 200))]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     ExistMock (IsExist (TagId 200))
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToPut 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
     it "throw BadReq Error on wrong QString" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToPut 4)) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, ExistMock (IsExist (TagId 4))]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     ExistMock (IsExist (TagId 4))
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToPut 4)) []
       eitherResp
         `shouldBe` (Left $ BadReqError "Can't find parameter:tag_name")
@@ -170,17 +262,39 @@ testTag = hspec $ do
     it "work with exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr2 (ToDelete 4)) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, ExistMock (IsExist (TagId 4)), LOG DEBUG, TRANSACTIONOPEN, TagMock (DeleteDbTagForDrafts 4), TagMock (DeleteDbTagForPosts 4), TagMock (DeleteDbTag 4), TRANSACTIONCLOSE, LOG INFO, LOG INFO]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     ExistMock (IsExist (TagId 4)),
+                     LOG DEBUG,
+                     TRANSACTIONOPEN,
+                     TagMock (DeleteDbTagForDrafts 4),
+                     TagMock (DeleteDbTagForPosts 4),
+                     TagMock (DeleteDbTag 4),
+                     TRANSACTIONCLOSE,
+                     LOG INFO,
+                     LOG INFO
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToDelete 4)) []
       eitherResp
         `shouldBe` (Right $ ResponseInfo status204 [textHeader] "Status 204 No data")
     it "throw 404 Error on not exist tag" $ do
       state <- execStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200)) []
       reverse state
-        `shouldBe` [LOG INFO, LOG INFO, LOG DEBUG, AuthMock (SelectTokenKeyForUser 152), LOG INFO, LOG INFO, ExistMock (IsExist (TagId 200))]
+        `shouldBe` [ LOG INFO,
+                     LOG INFO,
+                     LOG DEBUG,
+                     AuthMock (SelectTokenKeyForUser 152),
+                     LOG INFO,
+                     LOG INFO,
+                     ExistMock (IsExist (TagId 200))
+                   ]
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr1 (ToDelete 200)) []
       eitherResp
-        `shouldBe` (Left $ ResourseNotExistError "tag_id: 200 doesn`t exist")
+        `shouldBe` (Left $ ResourceNotExistError "tag_id: 200 doesn`t exist")
   describe "workWithTags (ToPostId)"
     $ it "throw 404 Error "
     $ do
@@ -189,4 +303,4 @@ testTag = hspec $ do
         `shouldBe` []
       eitherResp <- evalStateT (runExceptT $ workWithTags handle qStr2 (ToPostId 4)) []
       eitherResp
-        `shouldBe` Left (ResourseNotExistError "Wrong method for tags resourse: ToPostId 4")
+        `shouldBe` Left (ResourceNotExistError "Wrong method for tags resource: ToPostId 4")

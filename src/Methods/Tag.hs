@@ -1,8 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
 
 module Methods.Tag where
 
@@ -14,15 +10,15 @@ import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Database.PostgreSQL.Simple (withTransaction)
+import Error (ReqError (..))
 import Logger
 import Methods.Common
 import qualified Methods.Common.Auth (Handle, makeH)
 import Methods.Common.Auth (tokenAdminAuth)
 import qualified Methods.Common.Exist (Handle, makeH)
-import Methods.Common.Exist (isExistResourseE)
+import Methods.Common.Exist (isExistResourceE)
 import Methods.Common.Exist.UncheckedExId (UncheckedExId (..))
 import Network.HTTP.Types (QueryText)
-import Oops (ReqError (..))
 import Psql.Methods.Tag
 import Types
 
@@ -56,7 +52,12 @@ makeH conf logH =
         (Methods.Common.Auth.makeH conf logH)
         (Methods.Common.Exist.makeH conf)
 
-workWithTags :: (MonadCatch m) => Handle m -> QueryText -> AppMethod -> ExceptT ReqError m ResponseInfo
+workWithTags ::
+  (MonadCatch m) =>
+  Handle m ->
+  QueryText ->
+  AppMethod ->
+  ExceptT ReqError m ResponseInfo
 workWithTags h@Handle {..} qStr meth =
   case meth of
     ToPost -> do
@@ -65,33 +66,44 @@ workWithTags h@Handle {..} qStr meth =
       checkQStr hExist qStr >>= createTag h
     ToGet tagId -> do
       lift $ logInfo hLog "Get tag command"
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       getTag h tagId
     ToPut tagId -> do
       lift $ logInfo hLog "Update tag command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       checkQStr hExist qStr >>= updateTag h tagId
     ToDelete tagId -> do
       lift $ logInfo hLog "Delete tag command"
       tokenAdminAuth hAuth qStr
-      isExistResourseE hExist (TagId tagId)
+      isExistResourceE hExist (TagId tagId)
       deleteTag h tagId
-    _ -> throwE $ ResourseNotExistError $ "Wrong method for tags resourse: " ++ show meth
+    _ ->
+      throwE $ ResourceNotExistError $
+        "Wrong method for tags resource: " ++ show meth
 
-createTag :: (Monad m, MonadCatch m) => Handle m -> CreateTag -> ExceptT ReqError m ResponseInfo
+createTag ::
+  (Monad m, MonadCatch m) =>
+  Handle m ->
+  CreateTag ->
+  ExceptT ReqError m ResponseInfo
 createTag Handle {..} (CreateTag tagNameParam) = do
-  tagId <- catchInsRetE hLog $ insertReturnTag tagNameParam
+  tagId <- catchInsertReturnE hLog $ insertReturnTag tagNameParam
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " created"
-  ok201Helper hConf $ "tags/" ++ show tagId
+  ok201Helper hConf "tag" tagId
 
 getTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> ExceptT ReqError m ResponseInfo
 getTag Handle {..} tagId = do
-  tagName <- catchOneSelE hLog $ selectTagNames tagId
+  tagName <- catchOneSelectE hLog $ selectTagNames tagId
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " sending in response"
   okHelper $ TagResponse tagId tagName
 
-updateTag :: (Monad m, MonadCatch m) => Handle m -> TagId -> UpdateTag -> ExceptT ReqError m ResponseInfo
+updateTag ::
+  (Monad m, MonadCatch m) =>
+  Handle m ->
+  TagId ->
+  UpdateTag ->
+  ExceptT ReqError m ResponseInfo
 updateTag Handle {..} tagId (UpdateTag tagNameParam) = do
   catchUpdE hLog $ updateDbTag tagNameParam tagId
   lift $ logInfo hLog $ "Tag_id: " ++ show tagId ++ " updated"
@@ -107,4 +119,4 @@ deleteTag h@Handle {..} tagId = do
   ok204Helper
 
 withTransactionDBE :: (MonadCatch m) => Handle m -> m a -> ExceptT ReqError m a
-withTransactionDBE h = catchTransactE (hLog h) . withTransactionDB h
+withTransactionDBE h = catchTransactionE (hLog h) . withTransactionDB h

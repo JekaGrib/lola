@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Spec.Admin.Handlers where
 
 import Control.Monad.State (StateT (..), modify)

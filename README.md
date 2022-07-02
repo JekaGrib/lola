@@ -33,22 +33,53 @@ Before start using app you should create new database and enter details in [Conf
 There is database diagram
 ![](https://github.com/JekaGrib/lola/raw/master/other/pic/dbDiagram.png)
 
-To create database structure you can use file "dbStructure.sql"
+To create database structure you can use file "dbStructure.sql" or use [migrations](#2-migrations)
+Psql command:
 
-## 2. Add default entities to db
+    $ \i ./dbStructure.sql;
+
+
+## 2. Migrations
+If you want create DB structure automatically. You can use argument "sm" or "structureMigrate". It will execute script "dbStructure.sql".
+
+   $ stack exec lola-exe sm
+
+
+If you want fill your DB with test data. You can use argument "tm" or "testMigrate". It will execute scripts from "testsMigrations" folder in alphabetical order.
+
+   $ stack exec lola-exe tm
+
+
+If you want execute some other PostgreSQL migrations for change DB structure later, you should put this scripts to "migrations" folder and use "migrate" or "m" argument when [run](#5-run) application.  It will execute scripts from "migrations" folder in alphabetical order.
+
+   $ stack exec lola-exe m
+
+
+This three(or two) arguments can be used together 
+
+   $ stack exec lola-exe m sm tm
+
+Program will execute them in the following order:
+ First dbStructure migrations, then test migrations, then other migrations.
+
+First migration, executed with arguments, create in DB table schema_migrations, where you can see all migrations history.
+
+Every time you try execute migrations at startup, terminal will output all migrations history of DB(that was executed with arguments at startup and that schema_migrations table in DB contains). Last executed migrations should be in the end of history list.
+
+If you try execute script, that has already been executed, it wouldn`t run. You can follow it in migrations history in table schema_migrations in DB or in terminal(if you try to execute some migrations).
+
+## 3. Add default entities to db
 Application has several default db entities:
 1. default picture  - picture of deleted user
 2. default user     - deleted user
 2. default author   - deleted author
 2. default category - deleted category
 
-You can create yours default entities or use folder "migrations" with migrations examples.
-
-For all example migrations you can use file "COMMAND for all migrations with dbStructure" for psql.
+You can create yours default entities or use folder "testMigrations" with migrations examples.
 
 Aftеr creating entities enter ids in [Configuration](#2-configuration)
 
-## 3. Configuration
+## 4. Configuration
 Before start, you should rename "example.config" to "postApp.config". 
 Then you should make changes in this file.
 
@@ -70,10 +101,15 @@ There is table with descriptions of each values in configuration file, that shou
 |LimitNumbers | postNumberLimit      | The number of posts given in the response at a time |
 |log          | logLevel             | The logging level is specified here. The log will only display entries of this level and levels above. It can be one of four levels: DEBUG,INFO,WARNING,ERROR. More information [here](#logging)  |
 
-## 4. Run
-You can run App with:
+## 5. Run
+You can run App WITHOUT [migrations](#2-migrations):
 
     $ stack exec lola-exe 
+
+You can run App WITH [migrations](#2-migrations):
+
+    $ stack exec lola-exe m
+
 
 # Api
 
@@ -81,18 +117,18 @@ INT - number from 0 to 9223372036854775805 for id and from 0 to 100000 for page
 
 Success answers:
 1. For endpoint GET :
-    *  Status 200 OK with resourse entity in request body.
+    *  Status 200 OK with resource entity in request body.
 2. For endpoint POST :
-    *  Status 201 Created with Location of created entity in Headers.
-3. For endpoint PUT (Put only update resourse, NOT create new ) :
-    *  Status 200 OK with entity of resourse in request body.
+    *  Status 201 Created with Location of created entity in Headers and with created id in request body.
+3. For endpoint PUT (Put only update resource, NOT create new ) :
+    *  Status 200 OK with entity of resource in request body.
 4. For endpoint DELETE :
     *  Status 204 No Data
 
 Fail answers:
 * Status 400 BadRequest with JSON body {«ok»:«false»,«info»:«Some error info»}
 * Status 401 Unauthorized with JSON body {«ok»:«false»,«info»:«Some error info»}
-* Status 404 (resourse or resourse entity doesn`t exist)
+* Status 404 (resource or resource entity doesn`t exist)
 * Status 413 Request Body Too Large
 * Status 414 Request-URI Too Long
 * Status 500 Internal server error
@@ -111,7 +147,8 @@ Methods:
     
     Json answer example:
 
-        {"token":"abc"}
+        {"status":"created","user_id":7, "token":"abc"}
+
 
     2. To create admin:  
     POST /admins  
@@ -121,10 +158,10 @@ Methods:
     - first_name TXT (max50char)
     - last_name TXT (max50char)
     - user_pic_id INT
-    
+
     Json answer example:
 
-        {"token":"abc"}
+        {"status":"created","user_id":7, "token":"abc"}
 
     3. To get user:  
     GET /users/INT(user_id)  
@@ -155,7 +192,11 @@ Methods:
     - user_id INT
     - author_info TXT (max500char)
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","author_id":7}
+
     2. To get author:  
     GET /authors/INT(author_id)  
     Query parameters:
@@ -188,7 +229,11 @@ Methods:
     - category_name TXT (max50char)
     - super_category_id INT optional
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","category_id":7}
+
     2. To get category:  
     GET /categories/INT(category_id)  
 
@@ -218,7 +263,11 @@ Methods:
     Query parameters:  
     - tag_name TXT (max50char)
     - token TXT (admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","tag_id":7}
+
     2. To get tag:  
     GET /tags/INT(tag_id)  
 
@@ -268,30 +317,27 @@ Methods:
 
     Request example:
         
-        { "token": "abc",
-        "draft_name": "rock",
+        { "draft_name": "rock",
         "draft_category_id": 3,
         "draft_text": "heyhey",
         "draft_main_pic_id": 501,
         "draft_tags_ids" : [ 1, 2, 4 ],
         "draft_pics_ids": [ 5,4,3]
         }
-           
-    2. To create draft for post:  
-    POST posts/post_id INT/drafts  
-    User should be post author.  
-    Query parameters:
-    - token TXT (user/admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","draft_id":7}
+
     3. To publish draft (create post(if it is new draft) or update post(if it is post`s draft)):  
     POST drafts/draft_id INT/posts  
     User should be draft author.  
     Query parameters:
     - token TXT (user/admin token)
-           
-    Json answer example (for update post):
+    
+    Json answer example :
 
-        {"post_id":7,"author":{"author_id":2,"author_info":"info","user_id":2},"post_name":"name","post_create_date":"2018-06-26","post_category":{"category_id":16,"category_name":"odio","sub_categories":[25,26]},"post_text":"text","post_main_pic_id":164,"post_main_pic_url":"http://localhost:3000/pictures/164","post_pics":[{"pic_id":338,"pic_url":"http://localhost:3000/pictures/338"},{"pic_id":356,"pic_url":"http://localhost:3000/pictures/356"}],"post_tags":[{"tag_id":103,"tag_name":"consequat"},{"tag_id":118,"tag_name":"cum"}]}
+        {"status":"published","post_id":7}
 
     4. To get draft:  
     GET /drafts/draft_id INT  
@@ -383,7 +429,11 @@ Methods:
     Query parameters:
     - comment_text TXT (max500char)
     - token TXT (user/admin token)
-           
+
+    Json answer example:
+
+        {"status":"created","comment_id":7}
+
     2. To get one comment:  
     GET /comments/INT(comment_id)  
 
@@ -454,10 +504,11 @@ Description of project sections:
     1. "ToQuery" section - parsing db requests
     1. "Selecty.hs" - parsing db responses
     1. "Methods" folder - all IO methods for corresponding handlers.
+    5. "Migration.hs" - work with psql migrations.
 3. Api - response and request parsing.
 5. Conf - configuratuion parsing and db connection.
 5. Logger - logging.
-5. Oops - work with exceptions.
+5. Error - work with exceptions.
 5. TryRead - some more parsing functions.
 5. Types - some more project types.
 
@@ -484,4 +535,4 @@ Modules, which has handlers, have unit-tests:
 
 All database wrong answers (multiple,emty) are tested at Tag and Picture modules. In other modules only success and some local errors are tested.
 
-For E2E tests with database you can use folder "scripts".
+For E2E tests with database you can use folder "scripts". Also you can use SQL [migration](#2-migrations) scripts from folder "testMigrations".

@@ -1,21 +1,21 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Api.Request.EndPoint where
 
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans.Except (ExceptT, throwE)
 import Data.Text (Text, append)
+import Error (ReqError (..))
 import Network.HTTP.Types (StdMethod (..))
-import Oops (ReqError (..))
-import TryRead (getTxtstart, tryReadResourseId)
+import TryRead (getTxtstart, tryReadResourceId)
 import Types
 
-parseEndPoint :: (MonadCatch m) => StdMethod -> [Text] -> ExceptT ReqError m EndPoint
+parseEndPoint ::
+  (MonadCatch m) =>
+  StdMethod ->
+  [Text] ->
+  ExceptT ReqError m EndPoint
 parseEndPoint stdMeth path = do
-  resourses <- parsePath path
-  toEP (stdMeth, resourses)
+  resources <- parsePath path
+  toEP (stdMeth, resources)
 
 data AppMethod
   = ToPost
@@ -38,8 +38,8 @@ data EndPoint
   | TagEP AppMethod
   | UserEP AppMethod
 
-toEP :: (MonadCatch m) => (StdMethod, [Resourse]) -> ExceptT ReqError m EndPoint
-toEP (stdMeth, resourses) = case (stdMeth, resourses) of
+toEP :: (MonadCatch m) => (StdMethod, [Resource]) -> ExceptT ReqError m EndPoint
+toEP (stdMeth, resources) = case (stdMeth, resources) of
   (POST, [AdminR]) -> return AdminEP
   (POST, [LogInR]) -> return LogInEP
   (POST, [AuthorR]) -> return $ AuthorEP ToPost
@@ -63,8 +63,8 @@ toEP (stdMeth, resourses) = case (stdMeth, resourses) of
   (DELETE, [DraftIdR iD]) -> return $ DraftEP (ToDelete iD)
   (POST, [PictureR]) -> return $ PictureEP ToPost
   (GET, [PictureIdR iD]) -> return $ PictureEP (ToGet iD)
-  (POST, [PostIdR iD, DraftR]) -> return $ PostEP (ToPostId iD)
   (GET, [PostIdR iD]) -> return $ PostEP (ToGet iD)
+  (GET, [PostR]) -> return $ PostEP ToGetAll
   (PUT, [PostIdR iD]) -> return $ PostEP (ToPut iD)
   (DELETE, [PostIdR iD]) -> return $ PostEP (ToDelete iD)
   (POST, [TagR]) -> return $ TagEP ToPost
@@ -75,9 +75,12 @@ toEP (stdMeth, resourses) = case (stdMeth, resourses) of
   (GET, [UserIdR iD]) -> return $ UserEP (ToGet iD)
   (PUT, [UserIdR iD]) -> return $ UserEP (ToPut iD)
   (DELETE, [UserIdR iD]) -> return $ UserEP (ToDelete iD)
-  (x, y) -> throwE $ ResourseNotExistError $ "Unknown method-path combination: " ++ show (x, y)
+  (x, y) ->
+    throwE
+      $ ResourceNotExistError
+      $ "Unknown method-path combination: " ++ show (x, y)
 
-data Resourse
+data Resource
   = AdminR
   | LogInR
   | AuthorR
@@ -98,37 +101,41 @@ data Resourse
   | UserIdR Id
   deriving (Eq, Show)
 
-parsePath :: (MonadCatch m) => [Text] -> ExceptT ReqError m [Resourse]
-parsePath [x] = (: []) <$> toResourse x
-parsePath [x, y] = (: []) <$> toResourseId x y
+parsePath :: (MonadCatch m) => [Text] -> ExceptT ReqError m [Resource]
+parsePath [x] = (: []) <$> toResource x
+parsePath [x, y] = (: []) <$> toResourceId x y
 parsePath [x, y, z] = (++) <$> parsePath [x, y] <*> parsePath [z]
-parsePath _ = throwE $ ResourseNotExistError "Path too long"
+parsePath _ = throwE $ ResourceNotExistError "Path too long"
 
-toResourse :: (MonadCatch m) => Text -> ExceptT ReqError m Resourse
-toResourse "admins" = return AdminR
-toResourse "logIn" = return LogInR
-toResourse "authors" = return AuthorR
-toResourse "categories" = return CatR
-toResourse "comments" = return CommentR
-toResourse "drafts" = return DraftR
-toResourse "pictures" = return PictureR
-toResourse "posts" = return PostR
-toResourse "tags" = return TagR
-toResourse "users" = return UserR
-toResourse txt = throwE $ ResourseNotExistError $ getTxtstart txt
+toResource :: (MonadCatch m) => Text -> ExceptT ReqError m Resource
+toResource "admins" = return AdminR
+toResource "logIn" = return LogInR
+toResource "authors" = return AuthorR
+toResource "categories" = return CatR
+toResource "comments" = return CommentR
+toResource "drafts" = return DraftR
+toResource "pictures" = return PictureR
+toResource "posts" = return PostR
+toResource "tags" = return TagR
+toResource "users" = return UserR
+toResource txt = throwE $ ResourceNotExistError $ getTxtstart txt
 
-toResourseId :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m Resourse
-toResourseId "authors" idTxt = AuthorIdR <$> parseResourseId "author" idTxt
-toResourseId "categories" idTxt = CatIdR <$> parseResourseId "category" idTxt
-toResourseId "comments" idTxt = CommentIdR <$> parseResourseId "comment" idTxt
-toResourseId "drafts" idTxt = DraftIdR <$> parseResourseId "draft" idTxt
-toResourseId "pictures" idTxt = PictureIdR <$> parseResourseId "pic" idTxt
-toResourseId "posts" idTxt = PostIdR <$> parseResourseId "post" idTxt
-toResourseId "tags" idTxt = TagIdR <$> parseResourseId "tag" idTxt
-toResourseId "users" idTxt = UserIdR <$> parseResourseId "user" idTxt
-toResourseId txt _ = throwE $ ResourseNotExistError $ getTxtstart txt
 
-parseResourseId :: (MonadCatch m) => ResourseName -> ResourseIdText -> ExceptT ReqError m Id
-parseResourseId resName = tryReadResourseId (append resName "_id")
+toResourceId :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m Resource
+toResourceId "authors" idTxt = AuthorIdR <$> parseResourceId "author" idTxt
+toResourceId "categories" idTxt = CatIdR <$> parseResourceId "category" idTxt
+toResourceId "comments" idTxt = CommentIdR <$> parseResourceId "comment" idTxt
+toResourceId "drafts" idTxt = DraftIdR <$> parseResourceId "draft" idTxt
+toResourceId "pictures" idTxt = PictureIdR <$> parseResourceId "pic" idTxt
+toResourceId "posts" idTxt = PostIdR <$> parseResourceId "post" idTxt
+toResourceId "tags" idTxt = TagIdR <$> parseResourceId "tag" idTxt
+toResourceId "users" idTxt = UserIdR <$> parseResourceId "user" idTxt
+toResourceId txt _ = throwE $ ResourceNotExistError $ getTxtstart txt
 
+parseResourceId ::
+  (MonadCatch m) =>
+  ResourceName ->
+  ResourceIdText ->
+  ExceptT ReqError m Id
+parseResourceId resName = tryReadResourceId (append resName "_id")
 

@@ -1,8 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -Werror #-}
-
 module Psql.Methods.Common.DeleteMany where
 
 import Database.PostgreSQL.Simple (Connection)
@@ -26,8 +21,8 @@ deleteDbTagsForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   deleteFromDb' conn (Delete "poststags" wh)
 
-deleteDbCommsForPost' :: Connection -> PostId -> IO ()
-deleteDbCommsForPost' conn postId = do
+deleteDbCommentsForPost' :: Connection -> PostId -> IO ()
+deleteDbCommentsForPost' conn postId = do
   let wh = WherePair "post_id=?" (Id postId)
   deleteFromDb' conn (Delete "comments" wh)
 
