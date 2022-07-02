@@ -108,3 +108,4 @@ createDefaultCategory conn = do
         \ VALUES ( 'NONE' ) RETURNING category_id"
   [Only catId] <- query_ conn str
   return catId
+

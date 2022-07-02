@@ -77,6 +77,7 @@ application config handleLog req send = do
 responseFromInfo :: ResponseInfo -> Response
 responseFromInfo (ResponseInfo s h b) = responseLBS s h b
 
+
 fromE :: Either ReqError ResponseInfo -> ResponseInfo
 fromE responseE = case responseE of
   Right a -> a
@@ -188,3 +189,4 @@ checkLengthReqBody req =
   case requestBodyLength req of
     ChunkedBody -> throwE $ ReqBodyTooLargeError "Chunked request body"
     _ -> return ()
+

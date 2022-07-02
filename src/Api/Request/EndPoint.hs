@@ -120,6 +120,7 @@ toResource "tags" = return TagR
 toResource "users" = return UserR
 toResource txt = throwE $ ResourceNotExistError $ getTxtstart txt
 
+
 toResourceId :: (MonadCatch m) => Text -> Text -> ExceptT ReqError m Resource
 toResourceId "authors" idTxt = AuthorIdR <$> parseResourceId "author" idTxt
 toResourceId "categories" idTxt = CatIdR <$> parseResourceId "category" idTxt
@@ -137,3 +138,4 @@ parseResourceId ::
   ResourceIdText ->
   ExceptT ReqError m Id
 parseResourceId resName = tryReadResourceId (append resName "_id")
+

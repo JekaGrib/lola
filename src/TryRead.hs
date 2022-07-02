@@ -130,3 +130,4 @@ getTxtstart :: Text -> String
 getTxtstart txt = case splitAt 20 (unpack txt) of
   (str, []) -> str
   (str, _) -> str ++ "... "
+
