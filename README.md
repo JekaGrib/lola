@@ -10,9 +10,11 @@ News has categories and tags.
 
 To post news user must be an author. Only admin can make a user an author. 
 
-At first author should create draft and then publish it.
+To make post author should create draft at first  and then publish it.
 
-To update post author should create draft of this post and publish it.
+To update post author should update draft of this post and publish it.
+
+Draft of post create automatically after publishing post. (Author can find it at page with their drafts).
 
 # Installing
 You can install app with:
