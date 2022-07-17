@@ -8,7 +8,7 @@ import Api.Response
     PublishedPost (..),
     TagResponse (..),
   )
-import Conf (Config (..))
+import Conf (Config (..),makeMyUrl)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Except
@@ -198,14 +198,7 @@ inPicIdUrl conf picId = PicIdUrl picId (makeMyPicUrl conf picId)
 numToTxt :: Id -> Text
 numToTxt = pack . show
 
-makeMyUrl :: Config -> String -> ByteString
-makeMyUrl conf str =
-  fromString $
-    "http://" ++ cServerHost conf
-      ++ ":"
-      ++ show (cServerPort conf)
-      ++ "/"
-      ++ str
+
 
 toPlural :: String -> String
 toPlural "category" = "categories"

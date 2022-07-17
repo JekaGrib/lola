@@ -8,6 +8,7 @@ import Conf.CreateDefault
     createNewDefUser,
   )
 import qualified Control.Exception as E
+import Data.ByteString (ByteString)
 import Data.Char (toUpper)
 import qualified Data.Configurator as C
 import qualified Data.Configurator.Types as C
@@ -25,6 +26,7 @@ import Psql.ToQuery.Exists
 import Psql.ToQuery.Select
 import Text.Read (readMaybe)
 import Types
+
 
 data Config = Config
   { cServerHost :: String,
@@ -313,3 +315,12 @@ checkBigIntOr num action
     putStrLn "Id should be less then 9223372036854775807"
     action
   | otherwise = return (fromInteger num)
+
+makeMyUrl :: Config -> String -> ByteString
+makeMyUrl conf str =
+  fromString $
+    "http://" ++ cServerHost conf
+      ++ ":"
+      ++ show (cServerPort conf)
+      ++ "/"
+      ++ str

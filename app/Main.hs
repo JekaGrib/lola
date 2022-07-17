@@ -1,7 +1,7 @@
 module Main where
 
 import App (application)
-import Conf (Config (cPriority), extractSettings, getTime, parseConfAnd)
+import Conf (Config (cPriority), extractSettings, getTime, parseConfAnd,makeMyUrl)
 import Logger (LogConfig (..), LogHandle (..), logger)
 import Network.Wai.Handler.Warp (runSettings)
 import Psql.Migration (readMigrateArg)
@@ -14,4 +14,5 @@ main = do
   let currLogPath = "./PostApp.LogSession: " ++ show time ++ " .log"
   let handleLog = LogHandle (LogConfig (cPriority config)) (logger currLogPath)
   let sets = extractSettings config
+  putStrLn $ "Server start at: " ++ (show $ makeMyUrl config "")
   runSettings sets (application config handleLog)
