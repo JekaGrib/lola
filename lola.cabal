@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d21384cd9ffc228cfc8fc16b1649b8690b42544c811b10fa5289193661cbd7a2
+-- hash: 93a5fdaaf9d1f38d2b0bf21c86e0599c2cbc779b7cbb33637c8294c45477865a
 
 name:           lola
 version:        0.1.0.0
@@ -100,7 +100,6 @@ library
     , http-conduit
     , http-types
     , mtl
-    , postgresql-libpq
     , postgresql-simple
     , postgresql-simple-migration
     , random
@@ -138,7 +137,6 @@ executable lola-exe
     , http-types
     , lola
     , mtl
-    , postgresql-libpq
     , postgresql-simple
     , postgresql-simple-migration
     , random
@@ -228,7 +226,6 @@ test-suite lola-test
     , http-types
     , lola
     , mtl
-    , postgresql-libpq
     , postgresql-simple
     , postgresql-simple-migration
     , random

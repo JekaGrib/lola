@@ -31,7 +31,6 @@ dependencies:
 - aeson
 - text
 - bytestring
-- postgresql-libpq
 - postgresql-simple
 - http-conduit
 - time
